@@ -1,4 +1,3 @@
-
 import express from 'express';
 import session from 'express-session';
 import bcrypt from 'bcrypt';
@@ -20,24 +19,34 @@ export const sessionConfig = session({
 });
 
 // Middleware to require authentication - simplified and bulletproof
-export const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+export const requireAuth = async (req: any, res: any, next: any) => {
   try {
-    // Simple session check - no database calls
+    // Check for session
     if (!req.session || !req.session.userId) {
       return res.status(401).json({
         success: false,
-        error: 'Authentication required',
-        message: 'Please log in to access this resource'
+        error: 'Authentication required'
       });
     }
 
-    // Trust the session completely - no additional verification
+    // Get user from database
+    const user = await getCurrentUser(req);
+    if (!user) {
+      // Clear invalid session
+      req.session.destroy();
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid session'
+      });
+    }
+
+    req.user = user;
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
-    return res.status(401).json({
+    res.status(500).json({
       success: false,
-      error: 'Authentication error'
+      error: 'Internal server error'
     });
   }
 };
@@ -187,7 +196,7 @@ export const requireRole = (roles: string[]) => {
         next();
         return;
       }
-      
+
       if (!user || !roles.includes(user.role || 'user')) {
         return res.status(403).json({ 
           error: 'Insufficient permissions',

@@ -37,18 +37,10 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
     
-    // Rate limit - only check once every 30 seconds minimum
-    const now = Date.now();
-    if (now - lastCheckRef.current < 30000) {
-      setLoading(false);
-      return;
-    }
-    
     isCheckingRef.current = true;
-    lastCheckRef.current = now;
 
     try {
-      // First, try to load from localStorage immediately
+      // Always check localStorage first and trust it completely
       const storedUser = localStorage.getItem('admin_user');
       if (storedUser) {
         try {
@@ -57,41 +49,20 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setIsAdmin(userData.role === 'admin' || userData.role === 'super_admin');
           setLoading(false);
           isCheckingRef.current = false;
-          // Trust localStorage completely - no server verification needed
           return;
         } catch (parseError) {
           localStorage.removeItem('admin_user');
         }
       }
 
-      // Only verify with server if no stored user exists
-      const response = await fetch('/api/auth/me', {
-        credentials: 'include',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success && result.user) {
-          setUser(result.user);
-          setIsAdmin(result.user.role === 'admin' || result.user.role === 'super_admin');
-          localStorage.setItem('admin_user', JSON.stringify(result.user));
-        } else {
-          // Server says no auth - clear everything
-          setUser(null);
-          setIsAdmin(false);
-          localStorage.removeItem('admin_user');
-        }
-      } else {
-        // Server error - maintain existing auth state if we have one
-        console.log('Auth check failed, maintaining existing state');
-      }
+      // No stored user - user is not authenticated
+      setUser(null);
+      setIsAdmin(false);
     } catch (error) {
       console.error('Auth check failed:', error);
-      // On any error, maintain existing auth state
+      // On any error, clear auth state
+      setUser(null);
+      setIsAdmin(false);
     } finally {
       setLoading(false);
       isCheckingRef.current = false;

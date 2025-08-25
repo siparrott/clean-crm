@@ -140,41 +140,41 @@ function App() {
                 <Route 
                   path="/admin/leads" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminLeadsPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/voucher-sales" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminVoucherSalesPageV3 />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/clients" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminClientsPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route
                   path="/admin/clients/new"
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <ClientFormPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   }
                 />
                 <Route
                   path="/admin/clients/:id"
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <ClientDetailPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   }
                 />
                 <Route
