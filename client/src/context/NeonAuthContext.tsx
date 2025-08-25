@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 
 interface AdminUser {
   id: string;
@@ -22,40 +23,48 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [user, setUser] = useState<AdminUser | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const isCheckingRef = useRef(false);
+  const lastCheckRef = useRef<number>(0);
 
   useEffect(() => {
-    // Check if user is logged in on app start
+    // Only check auth on initial load
     checkAuthStatus();
-    
-    // Reduce refresh frequency to 15 minutes for super stable sessions
-    const refreshInterval = setInterval(() => {
-      if (user) {
-        checkAuthStatus();
-      }
-    }, 900000); // 15 minutes
-    
-    return () => clearInterval(refreshInterval);
-  }, [user]);
+  }, []); // Remove user dependency that was causing loops
 
   const checkAuthStatus = async () => {
+    // Prevent multiple simultaneous auth checks
+    if (isCheckingRef.current) {
+      return;
+    }
+    
+    // Rate limit - only check once every 30 seconds minimum
+    const now = Date.now();
+    if (now - lastCheckRef.current < 30000) {
+      setLoading(false);
+      return;
+    }
+    
+    isCheckingRef.current = true;
+    lastCheckRef.current = now;
+
     try {
-      // First check localStorage for immediate UI response
+      // First, try to load from localStorage immediately
       const storedUser = localStorage.getItem('admin_user');
-      if (storedUser && !user) {
+      if (storedUser) {
         try {
           const userData = JSON.parse(storedUser);
           setUser(userData);
           setIsAdmin(userData.role === 'admin' || userData.role === 'super_admin');
-          
-          // For super stable sessions, trust localStorage more
           setLoading(false);
-          return; // Skip server verification for stored users
+          isCheckingRef.current = false;
+          // Trust localStorage completely - no server verification needed
+          return;
         } catch (parseError) {
           localStorage.removeItem('admin_user');
         }
       }
 
-      // Only verify with backend on first load or when no stored user
+      // Only verify with server if no stored user exists
       const response = await fetch('/api/auth/me', {
         credentials: 'include',
         headers: {
@@ -70,24 +79,22 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setUser(result.user);
           setIsAdmin(result.user.role === 'admin' || result.user.role === 'super_admin');
           localStorage.setItem('admin_user', JSON.stringify(result.user));
+        } else {
+          // Server says no auth - clear everything
+          setUser(null);
+          setIsAdmin(false);
+          localStorage.removeItem('admin_user');
         }
+      } else {
+        // Server error - maintain existing auth state if we have one
+        console.log('Auth check failed, maintaining existing state');
       }
-      // Never clear auth on errors - maintain existing state
     } catch (error) {
       console.error('Auth check failed:', error);
       // On any error, maintain existing auth state
-      if (storedUser && !user) {
-        try {
-          const userData = JSON.parse(storedUser);
-          setUser(userData);
-          setIsAdmin(userData.role === 'admin' || userData.role === 'super_admin');
-        } catch (parseError) {
-          // Only clear on parse errors
-          localStorage.removeItem('admin_user');
-        }
-      }
     } finally {
       setLoading(false);
+      isCheckingRef.current = false;
     }
   };
 
@@ -106,7 +113,7 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       if (result.success && result.user) {
         setUser(result.user);
-        setIsAdmin(result.user.role === 'admin');
+        setIsAdmin(result.user.role === 'admin' || result.user.role === 'super_admin');
         localStorage.setItem('admin_user', JSON.stringify(result.user));
         return { success: true };
       } else {

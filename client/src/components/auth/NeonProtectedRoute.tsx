@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useNeonAuth } from '../../context/NeonAuthContext';
 
@@ -12,6 +13,7 @@ export const NeonProtectedRoute: React.FC<NeonProtectedRouteProps> = ({
 }) => {
   const { user, isAdmin, loading } = useNeonAuth();
 
+  // Show loading only briefly
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50">

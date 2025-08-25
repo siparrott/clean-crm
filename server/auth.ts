@@ -1,27 +1,28 @@
+
 import express from 'express';
 import session from 'express-session';
 import bcrypt from 'bcrypt';
 import { storage } from './storage';
 
-// Session configuration
+// Session configuration with better settings
 export const sessionConfig = session({
   secret: process.env.SESSION_SECRET || 'dev-secret-key-photography-crm-2024',
   resave: false,
   saveUninitialized: false,
-  name: 'admin.session.id', // Custom session name
+  name: 'admin.session.id',
   cookie: {
-    secure: false, // Set to true in production with HTTPS
+    secure: false,
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours (increased from 7 days for better security)
-    sameSite: 'lax' // Important for navigation persistence
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    sameSite: 'lax'
   },
-  rolling: true // Refresh session on each request
+  rolling: false // Don't refresh session on each request - prevents conflicts
 });
 
-// Middleware to require authentication
+// Middleware to require authentication - simplified and bulletproof
 export const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
-    // Check if session exists and has userId
+    // Simple session check - no database calls
     if (!req.session || !req.session.userId) {
       return res.status(401).json({
         success: false,
@@ -30,20 +31,19 @@ export const requireAuth = async (req: express.Request, res: express.Response, n
       });
     }
 
-    // Skip ALL database verification for super stable sessions
-    // Only validate session exists, not database state
-    req.session.touch();
+    // Trust the session completely - no additional verification
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
-    // Never fail auth on errors - maintain session
-    next();
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication error'
+    });
   }
 };
 
-// Optional authentication middleware (doesn't block unauthenticated users)
+// Optional authentication middleware
 export const optionalAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  // Always continue, but req.session.userId will be undefined if not authenticated
   next();
 };
 
@@ -198,8 +198,9 @@ export const requireRole = (roles: string[]) => {
       next();
     } catch (error) {
       console.error('Role check error:', error);
-      // For super stable auth, don't fail on errors
-      next();
+      return res.status(500).json({ 
+        error: 'Authorization check failed' 
+      });
     }
   };
 };
