@@ -180,175 +180,175 @@ function App() {
                 <Route
                   path="/admin/clients/:id/edit"
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <ClientFormPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   }
                 />
                 <Route
                   path="/admin/clients/import"
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminClientsImportPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   }
                 />
                 <Route
                   path="/admin/clients/import-logs"
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <ImportLogsPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   }
                 />
                 <Route
                   path="/admin/high-value-clients"
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <HighValueClientsPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   }
                 />
                 <Route
                   path="/admin/galleries"
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <GalleriesPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   }
                 />
                 <Route 
                   path="/admin/galleries/new" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminGalleryCreatePage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/galleries/:id/edit" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminGalleryEditPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
 
                 <Route 
                   path="/admin/calendar" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <CalendarPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/invoices" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <InvoicesPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/files" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <FilesPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/pro-files" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <ProDigitalFilesPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/campaigns" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <CampaignsPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />                <Route 
                   path="/admin/inbox" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminInboxPageV2 />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />                <Route 
                   path="/admin/questionnaires" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <QuestionnairesPageV2 />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 /><Route 
                   path="/admin/reports" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <ComprehensiveReportsPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/crm-assistant" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <CRMOperationsAssistant />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/knowledge-base" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <KnowledgeBasePage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/test" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <TestPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/customization" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <CustomizationPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/studio-templates" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <StudioCustomization />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/website-wizard" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <WebsiteCustomizationWizard />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/website-analyzer" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <WebsiteWizard />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
@@ -362,89 +362,89 @@ function App() {
                 <Route 
                   path="/admin/calendar" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <PhotographyCalendarPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/blog" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminBlogPostsPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/blog/posts" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminBlogPostsPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/blog/new" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminBlogNewPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/blog/edit/:id" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AdminBlogEditPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/autoblog" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AutoBlogGenerator />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/autoblog-generator" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AutoBlogGenerator />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/autoblog-generator-fixed" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AutoBlogGeneratorFixed />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/autoblog-v3" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AutoBlogGeneratorFixed />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/autoblog-v4" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <AutoBlogGeneratorFixed />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route 
                   path="/admin/clients/new" 
                   element={
-                    <ProtectedRoute>
+                    <NeonProtectedRoute>
                       <ClientFormPage />
-                    </ProtectedRoute>
+                    </NeonProtectedRoute>
                   } 
                 />
                 <Route path="/gallery-shop-test" element={<GalleryShopTest />} />
