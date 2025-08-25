@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Sitemap: https://www.newagefotografie.com/sitemap.xml
+
+# Block development and admin areas
+Disallow: /admin/
+Disallow: /api/
+Disallow: /_vite/
+Disallow: /node_modules/
+
+# Allow search engines to crawl important pages
+Allow: /galerie
+Allow: /preise  
+Allow: /kontakt
+Allow: /blog
+Allow: /fotoshootings
