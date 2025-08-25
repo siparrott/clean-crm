@@ -26,11 +26,32 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     // Check if user is logged in on app start
     checkAuthStatus();
-  }, []);
+    
+    // Set up periodic session refresh (every 5 minutes instead of every navigation)
+    const refreshInterval = setInterval(() => {
+      if (user) {
+        checkAuthStatus();
+      }
+    }, 300000); // 5 minutes
+    
+    return () => clearInterval(refreshInterval);
+  }, [user]);
 
   const checkAuthStatus = async () => {
     try {
-      // Always check with backend first for current session
+      // First check localStorage for immediate UI response
+      const storedUser = localStorage.getItem('admin_user');
+      if (storedUser && !user) {
+        try {
+          const userData = JSON.parse(storedUser);
+          setUser(userData);
+          setIsAdmin(userData.role === 'admin');
+        } catch (parseError) {
+          localStorage.removeItem('admin_user');
+        }
+      }
+
+      // Then verify with backend (less frequently)
       const response = await fetch('/api/auth/me', {
         credentials: 'include',
         headers: {
@@ -46,38 +67,24 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setIsAdmin(result.user.role === 'admin');
           localStorage.setItem('admin_user', JSON.stringify(result.user));
         } else {
-          setUser(null);
-          setIsAdmin(false);
-          localStorage.removeItem('admin_user');
+          // Only clear if we don't have a valid stored user
+          if (!storedUser) {
+            setUser(null);
+            setIsAdmin(false);
+            localStorage.removeItem('admin_user');
+          }
         }
       } else if (response.status === 401) {
-        // Unauthorized - clear everything
+        // Only clear auth on explicit unauthorized response
         setUser(null);
         setIsAdmin(false);
         localStorage.removeItem('admin_user');
-      } else {
-        // Check localStorage as fallback only for non-auth errors
-        const storedUser = localStorage.getItem('admin_user');
-        if (storedUser) {
-          try {
-            const userData = JSON.parse(storedUser);
-            setUser(userData);
-            setIsAdmin(userData.role === 'admin');
-          } catch (parseError) {
-            localStorage.removeItem('admin_user');
-            setUser(null);
-            setIsAdmin(false);
-          }
-        } else {
-          setUser(null);
-          setIsAdmin(false);
-        }
       }
+      // For other errors (500, network issues), keep existing auth state
     } catch (error) {
       console.error('Auth check failed:', error);
-      // On network error, check localStorage as fallback
-      const storedUser = localStorage.getItem('admin_user');
-      if (storedUser) {
+      // On network error, maintain existing auth state from localStorage
+      if (storedUser && !user) {
         try {
           const userData = JSON.parse(storedUser);
           setUser(userData);
@@ -87,9 +94,6 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setUser(null);
           setIsAdmin(false);
         }
-      } else {
-        setUser(null);
-        setIsAdmin(false);
       }
     } finally {
       setLoading(false);

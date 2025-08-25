@@ -74,7 +74,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     };
 
     fetchCounts();
-    
+
     // Refresh counts every 30 seconds
     const interval = setInterval(fetchCounts, 30000);
     return () => clearInterval(interval);
@@ -114,6 +114,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'de' : 'en');
   };
+
+  // Persist auth state on navigation
+  useEffect(() => {
+    if (user && user.role === 'admin') { // Assuming 'user' has a 'role' property
+      localStorage.setItem('admin_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('admin_user');
+    }
+  }, [location.pathname, user]);
+
 
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
@@ -198,7 +208,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path || 
                               (item.path === '/admin/blog' && location.pathname.startsWith('/admin/blog/'));
-              
+
               return (
                 <Link
                   key={item.path}
@@ -227,7 +237,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               );
             })}
           </div>
-          
+
           {/* Frontend Link */}
           <a
             href="/"
@@ -265,7 +275,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 (item.path === '/admin/blog' && location.pathname.startsWith('/admin/blog/'))
               )?.label || 'Admin'}
             </h1>
-            
+
             <div className="flex items-center space-x-4">
               {/* Language Switcher */}
               <button

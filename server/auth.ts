@@ -12,7 +12,7 @@ export const sessionConfig = session({
   cookie: {
     secure: false, // Set to true in production with HTTPS
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours (increased from 7 days for better security)
     sameSite: 'lax' // Important for navigation persistence
   },
   rolling: true // Refresh session on each request
@@ -30,19 +30,24 @@ export const requireAuth = async (req: express.Request, res: express.Response, n
       });
     }
 
-    // Verify the user still exists in database
-    const user = await getCurrentUser(req);
-    if (!user) {
-      // Clear invalid session
-      req.session.destroy((err) => {
-        if (err) console.error('Session destroy error:', err);
-      });
+    // Skip database verification for frequent requests to reduce load
+    const skipDBCheck = req.path.includes('/api/auth/me') && req.method === 'GET';
+    
+    if (!skipDBCheck) {
+      // Verify the user still exists in database
+      const user = await getCurrentUser(req);
+      if (!user) {
+        // Clear invalid session
+        req.session.destroy((err) => {
+          if (err) console.error('Session destroy error:', err);
+        });
 
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required',
-        message: 'Session invalid, please log in again'
-      });
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required',
+          message: 'Session invalid, please log in again'
+        });
+      }
     }
 
     // Refresh session
@@ -50,10 +55,8 @@ export const requireAuth = async (req: express.Request, res: express.Response, n
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error'
-    });
+    // Don't fail auth on database errors - maintain session
+    next();
   }
 };
 

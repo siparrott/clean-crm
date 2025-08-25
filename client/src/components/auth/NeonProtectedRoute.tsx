@@ -8,8 +8,21 @@ interface NeonProtectedRouteProps {
 
 const NeonProtectedRoute: React.FC<NeonProtectedRouteProps> = ({ children }) => {
   const { user, isAdmin, loading } = useNeonAuth();
+  const [shouldRedirect, setShouldRedirect] = React.useState(false);
 
-  if (loading) {
+  React.useEffect(() => {
+    // Only redirect after a reasonable delay to avoid flash redirects
+    if (!loading && (!user || !isAdmin)) {
+      const timer = setTimeout(() => {
+        setShouldRedirect(true);
+      }, 1000); // Give 1 second for auth to resolve
+      
+      return () => clearTimeout(timer);
+    }
+  }, [loading, user, isAdmin]);
+
+  // Show loading for initial load or quick transitions
+  if (loading || (!user && !shouldRedirect)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -20,7 +33,7 @@ const NeonProtectedRoute: React.FC<NeonProtectedRouteProps> = ({ children }) => 
     );
   }
 
-  if (!user || !isAdmin) {
+  if (shouldRedirect || (!user || !isAdmin)) {
     console.log('Auth failed - redirecting to login. User:', !!user, 'IsAdmin:', isAdmin);
     return <Navigate to="/admin/login" replace />;
   }
