@@ -45,24 +45,47 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (storedUser) {
         try {
           const userData = JSON.parse(storedUser);
+          console.log('✅ Found stored user:', userData.email, userData.role);
           setUser(userData);
           setIsAdmin(userData.role === 'admin' || userData.role === 'super_admin');
           setLoading(false);
           isCheckingRef.current = false;
           return;
         } catch (parseError) {
+          console.log('❌ Failed to parse stored user, removing');
           localStorage.removeItem('admin_user');
         }
       }
 
-      // No stored user - user is not authenticated
-      setUser(null);
-      setIsAdmin(false);
+      // Verify session with server only if no localStorage
+      const response = await fetch('/api/auth/verify', {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.user) {
+          console.log('✅ Server verified user:', result.user.email);
+          setUser(result.user);
+          setIsAdmin(result.user.role === 'admin' || result.user.role === 'super_admin');
+          localStorage.setItem('admin_user', JSON.stringify(result.user));
+        } else {
+          setUser(null);
+          setIsAdmin(false);
+        }
+      } else {
+        setUser(null);
+        setIsAdmin(false);
+      }
     } catch (error) {
       console.error('Auth check failed:', error);
-      // On any error, clear auth state
-      setUser(null);
-      setIsAdmin(false);
+      // Only clear auth if there's a real server error and no localStorage
+      const storedUser = localStorage.getItem('admin_user');
+      if (!storedUser) {
+        setUser(null);
+        setIsAdmin(false);
+      }
     } finally {
       setLoading(false);
       isCheckingRef.current = false;

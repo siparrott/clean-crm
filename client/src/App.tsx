@@ -116,50 +116,50 @@ function App() {
                 <Route path="/survey-demo" element={<SurveySystemDemoPage />} />
                 <Route path="/survey/:id" element={<SurveyTakingPage />} />
                 <Route path="/download-data" element={<DownloadDataPage />} />
-                
+
                 {/* Admin routes */}
                 <Route path="/admin/login" element={<NeonAdminLoginPage />} />
                 <Route path="/admin/supabase-login" element={<AdminLoginPage />} />
                 <Route path="/admin/dev" element={<AdminDashboardPageDev />} />
-                <Route 
-                  path="/admin" 
+                <Route
+                  path="/admin"
                   element={
                     <NeonProtectedRoute>
                       <AdminDashboardPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/dashboard" 
+                <Route
+                  path="/admin/dashboard"
                   element={
                     <NeonProtectedRoute>
                       <AdminDashboardPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/leads" 
+                <Route
+                  path="/admin/leads"
                   element={
                     <NeonProtectedRoute>
                       <AdminLeadsPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/voucher-sales" 
+                <Route
+                  path="/admin/voucher-sales"
                   element={
                     <NeonProtectedRoute>
                       <AdminVoucherSalesPageV3 />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/clients" 
+                <Route
+                  path="/admin/clients"
                   element={
                     <NeonProtectedRoute>
                       <AdminClientsPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
                 <Route
                   path="/admin/clients/new"
@@ -213,239 +213,258 @@ function App() {
                   path="/admin/galleries"
                   element={
                     <NeonProtectedRoute>
-                      <GalleriesPage />
+                      <AdminGalleriesPage />
                     </NeonProtectedRoute>
                   }
                 />
-                <Route 
-                  path="/admin/galleries/new" 
+                <Route
+                  path="/admin/galleries/new"
                   element={
                     <NeonProtectedRoute>
                       <AdminGalleryCreatePage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/galleries/:id/edit" 
+                <Route
+                  path="/admin/galleries/:id/edit"
                   element={
                     <NeonProtectedRoute>
                       <AdminGalleryEditPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
+                />
+                <Route
+                  path="/admin/galleries/:id"
+                  element={
+                    <NeonProtectedRoute>
+                      <AdminGalleryDetailPage />
+                    </NeonProtectedRoute>
+                  }
                 />
 
-                <Route 
-                  path="/admin/calendar" 
-                  element={
-                    <NeonProtectedRoute>
-                      <CalendarPage />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/invoices" 
-                  element={
-                    <NeonProtectedRoute>
-                      <InvoicesPage />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/files" 
-                  element={
-                    <NeonProtectedRoute>
-                      <FilesPage />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/pro-files" 
-                  element={
-                    <NeonProtectedRoute>
-                      <ProDigitalFilesPage />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/campaigns" 
-                  element={
-                    <NeonProtectedRoute>
-                      <CampaignsPage />
-                    </NeonProtectedRoute>
-                  } 
-                />                <Route 
-                  path="/admin/inbox" 
-                  element={
-                    <NeonProtectedRoute>
-                      <AdminInboxPageV2 />
-                    </NeonProtectedRoute>
-                  } 
-                />                <Route 
-                  path="/admin/questionnaires" 
-                  element={
-                    <NeonProtectedRoute>
-                      <QuestionnairesPageV2 />
-                    </NeonProtectedRoute>
-                  } 
-                /><Route 
-                  path="/admin/reports" 
-                  element={
-                    <NeonProtectedRoute>
-                      <ComprehensiveReportsPage />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/crm-assistant" 
-                  element={
-                    <NeonProtectedRoute>
-                      <CRMOperationsAssistant />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/knowledge-base" 
-                  element={
-                    <NeonProtectedRoute>
-                      <KnowledgeBasePage />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/test" 
-                  element={
-                    <NeonProtectedRoute>
-                      <TestPage />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/customization" 
-                  element={
-                    <NeonProtectedRoute>
-                      <CustomizationPage />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/studio-templates" 
-                  element={
-                    <NeonProtectedRoute>
-                      <StudioCustomization />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/website-wizard" 
-                  element={
-                    <NeonProtectedRoute>
-                      <WebsiteCustomizationWizard />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/website-analyzer" 
-                  element={
-                    <NeonProtectedRoute>
-                      <WebsiteWizard />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/" 
-                  element={<HomePage />} 
-                />
-                <Route 
-                  path="/home" 
-                  element={<HomePage />} 
-                />
-                <Route 
-                  path="/admin/calendar" 
+                <Route
+                  path="/admin/calendar"
                   element={
                     <NeonProtectedRoute>
                       <PhotographyCalendarPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/blog" 
+                <Route
+                  path="/admin/invoices"
+                  element={
+                    <NeonProtectedRoute>
+                      <InvoicesPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/files"
+                  element={
+                    <NeonProtectedRoute>
+                      <ProDigitalFilesPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/digital-files"
+                  element={
+                    <NeonProtectedRoute>
+                      <ProDigitalFilesPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/campaigns"
+                  element={
+                    <NeonProtectedRoute>
+                      <CampaignsPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/email-campaigns"
+                  element={
+                    <NeonProtectedRoute>
+                      <CampaignsPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/inbox"
+                  element={
+                    <NeonProtectedRoute>
+                      <AdminInboxPageV2 />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/questionnaires"
+                  element={
+                    <NeonProtectedRoute>
+                      <QuestionnairesPageV2 />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/reports"
+                  element={
+                    <NeonProtectedRoute>
+                      <ComprehensiveReportsPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/crm-assistant"
+                  element={
+                    <NeonProtectedRoute>
+                      <CRMOperationsAssistant />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/knowledge-base"
+                  element={
+                    <NeonProtectedRoute>
+                      <KnowledgeBasePage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/test"
+                  element={
+                    <NeonProtectedRoute>
+                      <TestPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/customization"
+                  element={
+                    <NeonProtectedRoute>
+                      <CustomizationPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/studio-templates"
+                  element={
+                    <NeonProtectedRoute>
+                      <StudioCustomization />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/website-wizard"
+                  element={
+                    <NeonProtectedRoute>
+                      <WebsiteCustomizationWizard />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/website-analyzer"
+                  element={
+                    <NeonProtectedRoute>
+                      <WebsiteWizard />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/"
+                  element={<HomePage />}
+                />
+                <Route
+                  path="/home"
+                  element={<HomePage />}
+                />
+                <Route
+                  path="/admin/calendar"
+                  element={
+                    <NeonProtectedRoute>
+                      <PhotographyCalendarPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/blog"
                   element={
                     <NeonProtectedRoute>
                       <AdminBlogPostsPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/blog/posts" 
+                <Route
+                  path="/admin/blog/posts"
                   element={
                     <NeonProtectedRoute>
                       <AdminBlogPostsPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/blog/new" 
+                <Route
+                  path="/admin/blog/new"
                   element={
                     <NeonProtectedRoute>
                       <AdminBlogNewPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/blog/edit/:id" 
+                <Route
+                  path="/admin/blog/edit/:id"
                   element={
                     <NeonProtectedRoute>
                       <AdminBlogEditPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/autoblog" 
+                <Route
+                  path="/admin/autoblog"
+                  element={
+                    <NeonProtectedRoute>
+                      <AutoBlogGeneratorFixed />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/autoblog-generator"
                   element={
                     <NeonProtectedRoute>
                       <AutoBlogGenerator />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/autoblog-generator" 
-                  element={
-                    <NeonProtectedRoute>
-                      <AutoBlogGenerator />
-                    </NeonProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/autoblog-generator-fixed" 
+                <Route
+                  path="/admin/autoblog-generator-fixed"
                   element={
                     <NeonProtectedRoute>
                       <AutoBlogGeneratorFixed />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/autoblog-v3" 
+                <Route
+                  path="/admin/autoblog-v3"
                   element={
                     <NeonProtectedRoute>
                       <AutoBlogGeneratorFixed />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/autoblog-v4" 
+                <Route
+                  path="/admin/autoblog-v4"
                   element={
                     <NeonProtectedRoute>
                       <AutoBlogGeneratorFixed />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/admin/clients/new" 
+                <Route
+                  path="/admin/clients/new"
                   element={
                     <NeonProtectedRoute>
                       <ClientFormPage />
                     </NeonProtectedRoute>
-                  } 
+                  }
                 />
                 <Route path="/gallery-shop-test" element={<GalleryShopTest />} />
               </Routes>
