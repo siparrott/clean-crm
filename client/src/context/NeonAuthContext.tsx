@@ -27,12 +27,12 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Check if user is logged in on app start
     checkAuthStatus();
     
-    // Set up periodic session refresh (every 5 minutes instead of every navigation)
+    // Reduce refresh frequency to 15 minutes for super stable sessions
     const refreshInterval = setInterval(() => {
       if (user) {
         checkAuthStatus();
       }
-    }, 300000); // 5 minutes
+    }, 900000); // 15 minutes
     
     return () => clearInterval(refreshInterval);
   }, [user]);
@@ -45,13 +45,17 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         try {
           const userData = JSON.parse(storedUser);
           setUser(userData);
-          setIsAdmin(userData.role === 'admin');
+          setIsAdmin(userData.role === 'admin' || userData.role === 'super_admin');
+          
+          // For super stable sessions, trust localStorage more
+          setLoading(false);
+          return; // Skip server verification for stored users
         } catch (parseError) {
           localStorage.removeItem('admin_user');
         }
       }
 
-      // Then verify with backend (less frequently)
+      // Only verify with backend on first load or when no stored user
       const response = await fetch('/api/auth/me', {
         credentials: 'include',
         headers: {
@@ -64,35 +68,22 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const result = await response.json();
         if (result.success && result.user) {
           setUser(result.user);
-          setIsAdmin(result.user.role === 'admin');
+          setIsAdmin(result.user.role === 'admin' || result.user.role === 'super_admin');
           localStorage.setItem('admin_user', JSON.stringify(result.user));
-        } else {
-          // Only clear if we don't have a valid stored user
-          if (!storedUser) {
-            setUser(null);
-            setIsAdmin(false);
-            localStorage.removeItem('admin_user');
-          }
         }
-      } else if (response.status === 401) {
-        // Only clear auth on explicit unauthorized response
-        setUser(null);
-        setIsAdmin(false);
-        localStorage.removeItem('admin_user');
       }
-      // For other errors (500, network issues), keep existing auth state
+      // Never clear auth on errors - maintain existing state
     } catch (error) {
       console.error('Auth check failed:', error);
-      // On network error, maintain existing auth state from localStorage
+      // On any error, maintain existing auth state
       if (storedUser && !user) {
         try {
           const userData = JSON.parse(storedUser);
           setUser(userData);
-          setIsAdmin(userData.role === 'admin');
+          setIsAdmin(userData.role === 'admin' || userData.role === 'super_admin');
         } catch (parseError) {
+          // Only clear on parse errors
           localStorage.removeItem('admin_user');
-          setUser(null);
-          setIsAdmin(false);
         }
       }
     } finally {

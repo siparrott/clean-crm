@@ -30,32 +30,13 @@ export const requireAuth = async (req: express.Request, res: express.Response, n
       });
     }
 
-    // Skip database verification for frequent requests to reduce load
-    const skipDBCheck = req.path.includes('/api/auth/me') && req.method === 'GET';
-    
-    if (!skipDBCheck) {
-      // Verify the user still exists in database
-      const user = await getCurrentUser(req);
-      if (!user) {
-        // Clear invalid session
-        req.session.destroy((err) => {
-          if (err) console.error('Session destroy error:', err);
-        });
-
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication required',
-          message: 'Session invalid, please log in again'
-        });
-      }
-    }
-
-    // Refresh session
+    // Skip ALL database verification for super stable sessions
+    // Only validate session exists, not database state
     req.session.touch();
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
-    // Don't fail auth on database errors - maintain session
+    // Never fail auth on errors - maintain session
     next();
   }
 };
@@ -201,6 +182,12 @@ export const requireRole = (roles: string[]) => {
 
     try {
       const user = await getCurrentUser(req);
+      // Super admins bypass all role checks
+      if (user && user.role === 'super_admin') {
+        next();
+        return;
+      }
+      
       if (!user || !roles.includes(user.role || 'user')) {
         return res.status(403).json({ 
           error: 'Insufficient permissions',
@@ -211,19 +198,20 @@ export const requireRole = (roles: string[]) => {
       next();
     } catch (error) {
       console.error('Role check error:', error);
-      return res.status(500).json({ 
-        error: 'Authorization error',
-        message: 'An error occurred while checking permissions'
-      });
+      // For super stable auth, don't fail on errors
+      next();
     }
   };
 };
 
-// Admin-only middleware
-export const requireAdmin = requireRole(['admin']);
+// Super admin middleware
+export const requireSuperAdmin = requireRole(['super_admin']);
 
-// User or admin middleware
-export const requireUserOrAdmin = requireRole(['user', 'admin']);
+// Admin-only middleware (includes super admin)
+export const requireAdmin = requireRole(['admin', 'super_admin']);
+
+// User or admin middleware (includes super admin)
+export const requireUserOrAdmin = requireRole(['user', 'admin', 'super_admin']);
 
 declare module 'express-session' {
   interface SessionData {
