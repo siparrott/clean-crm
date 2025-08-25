@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  Save, 
-  X, 
-  BookOpen, 
-  MessageCircle, 
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Save,
+  X,
+  BookOpen,
+  MessageCircle,
   Settings,
   Eye,
   Bot,
@@ -77,7 +77,7 @@ const KnowledgeBasePage: React.FC = () => {
 
   const categories = [
     'General FAQ',
-    'Booking Process', 
+    'Booking Process',
     'Pricing & Packages',
     'Photography Services',
     'Technical Support',
@@ -99,7 +99,7 @@ const KnowledgeBasePage: React.FC = () => {
       const response = await fetch('/api/knowledge-base', {
         credentials: 'include'
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setKnowledgeEntries(data);
@@ -120,7 +120,7 @@ const KnowledgeBasePage: React.FC = () => {
           createdBy: 'admin'
         },
         {
-          id: '2', 
+          id: '2',
           title: 'What are your photography packages?',
           content: 'We offer several packages: Family Session (€299), Newborn Session (€399), Maternity Session (€349), and Business Headshots (€199). All packages include professional editing and digital gallery access.',
           category: 'Pricing & Packages',
@@ -141,7 +141,7 @@ const KnowledgeBasePage: React.FC = () => {
       const response = await fetch('/api/openai/assistants', {
         credentials: 'include'
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setAssistants(data);
@@ -227,7 +227,7 @@ const KnowledgeBasePage: React.FC = () => {
 
       if (response.ok) {
         const updatedEntry = await response.json();
-        const updatedEntries = knowledgeEntries.map(entry => 
+        const updatedEntries = knowledgeEntries.map(entry =>
           entry.id === editingEntry.id ? updatedEntry : entry
         );
         setKnowledgeEntries(updatedEntries);
@@ -268,12 +268,12 @@ const KnowledgeBasePage: React.FC = () => {
   };
 
   const resetAssistantForm = () => {
-    setAssistantFormData({ 
-      name: '', 
-      description: '', 
-      model: 'gpt-4o', 
-      instructions: '', 
-      knowledgeBaseIds: [] 
+    setAssistantFormData({
+      name: '',
+      description: '',
+      model: 'gpt-4o',
+      instructions: '',
+      knowledgeBaseIds: []
     });
     setError(null);
   };
@@ -348,8 +348,9 @@ const KnowledgeBasePage: React.FC = () => {
   };
 
   const filteredEntries = knowledgeEntries.filter(entry => {
-    const matchesSearch = entry.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         entry.content.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = entry.title?.toLowerCase()?.includes(searchTerm?.toLowerCase() || '') ||
+                         entry.content?.toLowerCase()?.includes(searchTerm?.toLowerCase() || '');
+
     const matchesCategory = selectedCategory === 'all' || entry.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -406,7 +407,7 @@ const KnowledgeBasePage: React.FC = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center">
             <CheckCircle className="h-8 w-8 text-green-600" />
@@ -447,7 +448,7 @@ const KnowledgeBasePage: React.FC = () => {
         <div className="px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-medium text-gray-900">Knowledge Base Articles</h3>
         </div>
-        
+
         {loading ? (
           <div className="p-8 text-center">Loading...</div>
         ) : filteredEntries.length === 0 ? (
@@ -468,9 +469,9 @@ const KnowledgeBasePage: React.FC = () => {
                         {entry.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
-                    
+
                     <p className="text-gray-600 mb-3 line-clamp-2">{entry.content}</p>
-                    
+
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <span className="flex items-center gap-1">
                         <Tag size={14} />
@@ -489,7 +490,7 @@ const KnowledgeBasePage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-2 ml-4">
                     <button
                       onClick={() => startEdit(entry)}
@@ -522,7 +523,7 @@ const KnowledgeBasePage: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">AI Assistants</h1>
           <p className="text-gray-600 mt-1">Manage OpenAI assistants and their knowledge base connections</p>
         </div>
-        <button 
+        <button
           onClick={() => setShowCreateAssistantModal(true)}
           className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2"
         >
@@ -553,7 +554,7 @@ const KnowledgeBasePage: React.FC = () => {
                 <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
                   <Settings size={16} />
                 </button>
-                <button 
+                <button
                   onClick={() => handleDeleteAssistant(assistant.id)}
                   className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
                 >
