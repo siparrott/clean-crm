@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase, checkSupabaseProjectStatus, isProjectPausedError } from '../lib/supabase';
 
@@ -67,7 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     // Attempting to sign in
-    
+
     try {
       // First check if the Supabase project is active
       const projectStatus = await checkSupabaseProjectStatus();
@@ -82,12 +82,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         // console.error removed
-        
+
         // Check if this is a project paused error
-        if (isProjectPausedError(error)) {
+        if (isProjectPausedError({ message: error.message })) {
           throw new Error('Your Supabase project appears to be paused or experiencing database issues. Please:\n\n1. Visit your Supabase dashboard (https://supabase.com/dashboard)\n2. Check if your project is paused due to inactivity\n3. If paused, click "Resume" to reactivate your project\n4. Verify your project is on an active billing plan\n5. Check the project logs for any specific error details\n\nOnce your project is active, try logging in again.');
         }
-        
+
         // Provide more specific error messages based on error types
         if (error.message.includes('Database error querying schema')) {
           throw new Error('Database connection error. Your Supabase project may be paused or experiencing issues. Please:\n\n1. Check your Supabase dashboard to ensure the project is active\n2. Verify your environment variables match your project settings\n3. Check Supabase project logs for more details\n4. Try refreshing the page and attempting login again');
@@ -100,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (error.status === 500) {
           throw new Error('Server error occurred. Please check:\n\n1. Supabase project status in your dashboard\n2. Project logs for specific error details\n3. Try again in a few minutes');
         }
-        
+
         throw error;
       }
 
