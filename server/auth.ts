@@ -5,27 +5,56 @@ import { storage } from './storage';
 
 // Session configuration
 export const sessionConfig = session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+  secret: process.env.SESSION_SECRET || 'dev-secret-key-photography-crm-2024',
   resave: false,
   saveUninitialized: false,
+  name: 'admin.session.id', // Custom session name
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // Set to true in production with HTTPS
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    sameSite: 'lax' // Important for navigation persistence
   },
-  name: 'photography-crm-session'
+  rolling: true // Refresh session on each request
 });
 
-// Authentication middleware
-export const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (req.session && req.session.userId) {
-    return next();
+// Middleware to require authentication
+export const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  try {
+    // Check if session exists and has userId
+    if (!req.session || !req.session.userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+        message: 'Please log in to access this resource'
+      });
+    }
+
+    // Verify the user still exists in database
+    const user = await getCurrentUser(req);
+    if (!user) {
+      // Clear invalid session
+      req.session.destroy((err) => {
+        if (err) console.error('Session destroy error:', err);
+      });
+
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+        message: 'Session invalid, please log in again'
+      });
+    }
+
+    // Refresh session
+    req.session.touch();
+    next();
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
   }
-  
-  return res.status(401).json({ 
-    error: 'Authentication required',
-    message: 'Please log in to access this resource'
-  });
 };
 
 // Optional authentication middleware (doesn't block unauthenticated users)
@@ -44,7 +73,7 @@ export const getCurrentUser = async (req: express.Request) => {
   if (!req.session || !req.session.userId) {
     return null;
   }
-  
+
   try {
     return await storage.getAdminUser(req.session.userId);
   } catch (error) {

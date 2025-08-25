@@ -7,6 +7,9 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import "./jobs";
 
+// Import and configure session middleware
+import { sessionConfig } from './auth';
+
 // Override demo mode for production New Age Fotografie site
 // This is NOT a demo - it's the live business website
 if (!process.env.DEMO_MODE || process.env.DEMO_MODE === 'true') {
@@ -17,6 +20,9 @@ if (!process.env.DEMO_MODE || process.env.DEMO_MODE === 'true') {
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Session middleware must be before auth routes
+app.use(sessionConfig);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static('public/uploads'));
@@ -99,7 +105,7 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  
+
   // For deployment, we'll use development Vite middleware since the build is too complex
   // This serves the React app properly while keeping production API endpoints
   if (app.get("env") === "development" || process.env.NODE_ENV === "production") {
@@ -131,7 +137,7 @@ app.use((req, res, next) => {
 
   const port = await findPort(parseInt(process.env.PORT || '5000', 10));
   const host = "0.0.0.0";
-  
+
   server.listen(port, host, () => {
     log(`✅ New Age Fotografie CRM successfully started on ${host}:${port}`);
     log(`Environment: ${process.env.NODE_ENV}`);

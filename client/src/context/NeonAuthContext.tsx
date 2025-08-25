@@ -30,19 +30,13 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const checkAuthStatus = async () => {
     try {
-      // Check localStorage first
-      const storedUser = localStorage.getItem('admin_user');
-      if (storedUser) {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
-        setIsAdmin(userData.role === 'admin');
-        setLoading(false);
-        return;
-      }
-
-      // Check session with backend
+      // Always check with backend first for current session
       const response = await fetch('/api/auth/me', {
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
       });
 
       if (response.ok) {
@@ -56,16 +50,47 @@ export const NeonAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setIsAdmin(false);
           localStorage.removeItem('admin_user');
         }
-      } else {
+      } else if (response.status === 401) {
+        // Unauthorized - clear everything
         setUser(null);
         setIsAdmin(false);
         localStorage.removeItem('admin_user');
+      } else {
+        // Check localStorage as fallback only for non-auth errors
+        const storedUser = localStorage.getItem('admin_user');
+        if (storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            setUser(userData);
+            setIsAdmin(userData.role === 'admin');
+          } catch (parseError) {
+            localStorage.removeItem('admin_user');
+            setUser(null);
+            setIsAdmin(false);
+          }
+        } else {
+          setUser(null);
+          setIsAdmin(false);
+        }
       }
     } catch (error) {
       console.error('Auth check failed:', error);
-      setUser(null);
-      setIsAdmin(false);
-      localStorage.removeItem('admin_user');
+      // On network error, check localStorage as fallback
+      const storedUser = localStorage.getItem('admin_user');
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          setUser(userData);
+          setIsAdmin(userData.role === 'admin');
+        } catch (parseError) {
+          localStorage.removeItem('admin_user');
+          setUser(null);
+          setIsAdmin(false);
+        }
+      } else {
+        setUser(null);
+        setIsAdmin(false);
+      }
     } finally {
       setLoading(false);
     }
