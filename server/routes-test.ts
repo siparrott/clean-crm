@@ -2,18 +2,21 @@
 import type { Express } from "express";
 import Stripe from "stripe";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2023-10-16",
-});
+}) : null;
 
 export function registerTestRoutes(app: Express) {
   // Test Stripe payment intent creation (without charging)
   app.post("/api/test/stripe-payment-intent", async (req, res) => {
     try {
+      if (!stripe) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Stripe not configured - STRIPE_SECRET_KEY environment variable missing'
+        });
+      }
+
       const { amount = 1000, currency = 'eur' } = req.body; // Default €10.00
       
       const paymentIntent = await stripe.paymentIntents.create({
@@ -49,6 +52,13 @@ export function registerTestRoutes(app: Express) {
   // Test voucher purchase flow (without actual Stripe charge)
   app.post("/api/test/voucher-purchase", async (req, res) => {
     try {
+      if (!stripe) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Stripe not configured - STRIPE_SECRET_KEY environment variable missing'
+        });
+      }
+
       const { voucherId, quantity = 1, customerDetails, personalization } = req.body;
 
       // Validate input
@@ -112,6 +122,13 @@ export function registerTestRoutes(app: Express) {
   // Get Stripe account info (for testing connection)
   app.get("/api/test/stripe-account", async (req, res) => {
     try {
+      if (!stripe) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Stripe not configured - STRIPE_SECRET_KEY environment variable missing'
+        });
+      }
+
       const account = await stripe.accounts.retrieve();
       
       res.json({
