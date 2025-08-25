@@ -137,7 +137,6 @@ import-*.mjs
 !GITHUB-DEPLOYMENT-READY.md
 
 # Migration and export directories
-agent/
 attached_assets/
 complete_neon_export/
 CRM_Agent_Export/
