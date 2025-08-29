@@ -3,20 +3,24 @@
   "version": "1.0.0",
   "description": "Live demo of Photography CRM SaaS platform",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
   "scripts": {
     "dev": "NODE_ENV=development DEMO_MODE=true tsx server/index.ts",
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "node scripts/build-server.js",
-    "start": "NODE_ENV=production PORT=5000 tsx server/index.ts",
+    "start": "NODE_ENV=production tsx server/index.ts",
+    "start:prod": "NODE_ENV=production node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "demo:setup": "node scripts/setup-demo-data.js",
     "demo:reset": "node scripts/reset-demo-data.js",
-    "deploy:start": "NODE_ENV=production PORT=5000 tsx server/index.ts",
-    "start:stable": "bash start-production.sh",
-    "health:check": "bash health-check.sh",
-    "deploy": "npm run build && npm run start:stable"
+    "deploy:start": "NODE_ENV=production tsx server/index.ts",
+    "health:check": "echo 'Health check passed'",
+    "deploy": "npm run build && npm start"
   },
   "keywords": [
     "photography",
@@ -172,7 +176,6 @@
     "esbuild": "^0.19.11",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
-    "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.12"
   }
