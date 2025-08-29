@@ -153,6 +153,7 @@ build-for-deployment.js
 deployment-package.json
 package-*.json
 !package.json
+!package-lock.json
 package.json.backup
 esbuild.config.js
 esbuild.deployment.config.js
