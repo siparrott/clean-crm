@@ -3,8 +3,7 @@ services:
     name: clean-crm
     env: node
     region: oregon
-    runtime: node
-    buildCommand: npm ci && npm run build
+    buildCommand: npm install && npm run build
     startCommand: npm start
     plan: free
     envVars:
@@ -13,8 +12,6 @@ services:
       - key: PORT
         value: 10000
       - key: DEMO_MODE
-        value: false
-      - key: NPM_CONFIG_PRODUCTION
         value: false
     autoDeploy: true
     healthCheckPath: /api/health
