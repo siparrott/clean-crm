@@ -6,13 +6,16 @@
   # Directory that contains the deploy-ready HTML files and assets
   publish = "dist/public"
   
-  # Default build command
-  command = "npm install --legacy-peer-deps && npm run build"
+  # Simple build command - Netlify will handle npm install automatically
+  command = "npm run build"
 
 [build.environment]
   NODE_VERSION = "20"
-  NPM_FLAGS = "--legacy-peer-deps"
+  NPM_CONFIG_LEGACY_PEER_DEPS = "true"
   NODE_ENV = "production"
+  NODE_OPTIONS = "--max-old-space-size=4096"
+  SKIP_PREFLIGHT_CHECK = "true"
+  GENERATE_SOURCEMAP = "false"
 
 # Redirect rules for SPA (Single Page Application)
 [[redirects]]
