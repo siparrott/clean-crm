@@ -14,5 +14,7 @@ services:
         value: 10000
       - key: DEMO_MODE
         value: false
+      - key: NPM_CONFIG_PRODUCTION
+        value: false
     autoDeploy: true
     healthCheckPath: /api/health
