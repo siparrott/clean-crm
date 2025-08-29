@@ -6,8 +6,8 @@
   # Directory that contains the deploy-ready HTML files and assets
   publish = "dist/public"
   
-  # Build command - remove package-lock to avoid platform-specific native modules
-  command = "rm -f package-lock.json && npm install --legacy-peer-deps && npm run build"
+  # Build command - install specific Rollup native module for Linux + clean install
+  command = "rm -rf node_modules package-lock.json && npm install --legacy-peer-deps && npm install @rollup/rollup-linux-x64-gnu --save-optional && npm run build"
 
 [build.environment]
   NODE_VERSION = "20"
