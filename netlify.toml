@@ -7,7 +7,7 @@
   publish = "dist/public"
   
   # Default build command
-  command = "npm ci --legacy-peer-deps && npx vite build --mode production"
+  command = "npm install --legacy-peer-deps && npm run build"
 
 [build.environment]
   NODE_VERSION = "20"
