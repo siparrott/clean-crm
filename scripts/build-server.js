@@ -15,7 +15,7 @@ async function buildServerESM() {
       entryPoints: ['server/index.ts'],
       bundle: true,
       platform: 'node',
-      target: 'node18',
+      target: 'node20',
       format: 'esm', // ← This is the critical line that fixes the deployment
       outfile: 'dist/index.js',
       external: [

@@ -3,6 +3,7 @@ services:
     name: clean-crm
     env: node
     region: oregon
+    runtime: node
     buildCommand: npm ci && npm run build
     startCommand: npm start
     plan: free
