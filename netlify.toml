@@ -21,6 +21,13 @@
   NPM_CONFIG_TARGET_ARCH = "x64"
   NPM_CONFIG_CACHE = "/opt/buildhome/.npm"
 
+# API proxy - Connect frontend to Express backend on Render
+[[redirects]]
+  from = "/api/*"
+  to = "https://YOUR-RENDER-APP-NAME.onrender.com/api/:splat"
+  status = 200
+  force = true
+
 # Redirect rules for SPA (Single Page Application)
 [[redirects]]
   from = "/*"
