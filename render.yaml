@@ -3,17 +3,7 @@ services:
     name: clean-crm
     env: node
     region: oregon
-    buildCommand: |
-      echo "🔍 Starting build process..."
-      node --version
-      npm --version
-      pwd
-      ls -la
-      echo "📦 Installing dependencies..."
-      npm ci --legacy-peer-deps --production=false --no-audit --no-fund
-      echo "⚡ Building application..."
-      npx vite build --mode production
-      echo "✅ Build complete!"
+    buildCommand: npm ci --legacy-peer-deps && npx vite build --mode production --base=/ --outDir=dist/public
     startCommand: npm start
     plan: free
     envVars:
@@ -25,5 +15,7 @@ services:
         value: false
       - key: VITE_NODE_ENV
         value: production
+      - key: DISABLE_YARN
+        value: true
     autoDeploy: true
     healthCheckPath: /api/health

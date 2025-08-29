@@ -8,9 +8,10 @@
     "npm": ">=9.0.0"
   },
   "scripts": {
+    "prebuild": "echo 'Preparing build environment...' && npm --version",
     "dev": "NODE_ENV=development DEMO_MODE=true tsx server/index.ts",
-    "build": "npm run build:clean && npm run build:client",
-    "build:clean": "rm -rf dist || rmdir /s dist || echo 'Clean complete'",
+    "build": "vite build --mode production --base=/",
+    "build:clean": "echo 'Clean skipped'",
     "build:client": "vite build --mode production --base=/",
     "build:server": "echo 'Server build skipped - using tsx for production'",
     "start": "NODE_ENV=production tsx server/index.ts",
