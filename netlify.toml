@@ -6,13 +6,12 @@
   # Directory that contains the deploy-ready HTML files and assets
   publish = "dist/public"
   
-  # Build command with explicit dependency installation
-  command = "npm ci --legacy-peer-deps --include=dev && npm run build"
+  # Build command - now that package-lock.json is committed
+  command = "npm ci --legacy-peer-deps && npm run build"
 
 [build.environment]
   NODE_VERSION = "20"
   NPM_CONFIG_LEGACY_PEER_DEPS = "true"
-  NPM_CONFIG_INCLUDE = "dev"
   NODE_ENV = "production"
   NODE_OPTIONS = "--max-old-space-size=4096"
   SKIP_PREFLIGHT_CHECK = "true"
