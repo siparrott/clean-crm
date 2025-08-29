@@ -15,10 +15,13 @@ export default defineConfig({
     },
   },
   root: path.resolve(__dirname, "client"),
+  base: "/",
   build: {
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
     chunkSizeWarningLimit: 1000,
+    target: "es2020",
+    minify: "esbuild",
     rollupOptions: {
       output: {
         manualChunks: {
@@ -32,5 +35,8 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom'],
   },
 });
