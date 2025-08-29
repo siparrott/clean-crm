@@ -11,6 +11,7 @@
     "prebuild": "echo 'Preparing build environment...' && npm --version",
     "dev": "NODE_ENV=development DEMO_MODE=true tsx server/index.ts",
     "build": "vite build --mode production --base=/",
+    "build:netlify": "npm ci --legacy-peer-deps && vite build --mode production",
     "build:clean": "echo 'Clean skipped'",
     "build:client": "vite build --mode production --base=/",
     "build:server": "echo 'Server build skipped - using tsx for production'",
