@@ -6,8 +6,8 @@
   # Directory that contains the deploy-ready HTML files and assets
   publish = "dist/public"
   
-  # Build command - now that package-lock.json is committed
-  command = "npm ci --legacy-peer-deps && npm run build"
+  # Build command - remove package-lock to avoid platform-specific native modules
+  command = "rm -f package-lock.json && npm install --legacy-peer-deps && npm run build"
 
 [build.environment]
   NODE_VERSION = "20"
@@ -16,6 +16,10 @@
   NODE_OPTIONS = "--max-old-space-size=4096"
   SKIP_PREFLIGHT_CHECK = "true"
   GENERATE_SOURCEMAP = "false"
+  # Force npm to install platform-specific native modules
+  NPM_CONFIG_TARGET_PLATFORM = "linux"
+  NPM_CONFIG_TARGET_ARCH = "x64"
+  NPM_CONFIG_CACHE = "/opt/buildhome/.npm"
 
 # Redirect rules for SPA (Single Page Application)
 [[redirects]]
