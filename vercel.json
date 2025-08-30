@@ -2,17 +2,13 @@
   "version": 2,
   "buildCommand": "npm run build",
   "installCommand": "npm ci",
+  "outputDirectory": "dist/public",
   "builds": [
-    {
-      "src": "dist/public/**",
-      "use": "@vercel/static"
-    },
     {
       "src": "api/index.ts",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["server/**", "shared/**", "dist/**"],
-        "maxLambdaSize": "50mb"
+        "includeFiles": ["server/**", "shared/**"]
       }
     }
   ],
@@ -24,6 +20,10 @@
     {
       "source": "/uploads/(.*)",
       "destination": "/api/index.ts"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "env": {
