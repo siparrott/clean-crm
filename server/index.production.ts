@@ -91,7 +91,15 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
     });
   }
 
-  const port = parseInt(process.env.PORT || '5000', 10);
+  // Normalize and validate PORT coming from the environment.
+  // Railway requires PORT to be an integer between 0 and 65535; coerce and
+  // fall back to 10000 if it's missing or invalid to avoid deploy failures.
+  let port = parseInt(process.env.PORT ?? '', 10);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    console.warn(`Invalid or missing PORT environment variable (${process.env.PORT}). Falling back to 10000.`);
+    port = 10000;
+  }
+  process.env.PORT = String(port);
   const host = '0.0.0.0';
   
   server.listen(port, host, () => {

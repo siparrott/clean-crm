@@ -135,7 +135,14 @@ app.use((req, res, next) => {
     });
   };
 
-  const port = await findPort(parseInt(process.env.PORT || '5000', 10));
+  // Coerce and validate PORT from environment. If invalid, fall back to 10000.
+  let requestedPort = parseInt(process.env.PORT ?? '', 10);
+  if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) {
+    console.warn(`Invalid or missing PORT environment variable (${process.env.PORT}). Falling back to 10000.`);
+    requestedPort = 10000;
+  }
+
+  const port = await findPort(requestedPort);
   const host = "0.0.0.0";
 
   server.listen(port, host, () => {
