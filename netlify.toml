@@ -4,29 +4,14 @@
   base = "."
   
   # Directory that contains the deploy-ready HTML files and assets
-  publish = "dist/public"
+  publish = "dist"
   
-  # Build command - install specific Rollup native module for Linux + clean install
-  command = "rm -rf node_modules package-lock.json && npm install --legacy-peer-deps && npm install @rollup/rollup-linux-x64-gnu --save-optional && npm run build"
+  # Build command - use npm ci for faster, reliable builds
+  command = "npm ci && npm run build"
 
 [build.environment]
   NODE_VERSION = "20"
-  NPM_CONFIG_LEGACY_PEER_DEPS = "true"
   NODE_ENV = "production"
-  NODE_OPTIONS = "--max-old-space-size=4096"
-  SKIP_PREFLIGHT_CHECK = "true"
-  GENERATE_SOURCEMAP = "false"
-  # Force npm to install platform-specific native modules
-  NPM_CONFIG_TARGET_PLATFORM = "linux"
-  NPM_CONFIG_TARGET_ARCH = "x64"
-  NPM_CONFIG_CACHE = "/opt/buildhome/.npm"
-
-# API proxy - Connect frontend to Express backend on Render
-[[redirects]]
-  from = "/api/*"
-  to = "https://YOUR-RENDER-APP-NAME.onrender.com/api/:splat"
-  status = 200
-  force = true
 
 # Redirect rules for SPA (Single Page Application)
 [[redirects]]
