@@ -186,7 +186,6 @@ keepalive.js
 
 # Deployment scripts and configs (keep only necessary)
 cloud-run.yaml
-Dockerfile
 start-production*.sh
 start-production*.mjs
 start-deployment.*
