@@ -1,6 +1,6 @@
 # Nixpacks configuration for Railway deployment
 [phases.setup]
-cmds = ["echo 'No setup needed'"]
+cmds = ["cp package.production.json package.json"]
 
 [phases.install]
 cmds = ["npm ci --only=production"]
