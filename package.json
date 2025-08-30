@@ -20,6 +20,7 @@
     "validate:deps": "npm list vite tailwindcss autoprefixer postcss",
     "start": "cross-env NODE_ENV=production tsx server/index.ts",
     "start:prod": "cross-env NODE_ENV=production tsx server/index.ts",
+    "heroku-postbuild": "npm run build",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "demo:setup": "node scripts/setup-demo-data.js",
