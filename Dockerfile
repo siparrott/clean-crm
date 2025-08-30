@@ -1,6 +1,6 @@
 
 # --- deps stage: install ALL deps (incl. dev) to build
-# Cache bust: 2025-08-30-fix
+# CACHE BUSTER 2025-08-30-07:10 - FORCE REBUILD ALL LAYERS
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
@@ -13,7 +13,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-# --- runner stage: install only prod deps and copy build
+# --- runner stage: install ALL deps and copy build
+# FIXED: Remove --omit=dev to prevent missing dependency errors
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
