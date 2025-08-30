@@ -18,6 +18,7 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV RAILWAY_CACHE_BUST=2025-08-30-07-15
 COPY package*.json ./
 RUN npm ci && npm cache clean --force
 
