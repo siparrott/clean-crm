@@ -5,6 +5,8 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
+# Rebuild native dependencies for Alpine Linux (fixes rollup platform binaries)
+RUN npm rebuild
 
 # --- build stage: build your app
 FROM node:20-alpine AS build
