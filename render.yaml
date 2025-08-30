@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: clean-crm-backend
+    name: clean-crm-fullstack
     env: node
     region: oregon
-    buildCommand: npm install --legacy-peer-deps
+    buildCommand: npm install --legacy-peer-deps && npm run build
     startCommand: npm start
     plan: free
     envVars:
@@ -13,5 +13,7 @@ services:
         value: 10000
       - key: DEMO_MODE
         value: false
+      - key: DATABASE_URL
+        value: # ADD YOUR NEON URL HERE
     autoDeploy: true
     healthCheckPath: /api/health
