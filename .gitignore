@@ -69,7 +69,8 @@ jspm_packages/
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+# TEMPORARY: Allow dist for Railway deployment  
+# dist
 
 # Storybook build outputs
 .out

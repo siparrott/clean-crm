@@ -4,7 +4,7 @@ providers = ["node"]
 NODE_ENV = "production"
 
 [phases.build]
-cmd = "npm ci && npm run build"
+cmd = "echo 'Skipping build - using pre-built files'"
 
 [phases.start]
 cmd = "npm start"
