@@ -1,3 +1,0 @@
-[# Disabled - moved to removed-nixpacks.toml]
-# Original file caused Railway to use Nixpacks; this repo uses a Dockerfile build.
-
