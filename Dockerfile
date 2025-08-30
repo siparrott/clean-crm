@@ -1,5 +1,6 @@
 
 # --- deps stage: install ALL deps (incl. dev) to build
+# Cache bust: 2025-08-30-fix
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
