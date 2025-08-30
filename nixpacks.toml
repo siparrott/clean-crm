@@ -3,8 +3,11 @@ providers = ["node"]
 [variables]
 NODE_ENV = "production"
 
+[phases.setup]
+cmd = "echo 'Setup phase - no build tools needed'"
+
 [phases.build]
-cmd = "echo 'Skipping build - using pre-built files'"
+cmd = "echo 'Using pre-built files - skipping build'"
 
 [phases.start]
 cmd = "npm start"
