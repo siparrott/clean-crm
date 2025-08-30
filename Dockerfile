@@ -13,6 +13,8 @@ FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Rebuild platform binaries again in build stage for Alpine Linux
+RUN npm rebuild
 RUN npm run build
 
 # --- runner stage: install ALL deps and copy build
