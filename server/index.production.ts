@@ -64,6 +64,8 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
 
   // Serve static files from dist/public (production build)
   const distPath = path.join(process.cwd(), 'dist/public');
+  const clientPath = path.join(process.cwd(), 'client');
+  
   if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
     
@@ -78,7 +80,6 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
     });
   } else {
     // Development fallback - serve from client directory
-    const clientPath = path.join(process.cwd(), 'client');
     app.use(express.static(path.join(clientPath, 'public')));
     
     app.get('*', (req, res) => {
