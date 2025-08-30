@@ -1,55 +1,32 @@
-# Multi-stage build for optimal Docker image
-FROM node:20-alpine AS builder
 
+# --- deps stage: install ALL deps (incl. dev) to build
+FROM node:20-alpine AS deps
 WORKDIR /app
-
-# Copy package files
 COPY package*.json ./
-COPY tsconfig.json ./
-COPY vite.config.ts ./
-COPY tailwind.config.ts ./
-COPY postcss.config.js ./
-COPY components.json ./
-
-# Install dependencies
 RUN npm ci
 
-# Copy source code
+# --- build stage: build your app
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Build the application
 RUN npm run build
 
-# Production stage
+# --- runner stage: install only prod deps and copy build
 FROM node:20-alpine AS runner
-
 WORKDIR /app
-
-# Copy package files
+ENV NODE_ENV=production
 COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
-# Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+# bring in the compiled output
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/server ./server
+COPY --from=build /app/client/dist ./client/dist
+COPY --from=build /app/public ./public
 
-# Copy built application
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server ./server
-COPY --from=builder /app/client/dist ./client/dist
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
-
-# Change ownership of the app directory
-RUN chown -R nextjs:nodejs /app
-USER nextjs
-
-# Expose port
+# Expose port for Railway
 EXPOSE 10000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:10000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
-
 # Start the application
-CMD ["npm", "start"]
+CMD ["npm", "run", "start"]
