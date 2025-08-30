@@ -1,13 +1,12 @@
-providers = ["node"]
-
-[variables]
-NODE_ENV = "production"
-
+# Nixpacks configuration for Railway deployment
 [phases.setup]
-cmd = "echo 'Setup phase - no build tools needed'"
+cmds = ["echo 'No setup needed'"]
+
+[phases.install]
+cmds = ["npm ci --only=production"]
 
 [phases.build]
-cmd = "echo 'Using pre-built files - skipping build'"
+cmds = ["echo 'Using pre-built files - no build needed'"]
 
 [phases.start]
 cmd = "npm start"
