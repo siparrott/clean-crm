@@ -8,9 +8,9 @@
     "npm": ">=9.0.0"
   },
   "scripts": {
-    "prebuild": "echo 'Preparing build environment...' && npm --version && npx vite --version",
+    "prebuild": "echo 'Preparing build environment...' && npm --version",
     "dev": "NODE_ENV=development DEMO_MODE=true tsx server/index.ts",
-    "build": "npm rebuild && npx vite build --mode production",
+    "build": "npm install --force && npx vite build --mode production",
     "build:vercel": "npx vite build --mode production",
     "build:netlify": "npm ci --legacy-peer-deps --include=dev && npx vite build --mode production",
     "build:debug": "echo 'Debug build starting...' && npm list vite tailwindcss && npx vite build --mode production --logLevel info",
@@ -20,7 +20,7 @@
     "validate:deps": "npm list vite tailwindcss autoprefixer postcss",
     "start": "cross-env NODE_ENV=production tsx server/index.ts",
     "start:prod": "cross-env NODE_ENV=production tsx server/index.ts",
-    "heroku-postbuild": "npm rebuild && npm run build",
+    "heroku-postbuild": "npm install --force && npm run build",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "demo:setup": "node scripts/setup-demo-data.js",
@@ -46,6 +46,7 @@
     "@hookform/resolvers": "^3.3.2",
     "@neondatabase/serverless": "^0.9.0",
     "@radix-ui/react-accordion": "^1.1.2",
+    "@rollup/rollup-linux-x64-gnu": "^4.18.0",
     "@radix-ui/react-alert-dialog": "^1.0.5",
     "@radix-ui/react-aspect-ratio": "^1.0.3",
     "@radix-ui/react-avatar": "^1.0.4",
@@ -171,7 +172,8 @@
     "zod-to-json-schema": "^3.24.6"
   },
   "overrides": {
-    "rollup": "4.18.0"
+    "rollup": "4.18.0",
+    "@rollup/rollup-linux-x64-gnu": "4.18.0"
   },
   "devDependencies": {
     "@types/connect-pg-simple": "^7.0.3",
