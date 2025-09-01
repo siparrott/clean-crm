@@ -4,13 +4,13 @@
   "description": "Live demo of Photography CRM SaaS platform",
   "type": "module",
   "engines": {
-    "node": ">=20.18.1",
+    "node": "20.x",
     "npm": ">=9.0.0"
   },
   "scripts": {
     "prebuild": "echo 'Preparing build environment...' && npm --version && npx vite --version",
     "dev": "NODE_ENV=development DEMO_MODE=true tsx server/index.ts",
-    "build": "npx vite build --mode production",
+    "build": "npm rebuild && npx vite build --mode production",
     "build:vercel": "npx vite build --mode production",
     "build:netlify": "npm ci --legacy-peer-deps --include=dev && npx vite build --mode production",
     "build:debug": "echo 'Debug build starting...' && npm list vite tailwindcss && npx vite build --mode production --logLevel info",
@@ -20,7 +20,7 @@
     "validate:deps": "npm list vite tailwindcss autoprefixer postcss",
     "start": "cross-env NODE_ENV=production tsx server/index.ts",
     "start:prod": "cross-env NODE_ENV=production tsx server/index.ts",
-    "heroku-postbuild": "npm run build",
+    "heroku-postbuild": "npm rebuild && npm run build",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "demo:setup": "node scripts/setup-demo-data.js",
