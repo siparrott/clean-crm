@@ -4,7 +4,6 @@ import Layout from '../components/layout/Layout';
 import { ChevronRight } from 'lucide-react';
 import Typewriter from 'typewriter-effect';
 import CountUp from 'react-countup';
-import photoGridImage from '../assets/photo-grid.jpg';
 import { useLanguage } from '../context/LanguageContext';
 
 const HomePage: React.FC = () => {
@@ -110,24 +109,32 @@ const HomePage: React.FC = () => {
               </span>
             </div>
             <button 
-              onClick={() => navigate('/fotoshootings')}
+              onClick={() => navigate('/warteliste')}
               className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-medium py-3 px-8 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
               {t('home.bookShootingButton')}
             </button>
           </div>
           <div className="md:w-2/5">
-            <img 
-              src={photoGridImage}
-              alt="Comprehensive family portrait showcase featuring various photography styles including family groups, couples, newborns, maternity, and lifestyle sessions"
-              className="w-full rounded-lg shadow-lg"
-              onError={(e) => {
-                // Fallback for mobile/loading issues
-                // console.log removed
-                e.currentTarget.src = "https://i.postimg.cc/zGVgt500/Familienportrat-Wien-Krchnavy-Stolz-0105-1024x683-1.jpg";
-              }}
-              loading="lazy"
-            />
+            {/* Business Portrait Grid */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
+                <img 
+                  src="https://via.placeholder.com/400x500/f8f9fa/6c757d?text=Female+Business+Portrait"
+                  alt="Professional business portrait of a female photographer - Vienna portrait photography"
+                  className="w-full rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300"
+                  loading="lazy"
+                />
+              </div>
+              <div className="space-y-4 mt-8">
+                <img 
+                  src="https://via.placeholder.com/400x500/f8f9fa/6c757d?text=Male+Business+Portrait"
+                  alt="Professional business portrait of a male executive - Vienna corporate photography"
+                  className="w-full rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300"
+                  loading="lazy"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>
