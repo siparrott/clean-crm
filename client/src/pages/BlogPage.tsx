@@ -28,7 +28,7 @@ interface BlogTag {
 }
 
 const BlogPage: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [tags, setTags] = useState<BlogTag[]>([]);
@@ -81,6 +81,7 @@ const BlogPage: React.FC = () => {
       // Build query parameters
       const params = new URLSearchParams();
       params.append('published', 'true');
+      params.append('language', language);
       if (tag) params.append('tag', tag);
       if (search) params.append('search', search);
       params.append('page', page.toString());
@@ -105,8 +106,8 @@ const BlogPage: React.FC = () => {
       // For now, we'll handle tags separately since we don't have a tags API yet
       if (tags.length === 0 && postsData.length > 0) {
         // Extract unique tags from posts
-        const allTags = postsData.flatMap((post: any) => post.tags || []);
-        const uniqueTags = [...new Set(allTags)].map(tag => ({ id: tag, name: tag, slug: tag }));
+        const allTags: string[] = postsData.flatMap((post: any) => post.tags || []);
+        const uniqueTags = Array.from(new Set(allTags)).map((tag: string) => ({ id: tag, name: tag, slug: tag }));
         setTags(uniqueTags);
       }
     } catch (err) {

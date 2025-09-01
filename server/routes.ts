@@ -29,6 +29,50 @@ import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import multer from 'multer';
 import path from 'path';
+
+// Translation functions for blog content
+function translateToEnglish(germanText: string): string {
+  if (!germanText) return germanText;
+  
+  const translations: { [key: string]: string } = {
+    'Die perfekte Familienfotografie in Wien: So gelingt Ihr Fotoshooting': 'Perfect Family Photography in Vienna: How to Make Your Photo Shoot Successful',
+    'Erleben Sie unvergessliche Familienmomente in Wien! Entdecken Sie, wie Sie Ihre Familienfotosession zu einem wundervollen Erlebnis machen.': 'Experience unforgettable family moments in Vienna! Discover how to make your family photo session a wonderful experience.',
+    'Preise für Familienfotografie in Wien – Kostenübersicht 2025': 'Family Photography Prices in Vienna – Cost Overview 2025',
+    'Transparente Preisgestaltung für Familienfotografie in Wien. Von Mini-Sessions bis zu ganztägigen Shootings – finden Sie das perfekte Angebot für Ihre Familie.': 'Transparent pricing for family photography in Vienna. From mini sessions to full-day shoots – find the perfect offer for your family.',
+    'Familienfotografie': 'Family Photography',
+    'Wien': 'Vienna',
+    'Fotoshooting': 'Photo Shoot',
+    'Preise': 'Prices',
+    'Kosten': 'Costs',
+    'photography': 'photography',
+    'family': 'family'
+  };
+  
+  let translatedText = germanText;
+  
+  // Replace known translations
+  Object.entries(translations).forEach(([german, english]) => {
+    translatedText = translatedText.replace(new RegExp(german, 'gi'), english);
+  });
+  
+  return translatedText;
+}
+
+function translateTagToEnglish(germanTag: string): string {
+  const tagTranslations: { [key: string]: string } = {
+    'Familienfotografie': 'Family Photography',
+    'Wien': 'Vienna',
+    'Fotoshooting': 'Photo Shoot',
+    'Preise': 'Prices',
+    'Locations': 'Locations',
+    'Neugeborenenfotos': 'Newborn Photos',
+    'Schwangerschaftsfotos': 'Pregnancy Photos',
+    'Hochzeitsfotografie': 'Wedding Photography',
+    'Portraitfotografie': 'Portrait Photography'
+  };
+  
+  return tagTranslations[germanTag] || germanTag;
+}
 import fs from 'fs';
 import Stripe from 'stripe';
 import nodemailer from 'nodemailer';
@@ -1099,15 +1143,27 @@ Bitte versuchen Sie es später noch einmal.`;
       const search = req.query.search as string;
       const tag = req.query.tag as string;
       const exclude = req.query.exclude as string;
+      const language = req.query.language as string || 'de';
       
       let posts = await storage.getBlogPosts(published);
+      
+      // Translate content if language is English
+      if (language === 'en') {
+        posts = posts.map(post => ({
+          ...post,
+          title: translateToEnglish(post.title),
+          excerpt: post.excerpt ? translateToEnglish(post.excerpt) : null,
+          content: post.content ? translateToEnglish(post.content) : null,
+          tags: post.tags ? post.tags.map(tag => translateTagToEnglish(tag)) : null
+        }));
+      }
       
       // Filter by search
       if (search) {
         posts = posts.filter(post => 
           post.title.toLowerCase().includes(search.toLowerCase()) ||
           (post.excerpt && post.excerpt.toLowerCase().includes(search.toLowerCase())) ||
-          post.content.toLowerCase().includes(search.toLowerCase())
+          (post.content && post.content.toLowerCase().includes(search.toLowerCase()))
         );
       }
       

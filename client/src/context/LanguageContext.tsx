@@ -438,6 +438,7 @@ const translations = {
     'waitlist.title': 'Request Photoshoot Appointment in Vienna',
     'waitlist.subtitle': 'Professional family photographer in Vienna with flexible appointments. We offer photoshoots on weekends - contact us for availability.',
     'waitlist.fullName': 'Full Name',
+    'waitlist.fullNamePlaceholder': 'Your full name',
     'waitlist.preferredDate': 'Preferred Date',
     'waitlist.email': 'Email',
     'waitlist.emailPlaceholder': 'your@email.com',
@@ -460,7 +461,6 @@ const translations = {
     'vouchers.noVouchersAvailable': 'No vouchers available yet',
     'vouchers.noVouchersFoundMessage': 'We could not find any vouchers that match your criteria.',
     'vouchers.noVouchersAvailableMessage': 'Our photoshoot vouchers will be available soon.',
-    'vouchers.filterByCategory': 'Filter by Category',
     'vouchers.validUntil': 'Valid until',
     'vouchers.available': 'available',
     'vouchers.soldOut': 'Sold out',
@@ -927,6 +927,7 @@ const translations = {
     'waitlist.title': 'Fotoshooting Termin in Wien anfragen',
     'waitlist.subtitle': 'Professioneller Familienfotograf in Wien mit flexiblen Terminen. Wir bieten Fotoshootings an Wochenenden - kontaktieren Sie uns für die Verfügbarkeit.',
     'waitlist.fullName': 'Vollname',
+    'waitlist.fullNamePlaceholder': 'Ihr vollständiger Name',
     'waitlist.preferredDate': 'Wunschtermin',
     'waitlist.email': 'E-Mail',
     'waitlist.emailPlaceholder': 'ihre@email.com',
@@ -1003,7 +1004,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [language]);
 
   const t = (key: string): string => {
-    return translations[language][key as keyof typeof translations['en']] || key;
+    return (translations[language] as any)[key] || key;
   };
 
   return (
