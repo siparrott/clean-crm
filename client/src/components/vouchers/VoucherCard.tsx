@@ -2,12 +2,14 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Voucher } from '../../types';
 import { Calendar, Tag, Percent } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface VoucherCardProps {
   voucher: Voucher;
 }
 
 const VoucherCard: React.FC<VoucherCardProps> = ({ voucher }) => {
+  const { t } = useLanguage();
   const discountPercentage = Math.round(((voucher.price - voucher.discountPrice) / voucher.price) * 100);
   
   return (
@@ -48,7 +50,7 @@ const VoucherCard: React.FC<VoucherCardProps> = ({ voucher }) => {
           <div className="flex items-center mb-2">
             <Calendar size={16} className="text-gray-500 mr-2" />
             <span className="text-xs text-gray-500">
-              Gültig bis {new Date(voucher.validUntil).toLocaleDateString()}
+              {t('vouchers.validUntil')} {new Date(voucher.validUntil).toLocaleDateString()}
             </span>
           </div>
           
@@ -59,7 +61,7 @@ const VoucherCard: React.FC<VoucherCardProps> = ({ voucher }) => {
             </div>
             
             <span className="text-gray-600 text-xs">
-              {voucher.stock > 0 ? `Noch ${voucher.stock} verfügbar` : 'Ausverkauft'}
+              {voucher.stock > 0 ? `${voucher.stock} ${t('vouchers.available')}` : t('vouchers.soldOut')}
             </span>
           </div>
         </div>

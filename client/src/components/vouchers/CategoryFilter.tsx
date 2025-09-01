@@ -1,17 +1,30 @@
 import React from 'react';
 import { Category } from '../../types';
 import { useAppContext } from '../../context/AppContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 const CategoryFilter: React.FC = () => {
   const { categories, selectedCategory, setSelectedCategory } = useAppContext();
+  const { t } = useLanguage();
 
   const handleCategoryChange = (category: Category | null) => {
     setSelectedCategory(category);
   };
 
+  const translateCategory = (category: Category) => {
+    switch (category) {
+      case 'Familie': return t('categories.family');
+      case 'Baby': return t('categories.baby');
+      case 'Hochzeit': return t('categories.wedding');
+      case 'Business': return t('categories.business');
+      case 'Event': return t('categories.event');
+      default: return category;
+    }
+  };
+
   return (
     <div className="mb-8">
-      <h2 className="text-lg font-semibold mb-4 text-gray-800">Nach Kategorie filtern</h2>
+      <h2 className="text-lg font-semibold mb-4 text-gray-800">{t('vouchers.filterByCategory')}</h2>
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => handleCategoryChange(null)}
@@ -21,7 +34,7 @@ const CategoryFilter: React.FC = () => {
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
           }`}
         >
-          Alle
+          {t('common.all')}
         </button>
         
         {categories.map(category => (
@@ -34,7 +47,7 @@ const CategoryFilter: React.FC = () => {
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {category}
+            {translateCategory(category)}
           </button>
         ))}
       </div>

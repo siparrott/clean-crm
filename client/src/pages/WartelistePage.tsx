@@ -127,7 +127,7 @@ const WartelistePage: React.FC = () => {
                 onChange={handleChange}
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition-colors"
-                placeholder="ihre@email.com"
+                placeholder={t('waitlist.emailPlaceholder')}
               />
             </div>
 

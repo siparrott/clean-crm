@@ -206,7 +206,7 @@ const VouchersPage: React.FC = () => {
                     }}
                     className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
                   >
-                    Filter zurücksetzen
+                    {t('vouchers.resetFilters')}
                   </button>
                 )}
               </div>
