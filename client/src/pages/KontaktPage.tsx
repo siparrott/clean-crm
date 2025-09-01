@@ -80,8 +80,8 @@ const KontaktPage: React.FC = () => {
       <div className="bg-gray-50 py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h1 className="text-4xl font-bold text-gray-900 sm:text-5xl">Kontakt - Familienfotograf Wien</h1>
-            <p className="mt-4 text-xl text-gray-600">Vereinbaren Sie Ihr persönliches Fotoshooting in Wien</p>
+            <h1 className="text-4xl font-bold text-gray-900 sm:text-5xl">{t('contact.title')}</h1>
+            <p className="mt-4 text-xl text-gray-600">{t('contact.subtitle')}</p>
           </div>
         </div>
       </div>
@@ -91,7 +91,7 @@ const KontaktPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {/* Contact Information */}
           <div className="space-y-8">
-            <h2 className="text-2xl font-semibold text-gray-900">Fotostudio Wien - Kontaktinformationen</h2>
+            <h2 className="text-2xl font-semibold text-gray-900">{t('contact.studioTitle')}</h2>
             <div className="space-y-6">
               <div className="flex items-center space-x-4">
                 <Mail className="w-6 h-6 text-gray-600" />
@@ -103,25 +103,25 @@ const KontaktPage: React.FC = () => {
               </div>
               <div className="flex items-center space-x-4">
                 <Clock className="w-6 h-6 text-gray-600" />
-                <span className="text-gray-700">Fr-So: 09:00 - 17:00</span>
+                <span className="text-gray-700">{t('contact.openingHours')}</span>
               </div>
               <div className="flex items-center space-x-4">
                 <MapPin className="w-6 h-6 text-gray-600" />
                 <div className="text-gray-700">
-                  <div className="font-medium">Büro- und Korrespondenzadresse</div>
+                  <div className="font-medium">{t('contact.officeAddress')}</div>
                   <div>Julius Tandler Platz 5 / 13, 1090 Wien, Austria</div>
-                  <div className="text-sm text-gray-600 mt-1">Eingang Ecke Schönbrunnerstraße</div>
-                  <div className="text-sm text-gray-600">Studio: Wehrgasse 11A/2+5, 1050 Wien</div>
+                  <div className="text-sm text-gray-600 mt-1">{t('contact.addressNote')}</div>
+                  <div className="text-sm text-gray-600">{t('contact.studioAddress')}</div>
                 </div>
               </div>
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-gray-900">Anfahrt</h3>
+              <h3 className="text-xl font-semibold text-gray-900">{t('contact.transport')}</h3>
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
                   <Train className="w-5 h-5 text-gray-600" />
-                  <span className="text-gray-700">5 Minuten von Kettenbrückengasse</span>
+                  <span className="text-gray-700">{t('contact.trainInfo')}</span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Car className="w-5 h-5 text-gray-600" />
@@ -132,7 +132,7 @@ const KontaktPage: React.FC = () => {
 
             {/* Google Maps Embed */}
             <div className="mt-8">
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">Studio Location</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">{t('contact.mapTitle')}</h3>
               <div className="rounded-lg overflow-hidden shadow-sm border">
                 <iframe
                   src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2659.8!2d16.3608!3d48.1865!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x476d0774b3d4e1ab%3A0x123456789abcdef0!2sWehrgasse%2011A%2C%201050%20Wien%2C%20Austria!5e0!3m2!1sen!2sat!4v1625075400000!5m2!1sen!2sat"
@@ -150,15 +150,15 @@ const KontaktPage: React.FC = () => {
 
           {/* Contact Form */}
           <div className="bg-white p-8 rounded-lg shadow-sm">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Kontaktformular</h2>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">{t('contact.contactForm')}</h2>
             {success ? (
               <div className="bg-green-50 p-4 rounded-md">
-                <p className="text-green-800">Vielen Dank für Ihre Nachricht! Ich melde mich in Kürze bei Ihnen.</p>
+                <p className="text-green-800">{t('contact.successMessage')}</p>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">Name</label>
+                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">{t('contact.fullName')}</label>
                   <input
                     type="text"
                     id="fullName"
@@ -170,7 +170,7 @@ const KontaktPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">E-Mail</label>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">{t('contact.email')}</label>
                   <input
                     type="email"
                     id="email"
@@ -182,7 +182,7 @@ const KontaktPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700">Telefon</label>
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700">{t('contact.phone')}</label>
                   <input
                     type="tel"
                     id="phone"
@@ -193,7 +193,7 @@ const KontaktPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="message" className="block text-sm font-medium text-gray-700">Nachricht</label>
+                  <label htmlFor="message" className="block text-sm font-medium text-gray-700">{t('contact.message')}</label>
                   <textarea
                     id="message"
                     name="message"
@@ -214,7 +214,7 @@ const KontaktPage: React.FC = () => {
                   disabled={loading}
                   className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
                 >
-                  {loading ? 'Wird gesendet...' : 'Nachricht senden'}
+                  {loading ? t('contact.submitting') : t('contact.submit')}
                 </button>
               </form>
             )}
