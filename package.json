@@ -1,6 +1,6 @@
 {
   "name": "photography-crm-demo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Live demo of Photography CRM SaaS platform",
   "type": "module",
   "engines": {
