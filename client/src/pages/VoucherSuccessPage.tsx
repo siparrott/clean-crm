@@ -2,9 +2,11 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, ArrowLeft, Download, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '../context/LanguageContext';
 
 const VoucherSuccessPage: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -24,7 +26,7 @@ const VoucherSuccessPage: React.FC = () => {
               className="text-purple-600 hover:text-purple-700"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Zur Startseite
+              {t('voucher.backToHome')}
             </Button>
           </div>
         </div>
@@ -38,29 +40,29 @@ const VoucherSuccessPage: React.FC = () => {
           </div>
           
           <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            Zahlung erfolgreich!
+            {t('voucher.paymentSuccessful')}
           </h1>
           
           <p className="text-lg text-gray-600 mb-8">
-            Vielen Dank für Ihren Kauf! Ihr Gutschein wurde erfolgreich erstellt und wird in Kürze per E-Mail versendet.
+            {t('voucher.thankYouMessage')}
           </p>
           
           <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-8">
             <h3 className="text-lg font-semibold text-green-900 mb-2">
-              Was passiert als nächstes?
+              {t('voucher.whatHappensNext')}
             </h3>
             <ul className="text-sm text-green-800 space-y-2 text-left">
               <li className="flex items-start">
                 <CheckCircle className="w-4 h-4 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
-                Sie erhalten in wenigen Minuten eine E-Mail mit Ihrem Gutschein
+                {t('voucher.emailReceived')}
               </li>
               <li className="flex items-start">
                 <CheckCircle className="w-4 h-4 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
-                Der Gutschein ist ab sofort 12 Monate gültig
+                {t('voucher.validity')}
               </li>
               <li className="flex items-start">
                 <CheckCircle className="w-4 h-4 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
-                Für Terminbuchungen kontaktieren Sie uns unter +43 677 933 99210
+                {t('voucher.bookingContact')}
               </li>
             </ul>
           </div>
@@ -73,7 +75,7 @@ const VoucherSuccessPage: React.FC = () => {
                 className="w-full"
               >
                 <Download className="w-4 h-4 mr-2" />
-                Weitere Gutscheine
+                {t('voucher.moreVouchers')}
               </Button>
               
               <Button 
@@ -81,23 +83,23 @@ const VoucherSuccessPage: React.FC = () => {
                 className="w-full bg-purple-600 hover:bg-purple-700"
               >
                 <Calendar className="w-4 h-4 mr-2" />
-                Termin buchen
+                {t('voucher.bookAppointment')}
               </Button>
             </div>
             
             <div className="pt-6 border-t">
               <p className="text-sm text-gray-500 mb-4">
-                Haben Sie Fragen zu Ihrem Gutschein?
+                {t('voucher.questionsAboutVoucher')}
               </p>
               <div className="space-y-2 text-sm">
                 <p>
-                  <strong>Telefon:</strong> +43 677 933 99210
+                  <strong>{t('voucher.phone')}:</strong> +43 677 933 99210
                 </p>
                 <p>
-                  <strong>E-Mail:</strong> hallo@newagefotografie.com
+                  <strong>{t('voucher.email')}:</strong> hallo@newagefotografie.com
                 </p>
                 <p>
-                  <strong>Öffnungszeiten:</strong> Fr-So: 09:00 - 17:00
+                  <strong>{t('voucher.openingHours')}:</strong> {t('voucher.openingTimes')}
                 </p>
               </div>
             </div>

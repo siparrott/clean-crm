@@ -321,7 +321,23 @@ const translations = {
     // Voucher checkout
     'voucher.yourContactDetails': 'Your Contact Details',
     'voucher.paymentSystemSetup': 'Payment system is being set up',
-    'voucher.paymentSystemMessage': 'Our payment system is currently being configured. Please try again later or contact us directly.'
+    'voucher.paymentSystemMessage': 'Our payment system is currently being configured. Please try again later or contact us directly.',
+    
+    // Voucher success page
+    'voucher.backToHome': 'Back to Home',
+    'voucher.paymentSuccessful': 'Payment Successful!',
+    'voucher.thankYouMessage': 'Thank you for your purchase! Your voucher has been successfully created and will be sent by email shortly.',
+    'voucher.whatHappensNext': 'What happens next?',
+    'voucher.emailReceived': 'You will receive an email with your voucher in a few minutes',
+    'voucher.validity': 'The voucher is valid for 12 months from now',
+    'voucher.bookingContact': 'For appointment bookings, contact us at +43 677 933 99210',
+    'voucher.moreVouchers': 'More Vouchers',
+    'voucher.bookAppointment': 'Book Appointment',
+    'voucher.questionsAboutVoucher': 'Do you have questions about your voucher?',
+    'voucher.phone': 'Phone',
+    'voucher.email': 'Email',
+    'voucher.openingHours': 'Opening Hours',
+    'voucher.openingTimes': 'Fri-Sun: 09:00 - 17:00'
   },
   de: {
     'nav.home': 'Startseite',
@@ -637,7 +653,23 @@ const translations = {
     // Voucher checkout
     'voucher.yourContactDetails': 'Ihre Kontaktdaten',
     'voucher.paymentSystemSetup': 'Zahlungssystem wird eingerichtet',
-    'voucher.paymentSystemMessage': 'Unser Zahlungssystem wird gerade konfiguriert. Bitte versuchen Sie es später noch einmal oder kontaktieren Sie uns direkt.'
+    'voucher.paymentSystemMessage': 'Unser Zahlungssystem wird gerade konfiguriert. Bitte versuchen Sie es später noch einmal oder kontaktieren Sie uns direkt.',
+    
+    // Voucher success page
+    'voucher.backToHome': 'Zur Startseite',
+    'voucher.paymentSuccessful': 'Zahlung erfolgreich!',
+    'voucher.thankYouMessage': 'Vielen Dank für Ihren Kauf! Ihr Gutschein wurde erfolgreich erstellt und wird in Kürze per E-Mail versendet.',
+    'voucher.whatHappensNext': 'Was passiert als nächstes?',
+    'voucher.emailReceived': 'Sie erhalten in wenigen Minuten eine E-Mail mit Ihrem Gutschein',
+    'voucher.validity': 'Der Gutschein ist ab sofort 12 Monate gültig',
+    'voucher.bookingContact': 'Für Terminbuchungen kontaktieren Sie uns unter +43 677 933 99210',
+    'voucher.moreVouchers': 'Weitere Gutscheine',
+    'voucher.bookAppointment': 'Termin buchen',
+    'voucher.questionsAboutVoucher': 'Haben Sie Fragen zu Ihrem Gutschein?',
+    'voucher.phone': 'Telefon',
+    'voucher.email': 'E-Mail',
+    'voucher.openingHours': 'Öffnungszeiten',
+    'voucher.openingTimes': 'Fr-So: 09:00 - 17:00'
   }
 };
 
