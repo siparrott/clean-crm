@@ -304,7 +304,7 @@ const HomePage: React.FC = () => {
             >
               <div className="aspect-[4/3] overflow-hidden">
                 <img 
-                  src="https://i.imgur.com/9RaPUSK.jpg"
+                  src="https://i.postimg.cc/NMqvfKv7/4S8A6958.jpg"
                   alt="Business Headshots Wien - Professionelle Businessfotografie"
                   className="w-full h-full object-cover"
                   loading="lazy"
