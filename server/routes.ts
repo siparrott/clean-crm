@@ -26,9 +26,12 @@ import {
 import { z } from "zod";
 // Supabase removed - using Neon database only
 import Imap from 'imap';
+// @ts-ignore - mailparser types not available
 import { simpleParser } from 'mailparser';
 import multer from 'multer';
 import path from 'path';
+import { sql } from './db'; // Add sql import
+import { crmLeads } from "@shared/schema"; // Add missing import
 
 // Translation functions for blog content
 function translateToEnglish(germanText: string): string {
@@ -360,7 +363,7 @@ Vielen Dank für Ihr Vertrauen!
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
+  apiVersion: '2025-08-27.basil',
 });
 
 // Authentication middleware placeholder - replace with actual auth
@@ -961,7 +964,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { crmAgentRouter } = await import("./routes/crm-agent");
     app.use(crmAgentRouter);
   } catch (error) {
-    console.warn("CRM agent router not available:", error.message);
+    console.warn("CRM agent router not available:", error instanceof Error ? error.message : 'Unknown error');
   }
 
   // Audio transcription endpoint using OpenAI Whisper
@@ -2677,7 +2680,7 @@ Bitte versuchen Sie es später noch einmal.`;
       }
 
       // Create email transporter (using EasyName SMTP)
-      const transporter = nodemailer.createTransporter({
+      const transporter = nodemailer.createTransport({
         host: 'smtp.easyname.com',
         port: 465,
         secure: true,
@@ -2767,7 +2770,7 @@ Bitte versuchen Sie es später noch einmal.`;
           const isDuplicate = existingMessages.some(msg => 
             msg.subject === email.subject && 
             msg.senderEmail === email.from &&
-            Math.abs(new Date(msg.createdAt).getTime() - new Date(email.date).getTime()) < 300000 // Within 5 minutes
+            msg.createdAt && Math.abs(new Date(msg.createdAt).getTime() - new Date(email.date).getTime()) < 300000 // Within 5 minutes
           );
           
           if (!isDuplicate) {
@@ -2882,9 +2885,11 @@ Bitte versuchen Sie es später noch einmal.`;
       const messages = await storage.getCrmMessages();
       
       // Sort messages by creation date (newest first)
-      const sortedMessages = messages.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      const sortedMessages = messages.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
       
       if (unreadOnly) {
         const unreadMessages = sortedMessages.filter(message => message.status === 'unread');
