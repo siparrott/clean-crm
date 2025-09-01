@@ -30,7 +30,7 @@ import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import multer from 'multer';
 import path from 'path';
-import { sql } from './db'; // Add sql import
+// Note: sql function not available - using drizzle ORM instead
 import { crmLeads } from "@shared/schema"; // Add missing import
 
 // Translation functions for blog content
