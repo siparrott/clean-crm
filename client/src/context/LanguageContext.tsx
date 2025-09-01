@@ -296,7 +296,32 @@ const translations = {
     'common.timezone': 'Timezone',
     
     // Location/Contact
-    'contact.streetParking': 'Street parking available'
+    'contact.streetParking': 'Street parking available',
+    
+    // Gallery public page
+    'gallery.publicTitle': 'My Gallery',
+    'gallery.publicDescription': 'Discover our professional photo galleries. Search for your personal gallery and experience your special moments.',
+    'gallery.searchPlaceholder': 'Search gallery...',
+    'gallery.loading': 'Galleries are loading...',
+    'gallery.found': 'found',
+    'gallery.galleryFound': 'gallery',
+    'gallery.galleriesFound': 'galleries',
+    'gallery.viewGallery': 'View Gallery',
+    'gallery.openGallery': 'Open Gallery',
+    'gallery.noPreview': 'No preview',
+    'gallery.noGalleriesFound': 'No galleries found',
+    'gallery.noGalleriesAvailable': 'No galleries available',
+    'gallery.noGalleriesDescription': 'No galleries match your search for',
+    'gallery.noGalleriesAvailableDescription': 'There are currently no public galleries available.',
+    'gallery.showAllGalleries': 'Show all galleries',
+    'gallery.notFoundTitle': 'Your gallery not found?',
+    'gallery.notFoundDescription': 'If you cannot find your personal gallery, please contact us. We are happy to help you access your photos.',
+    'gallery.contactUs': 'Contact us',
+    
+    // Voucher checkout
+    'voucher.yourContactDetails': 'Your Contact Details',
+    'voucher.paymentSystemSetup': 'Payment system is being set up',
+    'voucher.paymentSystemMessage': 'Our payment system is currently being configured. Please try again later or contact us directly.'
   },
   de: {
     'nav.home': 'Startseite',
@@ -587,7 +612,32 @@ const translations = {
     'message.error.failed_to_update_post_status': 'Fehler beim Aktualisieren des Beitragsstatus. Bitte versuchen Sie es erneut.',
     
     // Location/Contact
-    'contact.streetParking': 'Straßenparkplätze verfügbar'
+    'contact.streetParking': 'Straßenparkplätze verfügbar',
+    
+    // Gallery public page
+    'gallery.publicTitle': 'Meine Galerie',
+    'gallery.publicDescription': 'Entdecken Sie unsere professionellen Fotogalerien. Suchen Sie nach Ihrer persönlichen Galerie und erleben Sie Ihre besonderen Momente.',
+    'gallery.searchPlaceholder': 'Galerie suchen...',
+    'gallery.loading': 'Galerien werden geladen...',
+    'gallery.found': 'gefunden',
+    'gallery.galleryFound': 'Galerie',
+    'gallery.galleriesFound': 'Galerien',
+    'gallery.viewGallery': 'Galerie ansehen',
+    'gallery.openGallery': 'Galerie öffnen',
+    'gallery.noPreview': 'Keine Vorschau',
+    'gallery.noGalleriesFound': 'Keine Galerien gefunden',
+    'gallery.noGalleriesAvailable': 'Keine Galerien verfügbar',
+    'gallery.noGalleriesDescription': 'Keine Galerien entsprechen Ihrer Suche nach',
+    'gallery.noGalleriesAvailableDescription': 'Es sind derzeit keine öffentlichen Galerien verfügbar.',
+    'gallery.showAllGalleries': 'Alle Galerien anzeigen',
+    'gallery.notFoundTitle': 'Ihre Galerie nicht gefunden?',
+    'gallery.notFoundDescription': 'Falls Sie Ihre persönliche Galerie nicht finden können, kontaktieren Sie uns bitte. Wir helfen Ihnen gerne beim Zugang zu Ihren Fotos.',
+    'gallery.contactUs': 'Kontakt aufnehmen',
+    
+    // Voucher checkout
+    'voucher.yourContactDetails': 'Ihre Kontaktdaten',
+    'voucher.paymentSystemSetup': 'Zahlungssystem wird eingerichtet',
+    'voucher.paymentSystemMessage': 'Unser Zahlungssystem wird gerade konfiguriert. Bitte versuchen Sie es später noch einmal oder kontaktieren Sie uns direkt.'
   }
 };
 

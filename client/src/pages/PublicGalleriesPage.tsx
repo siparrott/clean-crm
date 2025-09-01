@@ -4,8 +4,10 @@ import Layout from '../components/layout/Layout';
 import { getPublicGalleries } from '../lib/gallery-api';
 import { Gallery } from '../types/gallery';
 import { Search, Calendar, Eye, Loader2, AlertCircle, Camera } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 const PublicGalleriesPage: React.FC = () => {
+  const { t } = useLanguage();
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [filteredGalleries, setFilteredGalleries] = useState<Gallery[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,9 +70,9 @@ const PublicGalleriesPage: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Meine Galerie</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">{t('gallery.publicTitle')}</h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Entdecken Sie unsere professionellen Fotogalerien. Suchen Sie nach Ihrer persönlichen Galerie und erleben Sie Ihre besonderen Momente.
+            {t('gallery.publicDescription')}
           </p>
         </div>
 
@@ -80,7 +82,7 @@ const PublicGalleriesPage: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             <input
               type="text"
-              placeholder="Galerie suchen..."
+              placeholder={t('gallery.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -100,14 +102,14 @@ const PublicGalleriesPage: React.FC = () => {
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 text-purple-600 animate-spin" />
-            <span className="ml-2 text-gray-600">Galerien werden geladen...</span>
+            <span className="ml-2 text-gray-600">{t('gallery.loading')}</span>
           </div>
         ) : (
           <>
             {/* Results Info */}
             <div className="mb-6">
               <p className="text-gray-600">
-                {filteredGalleries.length} {filteredGalleries.length === 1 ? 'Galerie' : 'Galerien'} gefunden
+                {filteredGalleries.length} {filteredGalleries.length === 1 ? t('gallery.galleryFound') : t('gallery.galleriesFound')} {t('gallery.found')}
                 {searchTerm && ` für "${searchTerm}"`}
               </p>
             </div>
@@ -134,7 +136,7 @@ const PublicGalleriesPage: React.FC = () => {
                             <div className="w-16 h-16 mx-auto mb-4 bg-purple-100 rounded-full flex items-center justify-center">
                               <Camera className="w-8 h-8 text-purple-600" />
                             </div>
-                            <p className="text-sm text-gray-500">Keine Vorschau</p>
+                            <p className="text-sm text-gray-500">{t('gallery.noPreview')}</p>
                           </div>
                         </div>
                       )}
@@ -146,7 +148,7 @@ const PublicGalleriesPage: React.FC = () => {
                           className="bg-white bg-opacity-90 hover:bg-opacity-100 text-gray-800 px-6 py-3 rounded-full font-semibold transition-all duration-200 transform hover:scale-110 flex items-center"
                         >
                           <Eye size={18} className="mr-2" />
-                          Galerie ansehen
+                          {t('gallery.viewGallery')}
                         </Link>
                       </div>
 
@@ -185,7 +187,7 @@ const PublicGalleriesPage: React.FC = () => {
                         to={`/gallery/${gallery.slug}`}
                         className="block w-full text-center bg-gradient-to-r from-purple-600 to-pink-500 text-white py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-600 transition-all duration-200 transform hover:scale-105"
                       >
-                        Galerie öffnen
+                        {t('gallery.openGallery')}
                       </Link>
                     </div>
                   </div>
@@ -198,12 +200,12 @@ const PublicGalleriesPage: React.FC = () => {
                   <Camera className="w-full h-full" />
                 </div>
                 <h3 className="text-xl font-medium text-gray-900 mb-2">
-                  {searchTerm ? 'Keine Galerien gefunden' : 'Keine Galerien verfügbar'}
+                  {searchTerm ? t('gallery.noGalleriesFound') : t('gallery.noGalleriesAvailable')}
                 </h3>
                 <p className="text-gray-500 mb-6">
                   {searchTerm 
-                    ? `Keine Galerien entsprechen Ihrer Suche nach "${searchTerm}".`
-                    : 'Es sind derzeit keine öffentlichen Galerien verfügbar.'
+                    ? `${t('gallery.noGalleriesDescription')} "${searchTerm}".`
+                    : t('gallery.noGalleriesAvailableDescription')
                   }
                 </p>
                 {searchTerm && (
@@ -211,7 +213,7 @@ const PublicGalleriesPage: React.FC = () => {
                     onClick={() => setSearchTerm('')}
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
                   >
-                    Alle Galerien anzeigen
+                    {t('gallery.showAllGalleries')}
                   </button>
                 )}
               </div>
@@ -221,16 +223,15 @@ const PublicGalleriesPage: React.FC = () => {
 
         {/* Help Section */}
         <div className="mt-16 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-8 text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Ihre Galerie nicht gefunden?</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('gallery.notFoundTitle')}</h2>
           <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
-            Falls Sie Ihre persönliche Galerie nicht finden können, kontaktieren Sie uns bitte. 
-            Wir helfen Ihnen gerne beim Zugang zu Ihren Fotos.
+            {t('gallery.notFoundDescription')}
           </p>
           <Link
             to="/kontakt"
             className="inline-flex items-center px-6 py-3 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-purple-600 hover:bg-purple-700 transition-colors"
           >
-            Kontakt aufnehmen
+            {t('gallery.contactUs')}
           </Link>
         </div>
       </div>
