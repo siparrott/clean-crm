@@ -63,19 +63,17 @@ const WartelistePage: React.FC = () => {
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-2xl mx-auto text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold text-purple-600 mb-4">
-            Fotoshooting Termin in Wien anfragen
+            {t('waitlist.title')}
           </h1>
           <p className="text-xl text-gray-600">
-            Professioneller <strong>Familienfotograf in Wien</strong> mit flexiblen Terminen.
-            <br />
-            Wir bieten Fotoshootings an Wochenenden - kontaktieren Sie uns für die Verfügbarkeit.
+            {t('waitlist.subtitle')}
           </p>
         </div>
 
         <div className="max-w-xl mx-auto bg-white rounded-lg shadow-lg p-8">
           {success && (
             <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-6">
-              Ihre Anfrage wurde erfolgreich gesendet. Wir werden uns in Kürze bei Ihnen melden.
+              {t('waitlist.successMessage')}
             </div>
           )}
 
@@ -87,9 +85,9 @@ const WartelistePage: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-gray-700 font-medium mb-2 flex items-center">
+              <label className="flex items-center text-gray-700 font-medium mb-2">
                 <User size={18} className="mr-2 text-purple-600" />
-                Vollname <span className="text-purple-600 ml-1">*</span>
+                {t('waitlist.fullName')} <span className="text-purple-600 ml-1">*</span>
               </label>
               <input
                 type="text"
@@ -103,9 +101,9 @@ const WartelistePage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-gray-700 font-medium mb-2 flex items-center">
+              <label className="flex items-center text-gray-700 font-medium mb-2">
                 <Calendar size={18} className="mr-2 text-purple-600" />
-                Bevorzugtes Datum für Ihr Shooting <span className="text-purple-600 ml-1">*</span>
+                {t('waitlist.preferredDate')} <span className="text-purple-600 ml-1">*</span>
               </label>
               <input
                 type="date"
@@ -118,9 +116,9 @@ const WartelistePage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-gray-700 font-medium mb-2 flex items-center">
+              <label className="flex items-center text-gray-700 font-medium mb-2">
                 <Mail size={18} className="mr-2 text-purple-600" />
-                Email Adresse <span className="text-purple-600 ml-1">*</span>
+                {t('waitlist.email')} <span className="text-purple-600 ml-1">*</span>
               </label>
               <input
                 type="email"
@@ -134,9 +132,9 @@ const WartelistePage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-gray-700 font-medium mb-2 flex items-center">
+              <label className="flex items-center text-gray-700 font-medium mb-2">
                 <Phone size={18} className="mr-2 text-purple-600" />
-                WhatsApp / Telefonnummer <span className="text-purple-600 ml-1">*</span>
+                {t('waitlist.phone')} <span className="text-purple-600 ml-1">*</span>
               </label>
               <input
                 type="tel"
@@ -151,7 +149,7 @@ const WartelistePage: React.FC = () => {
 
             <div>
               <label className="block text-gray-700 font-medium mb-2">
-                Ihre Nachricht
+                {t('waitlist.message')}
               </label>
               <textarea
                 name="message"
@@ -159,7 +157,7 @@ const WartelistePage: React.FC = () => {
                 onChange={handleChange}
                 rows={4}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition-colors"
-                placeholder="Weitere Details zu Ihrem Shooting..."
+                placeholder={t('waitlist.messagePlaceholder')}
               />
             </div>
 
@@ -170,7 +168,7 @@ const WartelistePage: React.FC = () => {
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
-              {loading ? 'Wird gesendet...' : 'Termin anfragen'}
+              {loading ? t('waitlist.submitting') : t('waitlist.submit')}
             </button>
 
             <p className="text-sm text-gray-500 text-center">

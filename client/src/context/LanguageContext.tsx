@@ -295,9 +295,6 @@ const translations = {
     'common.currency': 'Currency',
     'common.timezone': 'Timezone',
     
-    // Location/Contact
-    'contact.streetParking': 'Street parking available',
-    
     // Gallery public page
     'gallery.publicTitle': 'My Gallery',
     'gallery.publicDescription': 'Discover our professional photo galleries. Search for your personal gallery and experience your special moments.',
@@ -475,15 +472,7 @@ const translations = {
     'contact.transport': 'Transportation',
     'contact.trainInfo': '5 minutes from Kettenbrückengasse',
     'contact.streetParking': 'Street parking available',
-    'contact.mapTitle': 'Studio Location',
-    'contact.openingHours': 'Opening Hours',
-    'contact.openingHoursTime': 'Friday - Sunday: 09:00 - 17:00',
-    'contact.address': 'Address',
-    'contact.addressDetails': 'Entrance corner Schönbrunner Straße, Wehrgasse 11A/2+5, 1050 Vienna',
-    'contact.publicTransport': 'Public Transport',
-    'contact.publicTransportDetails': 'U4 Kettenbrückengasse (5 min walk), Tram 6 Margaretengürtel (3 min walk)',
-    'contact.parking': 'Parking',
-    'contact.parkingDetails': 'Free parking available on Wehrgasse and surrounding streets'
+    'contact.mapTitle': 'Studio Location'
   },
   de: {
     'nav.home': 'Startseite',
@@ -772,9 +761,6 @@ const translations = {
     
     // Messages
     'message.error.failed_to_update_post_status': 'Fehler beim Aktualisieren des Beitragsstatus. Bitte versuchen Sie es erneut.',
-    
-    // Location/Contact
-    'contact.streetParking': 'Straßenparkplätze verfügbar',
     
     // Gallery public page
     'gallery.publicTitle': 'Meine Galerie',
