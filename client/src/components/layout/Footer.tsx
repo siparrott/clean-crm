@@ -74,26 +74,26 @@ const Footer: React.FC = () => {
           </div>
           
           <div>
-            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+            <h3 className="text-lg font-semibold mb-4">{t('footer.quickLinks')}</h3>
             <ul className="space-y-2">
               <li>
                 <Link to="/" className="text-gray-300 hover:text-white transition-colors">
-                  Home
+                  {t('nav.home')}
                 </Link>
               </li>
               <li>
                 <Link to="/fotoshootings" className="text-gray-300 hover:text-white transition-colors">
-                  Fotoshootings
+                  {t('nav.photoshoots')}
                 </Link>
               </li>
             </ul>
           </div>
           
           <div>
-            <h3 className="text-lg font-semibold mb-4">Kontakt</h3>
+            <h3 className="text-lg font-semibold mb-4">{t('footer.contact')}</h3>
             <ul className="space-y-2 text-gray-300">
               <li>
-                <span className="text-sm">Büro- und Korrespondenzadresse:</span>
+                <span className="text-sm">{t('footer.officeAddress')}:</span>
               </li>
               <li>
                 <span className="text-sm">Julius Tandler Platz 5 / 13</span>
@@ -106,45 +106,45 @@ const Footer: React.FC = () => {
               </li>
               <li>
                 <Link to="/kontakt" className="text-purple-400 hover:text-purple-300 transition-colors text-sm">
-                  Vollständige Kontaktdaten
+                  {t('footer.fullContactDetails')}
                 </Link>
               </li>
             </ul>
           </div>
           
           <div>
-            <h3 className="text-lg font-semibold mb-4">Kategorien</h3>
+            <h3 className="text-lg font-semibold mb-4">{t('footer.categories')}</h3>
             <ul className="space-y-2">
               <li>
                 <Link to="/fotoshootings?category=Familie" className="text-gray-300 hover:text-white transition-colors">
-                  Familie
+                  {t('footer.family')}
                 </Link>
               </li>
               <li>
                 <Link to="/fotoshootings?category=Baby" className="text-gray-300 hover:text-white transition-colors">
-                  Baby
+                  {t('footer.baby')}
                 </Link>
               </li>
               <li>
                 <Link to="/fotoshootings?category=Hochzeit" className="text-gray-300 hover:text-white transition-colors">
-                  Hochzeit
+                  {t('footer.wedding')}
                 </Link>
               </li>
               <li>
                 <Link to="/fotoshootings?category=Business" className="text-gray-300 hover:text-white transition-colors">
-                  Business
+                  {t('footer.business')}
                 </Link>
               </li>
               <li>
                 <Link to="/fotoshootings?category=Event" className="text-gray-300 hover:text-white transition-colors">
-                  Event
+                  {t('footer.event')}
                 </Link>
               </li>
             </ul>
           </div>
 
           <div>
-            <h3 className="text-lg font-semibold mb-4">Galerie</h3>
+            <h3 className="text-lg font-semibold mb-4">{t('footer.gallery')}</h3>
             <ul className="space-y-2">
               {user ? (
                 <>

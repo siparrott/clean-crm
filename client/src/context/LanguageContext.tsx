@@ -501,7 +501,23 @@ const translations = {
     'contact.transport': 'Transportation',
     'contact.trainInfo': '5 minutes from Kettenbrückengasse',
     'contact.streetParking': 'Street parking available',
-    'contact.mapTitle': 'Studio Location'
+    'contact.mapTitle': 'Studio Location',
+    
+    // Footer
+    'footer.quickLinks': 'Quick Links',
+    'footer.contact': 'Contact',
+    'footer.categories': 'Categories',
+    'footer.officeAddress': 'Office & Correspondence Address',
+    'footer.fullContactDetails': 'Full Contact Details',
+    'footer.family': 'Family',
+    'footer.baby': 'Baby',
+    'footer.wedding': 'Wedding',
+    'footer.business': 'Business',
+    'footer.event': 'Event',
+    'footer.gallery': 'Gallery',
+    
+    // Reviews
+    'reviews.viewAllOnGoogle': 'View All Reviews on Google'
   },
   de: {
     'nav.home': 'Startseite',
@@ -983,7 +999,23 @@ const translations = {
     'contact.transport': 'Anfahrt',
     'contact.trainInfo': '5 Minuten von Kettenbrückengasse',
     'contact.streetParking': 'Straßenparkplätze verfügbar',
-    'contact.mapTitle': 'Studio Location'
+    'contact.mapTitle': 'Studio Location',
+    
+    // Footer
+    'footer.quickLinks': 'Schnelllinks',
+    'footer.contact': 'Kontakt',
+    'footer.categories': 'Kategorien',
+    'footer.officeAddress': 'Büro- und Korrespondenzadresse',
+    'footer.fullContactDetails': 'Vollständige Kontaktdaten',
+    'footer.family': 'Familie',
+    'footer.baby': 'Baby',
+    'footer.wedding': 'Hochzeit',
+    'footer.business': 'Business',
+    'footer.event': 'Event',
+    'footer.gallery': 'Galerie',
+    
+    // Reviews
+    'reviews.viewAllOnGoogle': 'Alle Bewertungen auf Google ansehen'
   }
 };
 

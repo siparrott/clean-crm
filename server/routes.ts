@@ -76,6 +76,66 @@ function translateTagToEnglish(germanTag: string): string {
   
   return tagTranslations[germanTag] || germanTag;
 }
+
+function translateVoucherToEnglish(germanText: string): string {
+  if (!germanText) return germanText;
+  
+  const voucherTranslations: { [key: string]: string } = {
+    // Voucher product names
+    'Familienshooting Gutschein': 'Family Photo Session Voucher',
+    'Portrait Session Gutschein': 'Portrait Session Voucher',
+    'Hochzeitsfotografie Gutschein': 'Wedding Photography Voucher',
+    'Newborn Fotoshooting Gutschein': 'Newborn Photo Session Voucher',
+    'Paarshooting Gutschein': 'Couple Photo Session Voucher',
+    'Business Portrait Gutschein': 'Business Portrait Voucher',
+    
+    // Common words
+    'Gutschein': 'Voucher',
+    'Fotoshooting': 'Photo Session',
+    'Session': 'Session',
+    'Familienfotografie': 'Family Photography',
+    'Portraitfotografie': 'Portrait Photography',
+    'Hochzeitsfotografie': 'Wedding Photography',
+    'Neugeborenenfotos': 'Newborn Photos',
+    'Paarshooting': 'Couple Session',
+    'Business Portrait': 'Business Portrait',
+    
+    // Description terms
+    'Professionelle': 'Professional',
+    'Fotografie': 'Photography',
+    'Wien': 'Vienna',
+    'Studio': 'Studio',
+    'Location': 'Location',
+    'Indoor': 'Indoor',
+    'Outdoor': 'Outdoor',
+    'Digitale Bilder': 'Digital Images',
+    'Bearbeitete Fotos': 'Edited Photos',
+    'Hochauflösend': 'High Resolution',
+    'Nachbearbeitung': 'Post-processing',
+    'Retusche': 'Retouching',
+    
+    // Terms and conditions
+    'Geschäftsbedingungen': 'Terms and Conditions',
+    'Gültig': 'Valid',
+    'Monate': 'Months',
+    'Jahr': 'Year',
+    'Jahre': 'Years',
+    'Terminvereinbarung': 'Appointment Booking',
+    'Voranmeldung': 'Advance Booking',
+    'erforderlich': 'required',
+    'Übertragbar': 'Transferable',
+    'Nicht erstattungsfähig': 'Non-refundable'
+  };
+  
+  let translatedText = germanText;
+  
+  // Replace known translations
+  Object.entries(voucherTranslations).forEach(([german, english]) => {
+    translatedText = translatedText.replace(new RegExp(german, 'gi'), english);
+  });
+  
+  return translatedText;
+}
 import fs from 'fs';
 import Stripe from 'stripe';
 import nodemailer from 'nodemailer';
@@ -4214,7 +4274,19 @@ New Age Fotografie CRM System
   // ==================== VOUCHER ROUTES ====================
   app.get("/api/vouchers/products", async (req: Request, res: Response) => {
     try {
-      const products = await storage.getVoucherProducts();
+      const language = req.query.language as string || 'de';
+      let products = await storage.getVoucherProducts();
+      
+      // Translate content if language is English
+      if (language === 'en') {
+        products = products.map(product => ({
+          ...product,
+          name: translateVoucherToEnglish(product.name),
+          description: product.description ? translateVoucherToEnglish(product.description) : null,
+          termsAndConditions: product.termsAndConditions ? translateVoucherToEnglish(product.termsAndConditions) : null
+        }));
+      }
+      
       res.json(products);
     } catch (error) {
       console.error("Error fetching voucher products:", error);

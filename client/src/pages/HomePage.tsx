@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
+import ZoomableImage from '../components/ui/ZoomableImage';
 import { ChevronRight } from 'lucide-react';
 import Typewriter from 'typewriter-effect';
 import CountUp from 'react-countup';
@@ -117,7 +118,7 @@ const HomePage: React.FC = () => {
             </button>
           </div>
           <div className="md:w-2/5">
-            <img 
+            <ZoomableImage 
               src={photoGridImage}
               alt="Comprehensive family portrait showcase featuring various photography styles including family groups, couples, newborns, maternity, and lifestyle sessions"
               className="w-full rounded-lg shadow-lg"
@@ -176,7 +177,7 @@ const HomePage: React.FC = () => {
           <div className="flex flex-col md:flex-row items-center gap-8 mb-16">
             <div className="md:w-1/3">
               <div className="aspect-[4/3] overflow-hidden rounded-lg shadow-lg">
-                <img 
+                <ZoomableImage 
                   src="https://i.postimg.cc/zGVgt500/Familienportrat-Wien-Krchnavy-Stolz-0105-1024x683-1.jpg"
                   alt="Familienfotografie Wien - Professionelle Familienporträts im Studio"
                   className="w-full h-full object-cover"
@@ -203,11 +204,11 @@ const HomePage: React.FC = () => {
           {/* Second Content Block */}
           <div className="flex flex-col md:flex-row-reverse items-center gap-8">
             <div className="md:w-1/3">
-              <div className="aspect-[4/3] overflow-hidden rounded-lg shadow-lg">
-                <img 
-                  src="https://i.imgur.com/ITKEF8q.jpg"
-                  alt="Neugeborenenfotos Wien - Einfühlsame Babyfotografie im Studio"
-                  className="w-full h-full object-cover"
+              <div className="aspect-[3/4] overflow-hidden rounded-lg shadow-lg">
+                <ZoomableImage 
+                  src="https://i.postimg.cc/NMqvfKv7/4S8A6958.jpg"
+                  alt="Business Headshots Wien - Professionelle Businessfotografie im Studio"
+                  className="w-full h-full object-cover object-center"
                   loading="lazy"
                 />
               </div>

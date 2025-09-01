@@ -27,7 +27,7 @@ const getVoucherImagePlaceholder = (voucherName: string) => {
 
 const VouchersPage: React.FC = () => {
   const { selectedCategory } = useAppContext();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [searchTerm, setSearchTerm] = React.useState('');
   
   // Handle voucher purchase
@@ -39,10 +39,10 @@ const VouchersPage: React.FC = () => {
 
   // Fetch voucher products from database
   const { data: voucherProducts, isLoading, error } = useQuery<VoucherProduct[]>({
-    queryKey: ['/api/vouchers/products'],
+    queryKey: ['/api/vouchers/products', language],
     queryFn: async () => {
       // console.log removed
-      const response = await fetch('/api/vouchers/products');
+      const response = await fetch(`/api/vouchers/products?language=${language}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
