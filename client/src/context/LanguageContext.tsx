@@ -405,7 +405,30 @@ const translations = {
     'home.faqQuestion3': 'How do we prepare for the photo shoot?',
     'home.faqQuestion4': 'How long does a family photo shoot last?',
     'home.faqQuestion5': 'Can we bring pets to the photo shoot?',
-    'home.faqQuestion6': 'How do you ensure we feel comfortable in front of the camera?'
+    'home.faqQuestion6': 'How do you ensure we feel comfortable in front of the camera?',
+    
+    // Photoshoots Page
+    'photoshoots.title': 'Photoshoots Vienna - Family & Newborn Photography',
+    'photoshoots.subtitle': 'Professional photoshoots in Vienna: Family portraits, pregnancy photos, newborn pictures & business headshots',
+    'photoshoots.familyTitle': 'Family Portraits in Vienna & Zurich',
+    'photoshoots.familyDescription': 'Our family sessions are all about capturing the unique bond you share. From candid moments to posed portraits, we create images you\'ll treasure forever.',
+    'photoshoots.pregnancyTitle': 'Pregnancy Photography in Vienna & Zurich',
+    'photoshoots.pregnancyDescription': 'Celebrate the beauty of motherhood with our pregnancy sessions. We create stunning images that highlight this special time in your life.',
+    'photoshoots.newbornTitle': 'Newborn Photography in Vienna & Zurich',
+    'photoshoots.newbornDescription': 'There\'s nothing more delicate than the first days of a newborn\'s life. Our newborn sessions focus on capturing these fleeting moments with tenderness and care.',
+    'photoshoots.businessTitle': 'Corporate Photography in Vienna & Zurich',
+    'photoshoots.businessDescription': 'Enhance your professional image with our corporate photography services. From headshots to team photos, we help you present your business in the best light.',
+    'photoshoots.eventTitle': 'Event Photography in Vienna & Zurich',
+    'photoshoots.eventDescription': 'There\'s nothing more exciting than the unforgettable moments at events. Our event photography focuses on capturing these special moments with creativity and professionalism.',
+    'photoshoots.weddingTitle': 'Wedding Photography in Vienna & Zurich',
+    'photoshoots.weddingDescription': 'There\'s nothing more beautiful than the magic of a wedding day. Our wedding photography captures these magical moments with attention to detail and artistic flair.',
+    'photoshoots.learnMore': 'Learn More',
+    'photoshoots.flexibleAppointments': 'Flexible Appointments',
+    'photoshoots.flexibleDescription': 'We offer flexible scheduling, including weekends',
+    'photoshoots.wholeFamily': 'For the Whole Family',
+    'photoshoots.wholeFamilyDescription': 'Suitable for families of any size, including pets',
+    'photoshoots.professionalEquipment': 'Professional Equipment',
+    'photoshoots.professionalDescription': 'State-of-the-art camera equipment for best results'
   },
   de: {
     'nav.home': 'Startseite',
@@ -805,7 +828,30 @@ const translations = {
     'home.faqQuestion3': 'Wie bereiten wir uns auf das Fotoshooting vor?',
     'home.faqQuestion4': 'Wie lange dauert ein Familienfotoshooting?',
     'home.faqQuestion5': 'Können wir Haustiere zum Fotoshooting mitbringen?',
-    'home.faqQuestion6': 'Wie sorgt ihr dafür, dass wir uns vor der Kamera wohlfühlen?'
+    'home.faqQuestion6': 'Wie sorgt ihr dafür, dass wir uns vor der Kamera wohlfühlen?',
+    
+    // Photoshoots Page
+    'photoshoots.title': 'Fotoshootings Wien - Familien & Neugeborenen Fotografie',
+    'photoshoots.subtitle': 'Professionelle Fotoshootings in Wien: Familienporträts, Schwangerschaftsfotos, Neugeborenenbilder & Business-Headshots',
+    'photoshoots.familyTitle': 'Familienporträts in Wien & Zürich',
+    'photoshoots.familyDescription': 'Unsere Familiensitzungen drehen sich darum, die einzigartige Bindung festzuhalten, die Sie teilen. Von spontanen Momenten bis hin zu inszenierten Porträts schaffen wir Bilder, die Sie für immer schätzen werden.',
+    'photoshoots.pregnancyTitle': 'Schwangerschaftsfotografie in Wien & Zürich',
+    'photoshoots.pregnancyDescription': 'Feiern Sie die Schönheit der Mutterschaft mit unseren Schwangerschaftssitzungen. Wir schaffen atemberaubende Bilder, die diese besondere Zeit in Ihrem Leben hervorheben.',
+    'photoshoots.newbornTitle': 'Neugeborenenfotografie in Wien & Zürich',
+    'photoshoots.newbornDescription': 'Es gibt nichts Zarteres als die ersten Tage im Leben eines Neugeborenen. Unsere Neugeborenensitzungen konzentrieren sich darauf, diese flüchtigen Momente mit Zärtlichkeit und Sorgfalt einzufangen.',
+    'photoshoots.businessTitle': 'Firmenfotografie in Wien & Zürich',
+    'photoshoots.businessDescription': 'Verbessern Sie Ihr professionelles Image mit unseren Firmenfotografie-Dienstleistungen. Von Porträts bis hin zu Teamfotos helfen wir Ihnen, Ihr Unternehmen im besten Licht zu präsentieren.',
+    'photoshoots.eventTitle': 'Eventfotografie in Wien & Zürich',
+    'photoshoots.eventDescription': 'Es gibt nichts Aufregenderes als die unvergesslichen Momente bei Veranstaltungen. Unsere Eventfotografie konzentriert sich darauf, diese besonderen Augenblicke mit Kreativität und Professionalität festzuhalten.',
+    'photoshoots.weddingTitle': 'Hochzeitsfotografie in Wien & Zürich',
+    'photoshoots.weddingDescription': 'Es gibt nichts Schöneres als die Magie eines Hochzeitstages. Unsere Hochzeitsfotografie fängt diese magischen Momente mit Liebe zum Detail und künstlerischem Flair ein.',
+    'photoshoots.learnMore': 'Mehr erfahren',
+    'photoshoots.flexibleAppointments': 'Flexible Termine',
+    'photoshoots.flexibleDescription': 'Wir bieten flexible Terminvereinbarung an, auch an Wochenenden',
+    'photoshoots.wholeFamily': 'Für die ganze Familie',
+    'photoshoots.wholeFamilyDescription': 'Geeignet für Familien jeder Größe, inklusive Haustiere',
+    'photoshoots.professionalEquipment': 'Professionelle Ausrüstung',
+    'photoshoots.professionalDescription': 'Modernste Kameraausrüstung für beste Ergebnisse'
   }
 };
 

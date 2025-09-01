@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/layout/Layout';
 import { Calendar, Mail, Phone, User } from 'lucide-react';
 import { submitWaitlistForm } from '../lib/forms';
+import { useLanguage } from '../context/LanguageContext';
 
 const WartelistePage: React.FC = () => {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState({
     fullName: '',
     preferredDate: '',
