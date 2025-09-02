@@ -1,8 +1,14 @@
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
-});
+// Check if Stripe key is properly configured
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+if (!stripeSecretKey || stripeSecretKey.includes('dummy')) {
+  console.warn('WARNING: Stripe not configured properly. Using mock mode for development.');
+}
+
+const stripe = stripeSecretKey && !stripeSecretKey.includes('dummy') 
+  ? new Stripe(stripeSecretKey, { apiVersion: '2024-06-20' })
+  : null;
 
 export interface CheckoutSessionData {
   items: Array<{
@@ -80,6 +86,17 @@ export class StripeVoucherService {
    * Create checkout session with voucher support
    */
   static async createCheckoutSession(data: CheckoutSessionData): Promise<Stripe.Checkout.Session> {
+    // Handle mock mode for development when Stripe is not configured
+    if (!stripe) {
+      console.log('Mock checkout session created (Stripe not configured)');
+      return {
+        id: 'cs_mock_' + Date.now(),
+        url: `http://localhost:10000/checkout/mock-success?session_id=cs_mock_${Date.now()}`,
+        payment_status: 'unpaid',
+        status: 'open'
+      } as Stripe.Checkout.Session;
+    }
+
     // Set default URLs if not provided
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:10000';
     const successUrl = data.successUrl || `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;

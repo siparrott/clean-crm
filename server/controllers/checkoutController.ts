@@ -11,7 +11,7 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
     }
 
     // Add base URLs
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:10000';
     checkoutData.successUrl = `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
     checkoutData.cancelUrl = `${baseUrl}/cart`;
 

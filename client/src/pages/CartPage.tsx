@@ -133,7 +133,7 @@ const CartPage: React.FC = () => {
               Entdecken Sie unsere Fotografie-Pakete und fügen Sie sie Ihrem Warenkorb hinzu.
             </p>
             <button
-              onClick={() => navigate('/fotoshootings')}
+              onClick={() => navigate('/vouchers')}
               className="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
             >
               Pakete ansehen

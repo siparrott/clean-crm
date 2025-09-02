@@ -21,6 +21,11 @@ const Header: React.FC = () => {
     return location.pathname === path;
   };
 
+  const handleNavClick = (path: string) => {
+    // Scroll to top when navigating
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const navItems = [
     { path: '/', label: t('nav.home') },
     { path: '/fotoshootings', label: t('nav.photoshoots') },
@@ -46,6 +51,7 @@ const Header: React.FC = () => {
             <Link
               key={item.path}
               to={item.path}
+              onClick={() => handleNavClick(item.path)}
               className={`text-gray-700 hover:text-purple-600 transition-colors ${
                 isActive(item.path) ? 'text-purple-600 font-semibold' : ''
               }`}
@@ -86,7 +92,10 @@ const Header: React.FC = () => {
                 className={`py-2 text-gray-700 hover:text-purple-600 transition-colors ${
                   isActive(item.path) ? 'text-purple-600 font-semibold' : ''
                 }`}
-                onClick={() => setMenuOpen(false)}
+                onClick={() => {
+                  handleNavClick(item.path);
+                  setMenuOpen(false);
+                }}
               >
                 {item.label}
               </Link>

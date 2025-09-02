@@ -124,7 +124,7 @@ const HomePage: React.FC = () => {
           </div>
           <div className="md:w-2/5">
             <ZoomableImage 
-              src="https://i.postimg.cc/zGVgt500/Familienportrat-Wien-Krchnavy-Stolz-0105-1024x683-1.jpg"
+              src="https://i.postimg.cc/nc2MMJvL/photo-grid.jpg"
               alt="Comprehensive family portrait showcase featuring various photography styles including family groups, couples, newborns, maternity, and lifestyle sessions"
               className="w-full rounded-lg shadow-lg"
               onError={(e) => {
@@ -182,7 +182,7 @@ const HomePage: React.FC = () => {
             <div className="md:w-1/3">
               <div className="aspect-[4/3] overflow-hidden rounded-lg shadow-lg">
                 <ZoomableImage 
-                  src="https://i.postimg.cc/zGVgt500/Familienportrat-Wien-Krchnavy-Stolz-0105-1024x683-1.jpg"
+                  src="https://i.postimg.cc/nc2MMJvL/photo-grid.jpg"
                   alt="Familienfotografie Wien - Professionelle Familienporträts im Studio"
                   className="w-full h-full object-cover"
                   loading="lazy"
@@ -208,7 +208,7 @@ const HomePage: React.FC = () => {
           {/* Second Content Block */}
           <div className="flex flex-col md:flex-row-reverse items-center gap-8">
             <div className="md:w-1/3">
-              <div className="aspect-[3/4] overflow-hidden rounded-lg shadow-lg">
+              <div className="aspect-[4/5] max-w-xs mx-auto overflow-hidden rounded-lg shadow-lg">
                 <ZoomableImage 
                   src="https://i.postimg.cc/NMqvfKv7/4S8A6958.jpg"
                   alt="Business Headshots Wien - Professionelle Businessfotografie im Studio"
@@ -268,7 +268,9 @@ const HomePage: React.FC = () => {
               <div className="aspect-[4/3] overflow-hidden">
                 <img 
                   src="https://i.imgur.com/AMnhw6w.jpg"
-                  alt="Babybauch Fotografie Wien - Schwangerschaftsfotos im Studio"
+                  alt={language === 'en' 
+                    ? "Maternity Photography Vienna - Professional Pregnancy Photoshoot"
+                    : "Babybauch Fotografie Wien - Schwangerschaftsfotos im Studio"}
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
@@ -289,7 +291,9 @@ const HomePage: React.FC = () => {
               <div className="aspect-[4/3] overflow-hidden">
                 <img 
                   src="https://i.imgur.com/VLYZQof.jpg"
-                  alt="Neugeborenenfotos im Studio Wien - Professionelle Babyfotografie"
+                  alt={language === 'en'
+                    ? "Newborn Photography Vienna - Professional Baby Photoshoot"
+                    : "Neugeborenenfotos im Studio Wien - Professionelle Babyfotografie"}
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
@@ -372,6 +376,9 @@ const HomePage: React.FC = () => {
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-purple-900">
             {t('home.portraitStudioTitle')}
           </h2>
+          <p className="text-center text-gray-700 mb-12 max-w-2xl mx-auto">
+            Schenken Sie unvergessliche Momente! Unsere personalisierbaren Fotoshooting-Gutscheine sind das perfekte Geschenk für jeden Anlass.
+          </p>
         </div>
       </section>
 
@@ -502,123 +509,46 @@ const HomePage: React.FC = () => {
       {/* Gift Voucher Section */}
       <section className="py-16 bg-purple-50">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-4 text-purple-900">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-purple-900">
             Geschenkgutscheine
           </h2>
-          <p className="text-center text-gray-700 mb-12 max-w-2xl mx-auto">
-            Schenken Sie unvergessliche Momente! Unsere personalisierbaren Fotoshooting-Gutscheine sind das perfekte Geschenk für jeden Anlass.
-          </p>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {/* Photography Session Voucher */}
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-              <div className="bg-gradient-to-br from-purple-600 to-purple-800 p-6 text-white">
-                <h3 className="text-2xl font-bold mb-2">Fotoshooting Gutschein</h3>
-                <p className="text-purple-100">Professionelles Fotoshooting</p>
-              </div>
-              <div className="p-6">
-                <div className="text-3xl font-bold text-purple-600 mb-4">€150</div>
-                <ul className="text-gray-600 mb-6 space-y-2">
-                  <li>• 2 Stunden Studio-Shooting</li>
-                  <li>• 20 bearbeitete Bilder</li>
-                  <li>• Online Galerie</li>
-                  <li>• Personalisierbar</li>
-                </ul>
-                <button
-                  onClick={() => {
-                    addToCart({
-                      id: 'voucher-photo-150',
-                      title: 'Fotoshooting Gutschein',
-                      packageType: 'Geschenkgutschein',
-                      price: 150,
-                      quantity: 1,
-                      type: 'voucher'
-                    });
-                    // Show success feedback and scroll to top
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                    // Navigate to cart after a brief delay
-                    setTimeout(() => navigate('/cart'), 500);
-                  }}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  In den Warenkorb
-                </button>
-              </div>
-            </div>
-
-            {/* Premium Voucher */}
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow border-2 border-purple-300">
-              <div className="bg-gradient-to-br from-purple-700 to-purple-900 p-6 text-white relative">
-                <div className="absolute top-2 right-2 bg-yellow-400 text-purple-900 px-2 py-1 rounded-full text-xs font-bold">
-                  BELIEBT
+          <div className="flex justify-center">
+            <div className="max-w-md w-full">
+              {/* Flexible Voucher */}
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+                <div className="bg-gradient-to-br from-purple-500 to-purple-700 p-6 text-white">
+                  <h3 className="text-2xl font-bold mb-2">Flexibler Gutschein</h3>
+                  <p className="text-purple-100">Wunschbetrag</p>
                 </div>
-                <h3 className="text-2xl font-bold mb-2">Premium Gutschein</h3>
-                <p className="text-purple-100">Umfassendes Fotoshooting</p>
-              </div>
-              <div className="p-6">
-                <div className="text-3xl font-bold text-purple-600 mb-4">€299</div>
-                <ul className="text-gray-600 mb-6 space-y-2">
-                  <li>• 4 Stunden Shooting</li>
-                  <li>• 50 bearbeitete Bilder</li>
-                  <li>• Premium Online Galerie</li>
-                  <li>• Fotobuch inklusive</li>
-                  <li>• Vollständig personalisierbar</li>
-                </ul>
-                <button
-                  onClick={() => {
-                    addToCart({
-                      id: 'voucher-premium-299',
-                      title: 'Premium Fotoshooting Gutschein',
-                      packageType: 'Premium Geschenkgutschein',
-                      price: 299,
-                      quantity: 1,
-                      type: 'voucher'
-                    });
-                    // Show success feedback and scroll to top
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                    // Navigate to cart after a brief delay
-                    setTimeout(() => navigate('/cart'), 500);
-                  }}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  In den Warenkorb
-                </button>
-              </div>
-            </div>
-
-            {/* Flexible Voucher */}
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-              <div className="bg-gradient-to-br from-purple-500 to-purple-700 p-6 text-white">
-                <h3 className="text-2xl font-bold mb-2">Flexibler Gutschein</h3>
-                <p className="text-purple-100">Wunschbetrag</p>
-              </div>
-              <div className="p-6">
-                <div className="text-3xl font-bold text-purple-600 mb-4">€50-500</div>
-                <ul className="text-gray-600 mb-6 space-y-2">
-                  <li>• Freie Betragsauswahl</li>
-                  <li>• Anrechenbar auf alle Services</li>
-                  <li>• 12 Monate gültig</li>
-                  <li>• Individuell gestaltbar</li>
-                </ul>
-                <button
-                  onClick={() => {
-                    addToCart({
-                      id: 'voucher-flexible-100',
-                      title: 'Flexibler Wertgutschein',
-                      packageType: 'Flexibler Geschenkgutschein',
-                      price: 100,
-                      quantity: 1,
-                      type: 'voucher'
-                    });
-                    // Show success feedback and scroll to top
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                    // Navigate to cart after a brief delay
-                    setTimeout(() => navigate('/cart'), 500);
-                  }}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  In den Warenkorb
-                </button>
+                <div className="p-6">
+                  <div className="text-3xl font-bold text-purple-600 mb-4">€50-500</div>
+                  <ul className="text-gray-600 mb-6 space-y-2">
+                    <li>• Freie Betragsauswahl</li>
+                    <li>• Anrechenbar auf alle Services</li>
+                    <li>• 12 Monate gültig</li>
+                    <li>• Individuell gestaltbar</li>
+                  </ul>
+                  <button
+                    onClick={() => {
+                      addToCart({
+                        id: 'voucher-flexible-100',
+                        title: 'Flexibler Wertgutschein',
+                        packageType: 'Flexibler Geschenkgutschein',
+                        price: 100,
+                        quantity: 1,
+                        type: 'voucher'
+                      });
+                      // Show success feedback and scroll to top
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      // Navigate to cart after a brief delay
+                      setTimeout(() => navigate('/cart'), 500);
+                    }}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  >
+                    In den Warenkorb
+                  </button>
+                </div>
               </div>
             </div>
           </div>

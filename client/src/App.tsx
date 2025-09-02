@@ -77,6 +77,7 @@ import PublicGalleriesPage from './pages/PublicGalleriesPage';
 import ChatBot from './components/chat/ChatBot';
 import { GalleryShopTest } from './pages/GalleryShopTest';
 import DownloadDataPage from './pages/DownloadDataPage';
+import MockSuccessPage from './pages/MockSuccessPage';
 
 function App() {
   return (
@@ -108,6 +109,7 @@ function App() {
                 <Route path="/checkout" element={<CheckoutPage />} />
                 <Route path="/checkout/:id" element={<CheckoutPage />} />
                 <Route path="/checkout/success" element={<OrderCompletePage />} />
+                <Route path="/checkout/mock-success" element={<MockSuccessPage />} />
                 <Route path="/order-complete/:id" element={<OrderCompletePage />} />                <Route path="/account" element={<AccountPage />} />
                 <Route path="/account/profile" element={<AccountProfilePage />} />
                 <Route path="/cart" element={<CartPage />} />

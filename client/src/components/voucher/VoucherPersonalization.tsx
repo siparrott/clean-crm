@@ -433,6 +433,16 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
                 </button>
               </div>
             )}
+
+            {/* Always show checkout button in step 3 */}
+            <div className="text-center mt-6">
+              <button
+                onClick={handleComplete}
+                className="bg-green-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors w-full lg:w-auto"
+              >
+                Jetzt zur Kasse gehen
+              </button>
+            </div>
           </div>
         </div>
       )}
