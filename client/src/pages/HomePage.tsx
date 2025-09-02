@@ -386,9 +386,15 @@ const HomePage: React.FC = () => {
                 <h3 className="text-xl font-bold text-purple-900 mb-2">{t('home.pregnancyShootingTitle')}</h3>
                 <p className="text-gray-600 mb-4">{t('home.pregnancyShootingDescription')}</p>
                 <div className="flex justify-between items-center">
-                  <span className="text-2xl font-bold text-purple-600">€199</span>
+                  <div className="flex flex-col">
+                    <span className="text-lg text-gray-500 line-through">€195</span>
+                    <span className="text-2xl font-bold text-purple-600">€95</span>
+                  </div>
                   <button 
-                    onClick={() => navigate('/gutschein/maternity')}
+                    onClick={() => {
+                      navigate('/gutschein/maternity');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                     className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-full transition-colors"
                   >
                     {t('home.bookNowButton')}
@@ -412,7 +418,10 @@ const HomePage: React.FC = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-2xl font-bold text-purple-600">€249</span>
                   <button 
-                    onClick={() => navigate('/gutschein/family')}
+                    onClick={() => {
+                      navigate('/gutschein/family');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                     className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-full transition-colors"
                   >
                     {t('home.bookNowButton')}
@@ -436,7 +445,10 @@ const HomePage: React.FC = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-2xl font-bold text-purple-600">€299</span>
                   <button 
-                    onClick={() => navigate('/gutschein/newborn')}
+                    onClick={() => {
+                      navigate('/gutschein/newborn');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                     className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-full transition-colors"
                   >
                     {t('home.bookNowButton')}

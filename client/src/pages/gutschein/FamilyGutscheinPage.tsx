@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import GutscheinLayout from '../../components/gutschein/GutscheinLayout';
 import { Check, Clock, Users, Camera, Heart } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
@@ -7,6 +7,11 @@ import { useNavigate } from 'react-router-dom';
 const FamilyGutscheinPage: React.FC = () => {
   const { addItem } = useCart();
   const navigate = useNavigate();
+
+  // Ensure page scrolls to top when component mounts
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   const packages = [
     {

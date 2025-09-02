@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import { useCart } from '../context/CartContext';
+import VoucherCodeInput from '../components/cart/VoucherCodeInput';
+import { VoucherService, AppliedVoucher } from '../services/voucherService';
 import { Trash2, ShoppingBag, ArrowLeft } from 'lucide-react';
 
 const CartPage: React.FC = () => {
   const { items, removeItem, updateQuantity, total, clearCart } = useCart();
   const navigate = useNavigate();
+  const [appliedVoucher, setAppliedVoucher] = useState<AppliedVoucher | undefined>();
 
   const handleQuantityChange = (id: string, value: number) => {
     if (value > 0 && value <= 10) {
@@ -14,8 +17,43 @@ const CartPage: React.FC = () => {
     }
   };
 
+  const handleApplyVoucher = async (code: string) => {
+    const totalInCents = Math.round(total * 100);
+    const result = await VoucherService.validateVoucherCode(code, totalInCents);
+    
+    if (result.success && result.voucher && result.discount) {
+      const stripePromotionCodeId = await VoucherService.createStripePromotionCode(result.voucher.id);
+      
+      setAppliedVoucher({
+        code: result.voucher.code,
+        discount: result.discount,
+        type: result.voucher.type,
+        stripePromotionCodeId: stripePromotionCodeId || undefined
+      });
+    }
+    
+    return result;
+  };
+
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(undefined);
+  };
+
+  const discountedTotal = VoucherService.calculateDiscountedTotal(
+    Math.round(total * 100), 
+    appliedVoucher
+  ) / 100;
+
   const handleCheckout = () => {
-    // Implement checkout logic here
+    // Pass voucher information to checkout
+    const checkoutData = {
+      items,
+      total: discountedTotal,
+      appliedVoucher
+    };
+    
+    // Store in session storage for checkout process
+    sessionStorage.setItem('checkoutData', JSON.stringify(checkoutData));
     navigate('/checkout');
   };
 
@@ -126,17 +164,28 @@ const CartPage: React.FC = () => {
                   <span>Zwischensumme</span>
                   <span>€{total.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>MwSt. (19%)</span>
-                  <span>€{(total * 0.19).toFixed(2)}</span>
-                </div>
+                {appliedVoucher && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Rabatt ({appliedVoucher.code})</span>
+                    <span>-€{(appliedVoucher.discount / 100).toFixed(2)}</span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-gray-200 pt-4 mb-6">
                 <div className="flex justify-between text-xl font-bold text-gray-800">
                   <span>Gesamt</span>
-                  <span>€{(total * 1.19).toFixed(2)}</span>
+                  <span>€{discountedTotal.toFixed(2)}</span>
                 </div>
+              </div>
+
+              {/* Voucher Code Input */}
+              <div className="mb-6">
+                <VoucherCodeInput
+                  onApplyVoucher={handleApplyVoucher}
+                  appliedVoucher={appliedVoucher}
+                  onRemoveVoucher={handleRemoveVoucher}
+                />
               </div>
 
               <div className="space-y-4">

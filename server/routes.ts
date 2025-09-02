@@ -1019,6 +1019,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // Checkout and payment routes
+  app.post("/api/checkout/create-session", async (req: Request, res: Response) => {
+    try {
+      const { createCheckoutSession } = await import("./controllers/checkoutController");
+      await createCheckoutSession(req, res);
+    } catch (error) {
+      console.error('Checkout controller not available:', error);
+      res.status(500).json({ error: 'Checkout service unavailable' });
+    }
+  });
+
+  app.get("/api/checkout/success", async (req: Request, res: Response) => {
+    try {
+      const { handleCheckoutSuccess } = await import("./controllers/checkoutController");
+      await handleCheckoutSuccess(req, res);
+    } catch (error) {
+      console.error('Checkout success handler not available:', error);
+      res.status(500).json({ error: 'Checkout success service unavailable' });
+    }
+  });
+
+  app.post("/api/vouchers/validate", async (req: Request, res: Response) => {
+    try {
+      const { validateVoucherCode } = await import("./controllers/checkoutController");
+      await validateVoucherCode(req, res);
+    } catch (error) {
+      console.error('Voucher validation not available:', error);
+      res.status(500).json({ error: 'Voucher validation service unavailable' });
+    }
+  });
+
   // Import and register CRM agent router
   try {
     const { crmAgentRouter } = await import("./routes/crm-agent");
