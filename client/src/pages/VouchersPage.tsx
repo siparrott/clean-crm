@@ -8,7 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 
 const VouchersPage: React.FC = () => {
   const { selectedCategory } = useAppContext();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = React.useState('');
 

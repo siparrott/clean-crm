@@ -10,7 +10,7 @@ import { useCart } from '../context/CartContext';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { addToCart } = useCart();
 
   const scrollToTop = () => {
@@ -532,7 +532,6 @@ const HomePage: React.FC = () => {
                   <button
                     onClick={() => {
                       addToCart({
-                        id: 'voucher-flexible-100',
                         title: 'Flexibler Wertgutschein',
                         packageType: 'Flexibler Geschenkgutschein',
                         price: 100,
