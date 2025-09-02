@@ -526,7 +526,7 @@ const HomePage: React.FC = () => {
                   <ul className="text-gray-600 mb-6 space-y-2">
                     <li>• Freie Betragsauswahl</li>
                     <li>• Anrechenbar auf alle Services</li>
-                    <li>• 48 Monate gültig</li>
+                    <li>• 2 Jahre gültig</li>
                     <li>• Individuell gestaltbar</li>
                   </ul>
                   <button

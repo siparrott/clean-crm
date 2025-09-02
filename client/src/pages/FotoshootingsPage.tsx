@@ -8,6 +8,10 @@ const FotoshootingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   useEffect(() => {
     // SEO Meta Tags
     document.title = 'Fotoshootings Wien - Familien & Neugeborenen Fotografie | New Age Fotografie';
@@ -109,7 +113,10 @@ const FotoshootingsPage: React.FC = () => {
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
                     <button
-                      onClick={() => navigate(type.link)}
+                      onClick={() => {
+                        scrollToTop();
+                        navigate(type.link);
+                      }}
                       className="bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-8 rounded-lg transition-colors transform hover:scale-105"
                     >
                       {t('photoshoots.learnMore')}

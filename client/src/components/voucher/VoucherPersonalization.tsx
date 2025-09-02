@@ -92,9 +92,8 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
 
   const handleDeliverySelect = (delivery: DeliveryOption) => {
     setSelectedDelivery(delivery);
-    if (delivery.id === 'pdf') {
-      setCurrentStep(2);
-    }
+    // Allow all delivery options to proceed to design selection
+    setCurrentStep(2);
   };
 
   const handleDesignSelect = (design: DesignTemplate) => {
@@ -342,7 +341,7 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
                       </div>
                       
                       <div className="border-t pt-3">
-                        <p className="text-xs text-gray-500 mb-2">Einlösbar bis: 48 Monate ab Kaufdatum</p>
+                        <p className="text-xs text-gray-500 mb-2">Einlösbar bis: 2 Jahre ab Kaufdatum</p>
                         <div className="bg-gray-100 p-2 rounded text-center">
                           <p className="text-xs font-mono">DEMO-GUTSCHEIN-2024</p>
                         </div>

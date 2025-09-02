@@ -44,7 +44,7 @@ export const vouchers: Voucher[] = [
     validFrom: '2025-01-01',
     validUntil: '2025-12-31',
     image: 'https://imgur.com/EOgBzhL.jpg',
-    terms: '12 Monate ab Kaufdatum gültig. Vatertag-Spezialpaket beinhaltet 15 bearbeitete Fotos und einen Premium-Print.',
+    terms: '2 Jahre ab Kaufdatum gültig. Vatertag-Spezialpaket beinhaltet 15 bearbeitete Fotos und einen Premium-Print.',
     stock: 20,
     slug: 'vatertag-spezial'
   },
@@ -74,7 +74,7 @@ export const vouchers: Voucher[] = [
     validFrom: '2025-01-01',
     validUntil: '2025-12-31',
     image: 'https://imgur.com/puVF0cD.jpg',
-    terms: '12 Monate ab Kaufdatum gültig. Beinhaltet Cake-Smash-Setup und Familienporträts mit Großeltern. 25 bearbeitete Fotos inklusive.',
+    terms: '2 Jahre ab Kaufdatum gültig. Beinhaltet Cake-Smash-Setup und Familienporträts mit Großeltern. 25 bearbeitete Fotos inklusive.',
     stock: 25,
     slug: 'erster-geburtstag-grosseltern'
   }

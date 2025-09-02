@@ -396,7 +396,6 @@ const FamilyGutscheinPage: React.FC = () => {
             <li>• Termine flexibel vereinbar</li>
             <li>• Shooting-Locations in Wien und Umgebung</li>
             <li>• Beratung zur Outfit-Wahl inklusive</li>
-            <li>• Alle Preise inkl. MwSt</li>
           </ul>
         </div>
       </div>

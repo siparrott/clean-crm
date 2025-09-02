@@ -178,7 +178,7 @@ const VouchersPage: React.FC = () => {
                       {/* Validity */}
                       <div className="flex items-center justify-between mb-4">
                         <span className="text-sm text-gray-500">
-                          Gültig bis 12 Monate
+                          {t('vouchers.validUntil')} {t('vouchers.validityPeriod')}
                         </span>
                       </div>
                       
