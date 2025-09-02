@@ -2,7 +2,6 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import ZoomableImage from '../components/ui/ZoomableImage';
-import { ChevronRight } from 'lucide-react';
 import Typewriter from 'typewriter-effect';
 import CountUp from 'react-countup';
 import photoGridImage from '../assets/photo-grid.jpg';
@@ -119,13 +118,12 @@ const HomePage: React.FC = () => {
           </div>
           <div className="md:w-2/5">
             <ZoomableImage 
-              src={photoGridImage}
+              src="https://i.postimg.cc/zGVgt500/Familienportrat-Wien-Krchnavy-Stolz-0105-1024x683-1.jpg"
               alt="Comprehensive family portrait showcase featuring various photography styles including family groups, couples, newborns, maternity, and lifestyle sessions"
               className="w-full rounded-lg shadow-lg"
               onError={(e) => {
                 // Fallback for mobile/loading issues
-                // console.log removed
-                e.currentTarget.src = "https://i.postimg.cc/zGVgt500/Familienportrat-Wien-Krchnavy-Stolz-0105-1024x683-1.jpg";
+                e.currentTarget.src = photoGridImage;
               }}
               loading="lazy"
             />
