@@ -2,19 +2,23 @@ import React, { useState } from 'react';
 import { Tag, Check, X } from 'lucide-react';
 
 interface VoucherCodeInputProps {
-  onApplyVoucher: (code: string) => Promise<{ success: boolean; discount?: number; message: string }>;
+  onApplyVoucher?: (code: string) => Promise<{ success: boolean; discount?: number; message: string }>;
+  onVoucherApplied?: (code: string, discountAmount: number) => void;
   appliedVoucher?: {
     code: string;
     discount: number;
     type: 'percentage' | 'fixed';
   };
-  onRemoveVoucher: () => void;
+  onRemoveVoucher?: () => void;
+  subtotal?: number;
 }
 
 const VoucherCodeInput: React.FC<VoucherCodeInputProps> = ({
   onApplyVoucher,
+  onVoucherApplied,
   appliedVoucher,
-  onRemoveVoucher
+  onRemoveVoucher,
+  subtotal = 0
 }) => {
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -28,15 +32,42 @@ const VoucherCodeInput: React.FC<VoucherCodeInputProps> = ({
     setMessage('');
     
     try {
-      const result = await onApplyVoucher(code.trim().toUpperCase());
-      
-      if (result.success) {
-        setCode('');
-        setMessageType('success');
-        setMessage(result.message);
-      } else {
-        setMessageType('error');
-        setMessage(result.message);
+      // For enhanced checkout (direct callback)
+      if (onVoucherApplied) {
+        // Simple validation for demo - in real app this would call an API
+        const testCodes = {
+          'WELCOME20': { type: 'percentage' as const, value: 20 },
+          'PHOTO50': { type: 'fixed' as const, value: 50 },
+          'EARLYBIRD': { type: 'percentage' as const, value: 15 }
+        };
+        
+        const voucherInfo = testCodes[code.trim().toUpperCase() as keyof typeof testCodes];
+        if (voucherInfo) {
+          const discountAmount = voucherInfo.type === 'percentage' 
+            ? (subtotal * voucherInfo.value) / 100
+            : voucherInfo.value;
+          
+          onVoucherApplied(code.trim().toUpperCase(), discountAmount);
+          setCode('');
+          setMessageType('success');
+          setMessage(`Gutscheincode erfolgreich angewendet!`);
+        } else {
+          setMessageType('error');
+          setMessage('Ungültiger Gutscheincode');
+        }
+      } 
+      // For cart page (promise-based)
+      else if (onApplyVoucher) {
+        const result = await onApplyVoucher(code.trim().toUpperCase());
+        
+        if (result.success) {
+          setCode('');
+          setMessageType('success');
+          setMessage(result.message);
+        } else {
+          setMessageType('error');
+          setMessage(result.message);
+        }
       }
     } catch (error) {
       setMessageType('error');

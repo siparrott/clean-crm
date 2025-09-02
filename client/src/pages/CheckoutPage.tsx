@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import { useAppContext } from '../context/AppContext';
+import { useCart } from '../context/CartContext';
+import VoucherFlow from '../components/voucher/VoucherFlow';
 import { CheckCircle, AlertCircle, CreditCard, User, Mail, ArrowLeft } from 'lucide-react';
 import { purchaseVoucher } from '../lib/voucher';
 
@@ -9,11 +11,18 @@ interface LocationState {
   quantity: number;
 }
 
+interface CheckoutData {
+  items: any[];
+  total: number;
+  appliedVoucher?: any;
+}
+
 const CheckoutPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const { getVoucherById, addOrder } = useAppContext();
+  const { items: cartItems, total: cartTotal, clearCart } = useCart();
   
   const state = location.state as LocationState;
   const initialQuantity = state?.quantity || 1;
@@ -24,15 +33,81 @@ const CheckoutPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   
+  // Check for cart-based checkout data
+  const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
+  
+  useEffect(() => {
+    // Check session storage for checkout data from cart
+    const storedCheckoutData = sessionStorage.getItem('checkoutData');
+    if (storedCheckoutData) {
+      try {
+        const parsed = JSON.parse(storedCheckoutData);
+        setCheckoutData(parsed);
+      } catch (error) {
+        console.error('Failed to parse checkout data:', error);
+      }
+    }
+    
+    // If we have cart items, use those instead
+    if (cartItems.length > 0) {
+      setCheckoutData({
+        items: cartItems,
+        total: cartTotal,
+        appliedVoucher: undefined
+      });
+    }
+  }, [cartItems, cartTotal]);
+  
+  // Check if this is a voucher-based checkout
+  const voucherItems = checkoutData?.items?.filter(item => 
+    item.type === 'voucher' || 
+    item.name?.toLowerCase().includes('gutschein') || 
+    item.title?.toLowerCase().includes('voucher')
+  ) || [];
+  
+  const hasVoucherItems = voucherItems.length > 0;
+  const hasOnlyVoucherItems = checkoutData?.items?.length === voucherItems.length;
+  
+  // If we have voucher items that need personalization, show voucher flow
+  if (hasVoucherItems && hasOnlyVoucherItems && voucherItems.length === 1) {
+    const voucherItem = voucherItems[0];
+    
+    const handleVoucherFlowComplete = (voucherCheckoutData: any) => {
+      console.log('Voucher purchase completed:', voucherCheckoutData);
+      
+      // Clear the cart and session data
+      clearCart();
+      sessionStorage.removeItem('checkoutData');
+      
+      // Navigate to success page
+      navigate('/checkout/success');
+    };
+    
+    const handleBackToCart = () => {
+      navigate('/cart');
+    };
+    
+    return (
+      <VoucherFlow
+        voucherType={voucherItem.title}
+        baseAmount={voucherItem.price}
+        onComplete={handleVoucherFlowComplete}
+        onBack={handleBackToCart}
+      />
+    );
+  }
+  
+  // Original voucher checkout logic for old system
   const voucher = getVoucherById(id || '');
   
   useEffect(() => {
-    if (!voucher) {
+    if (id && !voucher) {
       navigate('/vouchers');
     }
-  }, [voucher, navigate]);
+  }, [voucher, navigate, id]);
   
-  if (!voucher) {
+  // If we have a specific voucher ID but no voucher found
+  if (id && !voucher) {
     return (
       <Layout>
         <div className="container mx-auto px-4 py-16 text-center">
@@ -52,7 +127,22 @@ const CheckoutPage: React.FC = () => {
     );
   }
   
-  const totalPrice = voucher.discountPrice * quantity;
+  // If no voucher ID and no checkout data, redirect to cart
+  if (!id && !checkoutData) {
+    navigate('/cart');
+    return null;
+  }
+  
+  // Use voucher data if available, otherwise use checkout data
+  const displayData = voucher ? {
+    title: voucher.title,
+    price: voucher.discountPrice,
+    image: voucher.image,
+    validUntil: voucher.validUntil,
+    stock: voucher.stock
+  } : null;
+  
+  const totalPrice = voucher ? voucher.discountPrice * quantity : (checkoutData?.total || 0);
   
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {};
@@ -82,29 +172,40 @@ const CheckoutPage: React.FC = () => {
       // Simulate payment processing
       const paymentIntentId = `pi_${Math.random().toString(36).substring(2, 15)}`;
       
-      // Record the voucher purchase
-      await purchaseVoucher({
-        purchaserName,
-        purchaserEmail,
-        amount: totalPrice,
-        paymentIntentId,
-        voucherType: voucher.category
-      });
-      
-      // Create the order in local state
-      const newOrder = addOrder({
-        voucher,
-        quantity,
-        totalPrice,
-        purchaserName,
-        purchaserEmail,
-        status: 'paid'
-      });
-      
-      // Navigate to order complete page
-      navigate(`/order-complete/${newOrder.id}`);
+      if (voucher) {
+        // Original voucher purchase flow
+        await purchaseVoucher({
+          purchaserName,
+          purchaserEmail,
+          amount: totalPrice,
+          paymentIntentId,
+          voucherType: voucher.category
+        });
+        
+        const newOrder = addOrder({
+          voucher,
+          quantity,
+          totalPrice,
+          purchaserName,
+          purchaserEmail,
+          status: 'paid'
+        });
+        
+        navigate(`/order-complete/${newOrder.id}`);
+      } else if (checkoutData) {
+        // Cart-based checkout flow
+        // Process regular items (non-voucher)
+        console.log('Processing cart checkout:', checkoutData);
+        
+        // Clear cart and session data
+        clearCart();
+        sessionStorage.removeItem('checkoutData');
+        
+        // Navigate to success page
+        navigate('/checkout/success');
+      }
     } catch (error) {
-      // console.error removed
+      console.error('Checkout error:', error);
       setErrors({ submit: 'Failed to process payment. Please try again.' });
       setIsSubmitting(false);
     }
@@ -112,7 +213,7 @@ const CheckoutPage: React.FC = () => {
   
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value);
-    if (value >= 1 && value <= voucher.stock) {
+    if (voucher && value >= 1 && value <= voucher.stock) {
       setQuantity(value);
     }
   };
@@ -122,10 +223,17 @@ const CheckoutPage: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         {/* Back button */}
         <button 
-          onClick={() => navigate(`/voucher/${voucher.slug}`)}
+          onClick={() => {
+            if (voucher) {
+              navigate(`/voucher/${voucher.slug}`);
+            } else {
+              navigate('/cart');
+            }
+          }}
           className="flex items-center text-blue-600 hover:text-blue-800 mb-6 transition-colors"
         >
-          <ArrowLeft size={16} className="mr-1" /> Back to voucher
+          <ArrowLeft size={16} className="mr-1" /> 
+          {voucher ? 'Back to voucher' : 'Back to cart'}
         </button>
         
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Checkout</h1>
@@ -245,46 +353,75 @@ const CheckoutPage: React.FC = () => {
             <div className="bg-white rounded-lg shadow-lg p-6 sticky top-24">
               <h2 className="text-xl font-semibold mb-6 text-gray-800">Order Summary</h2>
               
-              <div className="flex mb-4">
-                <img 
-                  src={voucher.image} 
-                  alt={voucher.title}
-                  className="w-16 h-16 object-cover rounded"
-                />
-                <div className="ml-4">
-                  <h3 className="font-medium text-gray-800">{voucher.title}</h3>
-                  <p className="text-gray-600 text-sm">
-                    Valid until {new Date(voucher.validUntil).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="mb-6">
-                <div className="flex justify-between mb-2">
-                  <label className="text-gray-600">Quantity:</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={voucher.stock}
-                    value={quantity}
-                    onChange={handleQuantityChange}
-                    disabled={isSubmitting}
-                    className="w-16 px-2 py-1 border border-gray-300 rounded text-right focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                  />
-                </div>
-                
-                <div className="flex justify-between mb-2">
-                  <span className="text-gray-600">Price per voucher:</span>
-                  <span className="text-gray-800">€{voucher.discountPrice.toFixed(2)}</span>
-                </div>
-                
-                <hr className="my-4 border-gray-200" />
-                
-                <div className="flex justify-between font-bold text-lg">
-                  <span>Total:</span>
-                  <span className="text-blue-600">€{totalPrice.toFixed(2)}</span>
-                </div>
-              </div>
+              {voucher ? (
+                <>
+                  <div className="flex mb-4">
+                    <img 
+                      src={voucher.image} 
+                      alt={voucher.title}
+                      className="w-16 h-16 object-cover rounded"
+                    />
+                    <div className="ml-4">
+                      <h3 className="font-medium text-gray-800">{voucher.title}</h3>
+                      <p className="text-gray-600 text-sm">
+                        Valid until {new Date(voucher.validUntil).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="mb-6">
+                    <div className="flex justify-between mb-2">
+                      <label className="text-gray-600">Quantity:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max={voucher.stock}
+                        value={quantity}
+                        onChange={handleQuantityChange}
+                        disabled={isSubmitting}
+                        className="w-16 px-2 py-1 border border-gray-300 rounded text-right focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between mb-2">
+                      <span className="text-gray-600">Price per voucher:</span>
+                      <span className="text-gray-800">€{voucher.discountPrice.toFixed(2)}</span>
+                    </div>
+                    
+                    <hr className="my-4 border-gray-200" />
+                    
+                    <div className="flex justify-between font-bold text-lg">
+                      <span>Total:</span>
+                      <span className="text-blue-600">€{totalPrice.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </>
+              ) : checkoutData ? (
+                <>
+                  {checkoutData.items.map((item, index) => (
+                    <div key={index} className="flex mb-4">
+                      <div className="w-16 h-16 bg-gray-100 rounded flex items-center justify-center">
+                        <span className="text-2xl">📸</span>
+                      </div>
+                      <div className="ml-4 flex-1">
+                        <h3 className="font-medium text-gray-800">{item.title}</h3>
+                        <p className="text-gray-600 text-sm">{item.packageType}</p>
+                        <p className="text-gray-600 text-sm">Qty: {item.quantity}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-gray-800">€{(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <hr className="my-4 border-gray-200" />
+                  
+                  <div className="flex justify-between font-bold text-lg">
+                    <span>Total:</span>
+                    <span className="text-blue-600">€{totalPrice.toFixed(2)}</span>
+                  </div>
+                </>
+              ) : null}
               
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-start">

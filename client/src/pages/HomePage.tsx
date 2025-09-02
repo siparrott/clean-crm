@@ -6,10 +6,16 @@ import Typewriter from 'typewriter-effect';
 import CountUp from 'react-countup';
 import photoGridImage from '../assets/photo-grid.jpg';
 import { useLanguage } from '../context/LanguageContext';
+import { useCart } from '../context/CartContext';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { addToCart } = useCart();
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const testimonials = [
     {
@@ -483,6 +489,162 @@ const HomePage: React.FC = () => {
                 <p className="text-gray-700">{testimonial.text}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Gift Voucher Section */}
+      <section className="py-16 bg-purple-50">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-4 text-purple-900">
+            Geschenkgutscheine
+          </h2>
+          <p className="text-center text-gray-700 mb-12 max-w-2xl mx-auto">
+            Schenken Sie unvergessliche Momente! Unsere personalisierbaren Fotoshooting-Gutscheine sind das perfekte Geschenk für jeden Anlass.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {/* Photography Session Voucher */}
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+              <div className="bg-gradient-to-br from-purple-600 to-purple-800 p-6 text-white">
+                <h3 className="text-2xl font-bold mb-2">Fotoshooting Gutschein</h3>
+                <p className="text-purple-100">Professionelles Fotoshooting</p>
+              </div>
+              <div className="p-6">
+                <div className="text-3xl font-bold text-purple-600 mb-4">€150</div>
+                <ul className="text-gray-600 mb-6 space-y-2">
+                  <li>• 2 Stunden Studio-Shooting</li>
+                  <li>• 20 bearbeitete Bilder</li>
+                  <li>• Online Galerie</li>
+                  <li>• Personalisierbar</li>
+                </ul>
+                <button
+                  onClick={() => {
+                    addToCart({
+                      id: 'voucher-photo-150',
+                      title: 'Fotoshooting Gutschein',
+                      packageType: 'Geschenkgutschein',
+                      price: 150,
+                      quantity: 1,
+                      type: 'voucher'
+                    });
+                    // Show success feedback and scroll to top
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    // Navigate to cart after a brief delay
+                    setTimeout(() => navigate('/cart'), 500);
+                  }}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                >
+                  In den Warenkorb
+                </button>
+              </div>
+            </div>
+
+            {/* Premium Voucher */}
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow border-2 border-purple-300">
+              <div className="bg-gradient-to-br from-purple-700 to-purple-900 p-6 text-white relative">
+                <div className="absolute top-2 right-2 bg-yellow-400 text-purple-900 px-2 py-1 rounded-full text-xs font-bold">
+                  BELIEBT
+                </div>
+                <h3 className="text-2xl font-bold mb-2">Premium Gutschein</h3>
+                <p className="text-purple-100">Umfassendes Fotoshooting</p>
+              </div>
+              <div className="p-6">
+                <div className="text-3xl font-bold text-purple-600 mb-4">€299</div>
+                <ul className="text-gray-600 mb-6 space-y-2">
+                  <li>• 4 Stunden Shooting</li>
+                  <li>• 50 bearbeitete Bilder</li>
+                  <li>• Premium Online Galerie</li>
+                  <li>• Fotobuch inklusive</li>
+                  <li>• Vollständig personalisierbar</li>
+                </ul>
+                <button
+                  onClick={() => {
+                    addToCart({
+                      id: 'voucher-premium-299',
+                      title: 'Premium Fotoshooting Gutschein',
+                      packageType: 'Premium Geschenkgutschein',
+                      price: 299,
+                      quantity: 1,
+                      type: 'voucher'
+                    });
+                    // Show success feedback and scroll to top
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    // Navigate to cart after a brief delay
+                    setTimeout(() => navigate('/cart'), 500);
+                  }}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                >
+                  In den Warenkorb
+                </button>
+              </div>
+            </div>
+
+            {/* Flexible Voucher */}
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+              <div className="bg-gradient-to-br from-purple-500 to-purple-700 p-6 text-white">
+                <h3 className="text-2xl font-bold mb-2">Flexibler Gutschein</h3>
+                <p className="text-purple-100">Wunschbetrag</p>
+              </div>
+              <div className="p-6">
+                <div className="text-3xl font-bold text-purple-600 mb-4">€50-500</div>
+                <ul className="text-gray-600 mb-6 space-y-2">
+                  <li>• Freie Betragsauswahl</li>
+                  <li>• Anrechenbar auf alle Services</li>
+                  <li>• 12 Monate gültig</li>
+                  <li>• Individuell gestaltbar</li>
+                </ul>
+                <button
+                  onClick={() => {
+                    addToCart({
+                      id: 'voucher-flexible-100',
+                      title: 'Flexibler Wertgutschein',
+                      packageType: 'Flexibler Geschenkgutschein',
+                      price: 100,
+                      quantity: 1,
+                      type: 'voucher'
+                    });
+                    // Show success feedback and scroll to top
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    // Navigate to cart after a brief delay
+                    setTimeout(() => navigate('/cart'), 500);
+                  }}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                >
+                  In den Warenkorb
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center mt-12">
+            <div className="bg-white rounded-lg shadow-lg p-6 max-w-4xl mx-auto">
+              <h3 className="text-xl font-bold text-purple-900 mb-4">
+                Warum unsere Gutscheine?
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
+                <div>
+                  <div className="text-3xl mb-2">🎨</div>
+                  <h4 className="font-semibold text-purple-700">Personalisierbar</h4>
+                  <p className="text-sm text-gray-600">Eigene Fotos & Nachrichten</p>
+                </div>
+                <div>
+                  <div className="text-3xl mb-2">📦</div>
+                  <h4 className="font-semibold text-purple-700">Flexible Zustellung</h4>
+                  <p className="text-sm text-gray-600">PDF, Post oder Geschenkbox</p>
+                </div>
+                <div>
+                  <div className="text-3xl mb-2">⏰</div>
+                  <h4 className="font-semibold text-purple-700">Sofort verfügbar</h4>
+                  <p className="text-sm text-gray-600">Auch last-minute bestellbar</p>
+                </div>
+                <div>
+                  <div className="text-3xl mb-2">💝</div>
+                  <h4 className="font-semibold text-purple-700">Perfektes Geschenk</h4>
+                  <p className="text-sm text-gray-600">Für jeden Anlass geeignet</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

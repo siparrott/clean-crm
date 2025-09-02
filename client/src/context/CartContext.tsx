@@ -6,11 +6,13 @@ interface CartItem {
   price: number;
   quantity: number;
   packageType: string;
+  type?: string; // Added for voucher detection
 }
 
 interface CartContextType {
   items: CartItem[];
   addItem: (item: Omit<CartItem, 'id'>) => void;
+  addToCart: (item: Omit<CartItem, 'id'>) => void; // Alias for consistency
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -53,6 +55,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <CartContext.Provider value={{
       items,
       addItem,
+      addToCart: addItem, // Alias for consistency
       removeItem,
       updateQuantity,
       clearCart,

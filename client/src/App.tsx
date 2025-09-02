@@ -105,7 +105,9 @@ function App() {
                 <Route path="/voucher/:slug" element={<VoucherDetailPage />} />
                 <Route path="/vouchers/checkout/:id" element={<VoucherCheckoutPage />} />
                 <Route path="/vouchers/success" element={<VoucherSuccessPage />} />
+                <Route path="/checkout" element={<CheckoutPage />} />
                 <Route path="/checkout/:id" element={<CheckoutPage />} />
+                <Route path="/checkout/success" element={<OrderCompletePage />} />
                 <Route path="/order-complete/:id" element={<OrderCompletePage />} />                <Route path="/account" element={<AccountPage />} />
                 <Route path="/account/profile" element={<AccountProfilePage />} />
                 <Route path="/cart" element={<CartPage />} />

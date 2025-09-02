@@ -133,6 +133,8 @@ const MaternityGutscheinPage: React.FC = () => {
       quantity: 1,
       packageType: pkg.subtitle
     });
+    // Scroll to top before navigating
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     navigate('/cart');
   };
 

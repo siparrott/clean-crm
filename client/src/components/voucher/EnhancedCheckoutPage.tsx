@@ -1,0 +1,341 @@
+import React, { useState, useEffect } from 'react';
+import { ShoppingCart, CreditCard, Mail, MapPin, Gift, Edit2, ChevronDown } from 'lucide-react';
+import VoucherCodeInput from '../cart/VoucherCodeInput';
+import type { VoucherPersonalizationData } from './VoucherPersonalization';
+
+interface EnhancedCheckoutPageProps {
+  voucherData?: VoucherPersonalizationData;
+  baseAmount: number;
+  onCheckout: (checkoutData: CheckoutData) => void;
+}
+
+interface CheckoutData {
+  email: string;
+  voucherData: VoucherPersonalizationData;
+  paymentMethod: string;
+  appliedVoucherCode?: string;
+  discount?: number;
+}
+
+const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
+  voucherData,
+  baseAmount,
+  onCheckout
+}) => {
+  const [email, setEmail] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('paypal');
+  const [appliedVoucherCode, setAppliedVoucherCode] = useState<string>();
+  const [discount, setDiscount] = useState(0);
+  const [showVoucherInput, setShowVoucherInput] = useState(false);
+
+  const deliveryAmount = voucherData?.deliveryOption.price || 0;
+  const subtotal = baseAmount + deliveryAmount;
+  const total = subtotal - discount;
+
+  const handleVoucherApplied = (code: string, discountAmount: number) => {
+    setAppliedVoucherCode(code);
+    setDiscount(discountAmount);
+    setShowVoucherInput(false);
+  };
+
+  const handleVoucherRemoved = () => {
+    setAppliedVoucherCode(undefined);
+    setDiscount(0);
+  };
+
+  const handleCheckout = () => {
+    if (!email.trim() || !voucherData) return;
+
+    const checkoutData: CheckoutData = {
+      email: email.trim(),
+      voucherData,
+      paymentMethod,
+      appliedVoucherCode,
+      discount
+    };
+
+    onCheckout(checkoutData);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-sm">TN</span>
+              </div>
+              <span className="font-semibold">TogNinja</span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button className="p-2 hover:bg-gray-100 rounded-full">
+                <Mail size={20} />
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-full relative">
+                <ShoppingCart size={20} />
+                <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  1
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Breadcrumb */}
+      <div className="max-w-6xl mx-auto px-4 py-3">
+        <div className="flex items-center space-x-2 text-sm text-gray-600">
+          <span>Warenkorb</span>
+          <ChevronDown size={16} className="rotate-[-90deg]" />
+          <span className="text-gray-900 font-medium">Kasse</span>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Left Column - Checkout Form */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Express Checkout */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h2 className="text-xl font-semibold mb-4">Express Checkout</h2>
+              <button className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-semibold py-3 px-6 rounded-lg flex items-center justify-center space-x-2 transition-colors">
+                <span>Pay with</span>
+                <span className="font-bold text-blue-600">PayPal</span>
+              </button>
+              <div className="flex items-center my-4">
+                <div className="flex-1 border-t border-gray-300"></div>
+                <span className="px-4 text-gray-500 text-sm">ODER</span>
+                <div className="flex-1 border-t border-gray-300"></div>
+              </div>
+            </div>
+
+            {/* Email Address */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h3 className="text-lg font-semibold mb-4">E-Mail Adresse eingeben</h3>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  E-Mail *
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ihre-email@beispiel.de"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <button
+                onClick={handleCheckout}
+                disabled={!email.trim() || !voucherData}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center space-x-2"
+              >
+                <span>Weiter</span>
+              </button>
+            </div>
+
+            {/* Payment Methods */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h3 className="text-lg font-semibold mb-4">Zahlungsart</h3>
+              <div className="space-y-3">
+                <label className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="paypal"
+                    checked={paymentMethod === 'paypal'}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="text-blue-600"
+                  />
+                  <span className="font-semibold text-blue-600">PayPal</span>
+                </label>
+                <label className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="card"
+                    checked={paymentMethod === 'card'}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="text-blue-600"
+                  />
+                  <CreditCard size={20} className="text-gray-600" />
+                  <span>Kreditkarte</span>
+                </label>
+                <label className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="sofort"
+                    checked={paymentMethod === 'sofort'}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="text-blue-600"
+                  />
+                  <span>Sofort Überweisung</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Order Summary */}
+          <div className="space-y-6">
+            {/* Voucher Details */}
+            {voucherData && (
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <div className="flex items-start space-x-4">
+                  <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden">
+                    {voucherData.customPhoto ? (
+                      <img 
+                        src={URL.createObjectURL(voucherData.customPhoto)}
+                        alt="Custom voucher"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : voucherData.selectedDesign ? (
+                      <img 
+                        src={voucherData.selectedDesign.image}
+                        alt={voucherData.selectedDesign.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          (e.target as HTMLImageElement).parentElement!.innerHTML = `
+                            <div class="w-full h-full flex items-center justify-center text-gray-400">
+                              <Gift size="24" />
+                            </div>
+                          `;
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <Gift size={24} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold">Massage Gutschein</h3>
+                    <p className="text-sm text-gray-600">
+                      {voucherData.selectedDesign?.occasion || 'Eigenes Foto'}
+                    </p>
+                    {voucherData.personalMessage && (
+                      <p className="text-sm text-gray-600 mt-1 italic">
+                        "{voucherData.personalMessage.substring(0, 50)}..."
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold">{baseAmount.toFixed(2)} €</p>
+                  </div>
+                </div>
+
+                {/* Delivery Method */}
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">1</span>
+                      <span className="text-sm">{voucherData.deliveryOption.name}</span>
+                    </div>
+                    <span className="text-sm font-medium">
+                      {voucherData.deliveryOption.price === 0 ? 'Kostenlos' : `${voucherData.deliveryOption.price.toFixed(2)} €`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Order Summary */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h3 className="text-lg font-semibold mb-4">Bestellübersicht</h3>
+              
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span>Zwischensumme</span>
+                  <span>{baseAmount.toFixed(2)} €</span>
+                </div>
+                
+                <div className="flex justify-between">
+                  <span>Versandkosten</span>
+                  <span>{deliveryAmount === 0 ? 'Kostenlos' : `${deliveryAmount.toFixed(2)} €`}</span>
+                </div>
+
+                {discount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Rabatt ({appliedVoucherCode})</span>
+                    <span>-{discount.toFixed(2)} €</span>
+                  </div>
+                )}
+
+                <div className="border-t pt-3">
+                  <div className="flex justify-between font-semibold text-lg">
+                    <span>Gesamtpreis</span>
+                    <span>{total.toFixed(2)} €</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Voucher Code Section */}
+              <div className="mt-6 pt-4 border-t">
+                {!appliedVoucherCode ? (
+                  <button
+                    onClick={() => setShowVoucherInput(!showVoucherInput)}
+                    className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center space-x-1"
+                  >
+                    <Gift size={16} />
+                    <span>Geschenkkarte oder Rabattcode</span>
+                    <ChevronDown size={16} className={showVoucherInput ? 'rotate-180' : ''} />
+                  </button>
+                ) : (
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Gift size={16} className="text-green-600" />
+                        <span className="text-sm text-green-800">
+                          Code "{appliedVoucherCode}" angewendet
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleVoucherRemoved}
+                        className="text-red-600 hover:text-red-700 text-sm"
+                      >
+                        Entfernen
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {showVoucherInput && !appliedVoucherCode && (
+                  <div className="mt-3">
+                    <VoucherCodeInput
+                      onVoucherApplied={handleVoucherApplied}
+                      subtotal={subtotal}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Trust Badges */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <div className="text-center space-y-3">
+                <div className="flex items-center justify-center space-x-4">
+                  <div className="flex items-center space-x-1 text-green-600">
+                    <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                    <span className="text-sm">SSL Verschlüsselt</span>
+                  </div>
+                  <div className="flex items-center space-x-1 text-green-600">
+                    <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                    <span className="text-sm">Sicher</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Ihre Daten werden verschlüsselt übertragen
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default EnhancedCheckoutPage;
