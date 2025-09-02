@@ -422,7 +422,10 @@ const HomePage: React.FC = () => {
                 <h3 className="text-xl font-bold text-purple-900 mb-2">{t('home.familyShootingTitle')}</h3>
                 <p className="text-gray-600 mb-4">{t('home.familyShootingDescription')}</p>
                 <div className="flex justify-between items-center">
-                  <span className="text-2xl font-bold text-purple-600">€249</span>
+                  <div className="flex flex-col">
+                    <span className="text-lg text-gray-500 line-through">€295</span>
+                    <span className="text-2xl font-bold text-purple-600">€195</span>
+                  </div>
                   <button 
                     onClick={() => {
                       navigate('/gutschein/family');
