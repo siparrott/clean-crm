@@ -58,7 +58,11 @@ const Footer: React.FC = () => {
     <footer className="bg-gray-800 text-white mt-12">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-8">          <div className="md:col-span-2">
-            <Link to="/" className="text-white text-xl font-bold mb-4 block">
+            <Link 
+              to="/" 
+              onClick={scrollToTop}
+              className="text-white text-xl font-bold mb-4 block"
+            >
               New Age Fotografie
             </Link>
             <p className="text-gray-300 mb-4">
@@ -81,12 +85,20 @@ const Footer: React.FC = () => {
             <h3 className="text-lg font-semibold mb-4">{t('footer.quickLinks')}</h3>
             <ul className="space-y-2">
               <li>
-                <Link to="/" className="text-gray-300 hover:text-white transition-colors">
+                <Link 
+                  to="/" 
+                  onClick={scrollToTop}
+                  className="text-gray-300 hover:text-white transition-colors"
+                >
                   {t('nav.home')}
                 </Link>
               </li>
               <li>
-                <Link to="/fotoshootings" className="text-gray-300 hover:text-white transition-colors">
+                <Link 
+                  to="/fotoshootings" 
+                  onClick={scrollToTop}
+                  className="text-gray-300 hover:text-white transition-colors"
+                >
                   {t('nav.photoshoots')}
                 </Link>
               </li>
@@ -124,27 +136,47 @@ const Footer: React.FC = () => {
             <h3 className="text-lg font-semibold mb-4">{t('footer.categories')}</h3>
             <ul className="space-y-2">
               <li>
-                <Link to="/fotoshootings?category=Familie" className="text-gray-300 hover:text-white transition-colors">
+                <Link 
+                  to="/fotoshootings?category=Familie" 
+                  onClick={scrollToTop}
+                  className="text-gray-300 hover:text-white transition-colors"
+                >
                   {t('footer.family')}
                 </Link>
               </li>
               <li>
-                <Link to="/fotoshootings?category=Baby" className="text-gray-300 hover:text-white transition-colors">
+                <Link 
+                  to="/fotoshootings?category=Baby" 
+                  onClick={scrollToTop}
+                  className="text-gray-300 hover:text-white transition-colors"
+                >
                   {t('footer.baby')}
                 </Link>
               </li>
               <li>
-                <Link to="/fotoshootings?category=Hochzeit" className="text-gray-300 hover:text-white transition-colors">
+                <Link 
+                  to="/fotoshootings?category=Hochzeit" 
+                  onClick={scrollToTop}
+                  className="text-gray-300 hover:text-white transition-colors"
+                >
                   {t('footer.wedding')}
                 </Link>
               </li>
               <li>
-                <Link to="/fotoshootings?category=Business" className="text-gray-300 hover:text-white transition-colors">
+                <Link 
+                  to="/fotoshootings?category=Business" 
+                  onClick={scrollToTop}
+                  className="text-gray-300 hover:text-white transition-colors"
+                >
                   {t('footer.business')}
                 </Link>
               </li>
               <li>
-                <Link to="/fotoshootings?category=Event" className="text-gray-300 hover:text-white transition-colors">
+                <Link 
+                  to="/fotoshootings?category=Event" 
+                  onClick={scrollToTop}
+                  className="text-gray-300 hover:text-white transition-colors"
+                >
                   {t('footer.event')}
                 </Link>
               </li>
@@ -157,7 +189,11 @@ const Footer: React.FC = () => {
               {user ? (
                 <>
                   <li>
-                    <Link to="/gallery" className="text-gray-300 hover:text-white transition-colors flex items-center">
+                    <Link 
+                      to="/gallery" 
+                      onClick={scrollToTop}
+                      className="text-gray-300 hover:text-white transition-colors flex items-center"
+                    >
                       <User size={18} className="mr-2" />
                       {t('nav.gallery')}
                     </Link>
@@ -176,6 +212,7 @@ const Footer: React.FC = () => {
                 <li>
                   <Link 
                     to="/gallery"
+                    onClick={scrollToTop}
                     className="text-gray-300 hover:text-white transition-colors flex items-center"
                   >
                     <User size={18} className="mr-2" />
