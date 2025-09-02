@@ -302,8 +302,8 @@ const HomePage: React.FC = () => {
               className="bg-white rounded-lg shadow-lg overflow-hidden cursor-pointer transform transition-transform hover:-translate-y-1"
             >
               <div className="aspect-[4/3] overflow-hidden">
-                <img 
-                  src="https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg"
+                <ZoomableImage 
+                  src="https://i.postimg.cc/T2tqtjpN/9RaPUSK.jpg"
                   alt="Business Photography Wien - Professionelle Businessfotografie"
                   className="w-full h-full object-cover"
                   loading="lazy"
