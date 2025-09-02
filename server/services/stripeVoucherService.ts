@@ -91,7 +91,7 @@ export class StripeVoucherService {
       console.log('Mock checkout session created (Stripe not configured)');
       return {
         id: 'cs_mock_' + Date.now(),
-        url: `http://localhost:10000/checkout/mock-success?session_id=cs_mock_${Date.now()}`,
+        url: `http://localhost:10000/voucher-success?session_id=cs_mock_${Date.now()}`,
         payment_status: 'unpaid',
         status: 'open'
       } as Stripe.Checkout.Session;
