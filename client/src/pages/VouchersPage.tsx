@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+  import React, { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import CategoryFilter from '../components/vouchers/CategoryFilter';
@@ -11,6 +11,14 @@ const VouchersPage: React.FC = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = React.useState('');
+
+  // Memoize the title to prevent flashing
+  const vouchersTitle = useMemo(() => {
+    const title = t('vouchers.title');
+    // Fallback to prevent flashing if translation isn't ready
+    return title && title !== 'vouchers.title' ? title : 
+           (language === 'en' ? 'Photoshoot Vouchers Vienna' : 'Fotoshooting Gutscheine Wien');
+  }, [t, language]);
 
   // Define the three vouchers from HomePage
   const voucherProducts = [
@@ -64,13 +72,6 @@ const VouchersPage: React.FC = () => {
       ? 'Photoshoot vouchers as the perfect gift idea. Family, pregnancy and newborn photoshoots in Vienna for gifting.'
       : 'Fotoshooting Gutscheine als perfekte Geschenkidee. Familien-, Schwangerschafts- und Neugeborenen-Fotoshootings in Wien zum Verschenken.';
     metaDescription.setAttribute('content', description);
-
-    return () => {
-      const defaultTitle = language === 'en' 
-        ? 'New Age Photography - Family Photographer Vienna'
-        : 'New Age Fotografie - Familienfotograf Wien';
-      document.title = defaultTitle;
-    };
   }, [language]);
   
   // Filter vouchers based on search term and category
@@ -124,7 +125,7 @@ const VouchersPage: React.FC = () => {
                   NEW AGE FOTOGRAFIE
                 </h1>
                 <p className="text-lg text-purple-600 font-medium">
-                  {t('vouchers.title')}
+                  {vouchersTitle}
                 </p>
               </div>
             </div>
