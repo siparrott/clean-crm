@@ -9,6 +9,10 @@ const Footer: React.FC = () => {
   const { t } = useLanguage();
   const { user, signOut } = useAuth();
   const [email, setEmail] = useState('');
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subscribed, setSubscribed] = useState(false);    const handleSubmit = async (e: React.FormEvent) => {
@@ -105,7 +109,11 @@ const Footer: React.FC = () => {
                 <span className="text-sm">Tel/WhatsApp: +43 677 633 99210</span>
               </li>
               <li>
-                <Link to="/kontakt" className="text-purple-400 hover:text-purple-300 transition-colors text-sm">
+                <Link 
+                  to="/kontakt" 
+                  onClick={scrollToTop}
+                  className="text-purple-400 hover:text-purple-300 transition-colors text-sm"
+                >
                   {t('footer.fullContactDetails')}
                 </Link>
               </li>

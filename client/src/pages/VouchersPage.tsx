@@ -159,15 +159,8 @@ const VouchersPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {displayedVouchers.map(voucher => (
                   <div key={voucher.id} className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-                    {/* Discount Badge */}
+                    {/* Image */}
                     <div className="relative">
-                      <div className="absolute top-4 right-4 z-10">
-                        <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
-                          {Math.round((1 - voucher.price / voucher.originalPrice) * 100)}% OFF
-                        </span>
-                      </div>
-                      
-                      {/* Image */}
                       <div className="aspect-[4/3] overflow-hidden">
                         <img 
                           src={voucher.image}
