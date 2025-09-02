@@ -48,9 +48,9 @@ const CartPage: React.FC = () => {
   ) / 100;
 
   const handleCheckout = (itemId?: string) => {
-    // Check if this is a voucher item
+    // Check if this is a specific voucher item
     const item = itemId ? items.find(i => i.id === itemId) : null;
-    const isVoucherItem = item?.type === 'voucher' || item?.name.toLowerCase().includes('gutschein') || item?.name.toLowerCase().includes('voucher');
+    const isVoucherItem = item?.type === 'voucher' || item?.name?.toLowerCase().includes('gutschein') || item?.name?.toLowerCase().includes('voucher');
     
     if (isVoucherItem && item) {
       setSelectedVoucherItem(item);
@@ -58,7 +58,23 @@ const CartPage: React.FC = () => {
       return;
     }
     
-    // Regular checkout flow
+    // If no specific item ID provided, check if cart contains any voucher items
+    if (!itemId) {
+      const voucherItems = items.filter(item => 
+        item.type === 'voucher' || 
+        item.name?.toLowerCase().includes('gutschein') || 
+        item.title?.toLowerCase().includes('voucher')
+      );
+      
+      // If there are voucher items, redirect to personalize the first one
+      if (voucherItems.length > 0) {
+        setSelectedVoucherItem(voucherItems[0]);
+        setShowVoucherFlow(true);
+        return;
+      }
+    }
+    
+    // Regular checkout flow for non-voucher items
     const checkoutData = {
       items,
       total: discountedTotal,
@@ -258,12 +274,22 @@ const CartPage: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                <button
-                  onClick={handleCheckout}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
-                >
-                  Zur Kasse
-                </button>
+                {(() => {
+                  const hasVouchers = items.some(item => 
+                    item.type === 'voucher' || 
+                    item.name?.toLowerCase().includes('gutschein') || 
+                    item.title?.toLowerCase().includes('voucher')
+                  );
+                  
+                  return (
+                    <button
+                      onClick={handleCheckout}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+                    >
+                      {hasVouchers ? 'Gutschein personalisieren' : 'Zur Kasse'}
+                    </button>
+                  );
+                })()}
 
                 <button
                   onClick={clearCart}
