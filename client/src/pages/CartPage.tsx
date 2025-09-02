@@ -86,7 +86,8 @@ const CartPage: React.FC = () => {
   };
 
   const handleVoucherFlowComplete = (voucherCheckoutData: any) => {
-    // Process the voucher purchase
+    // Since the voucher flow now redirects to Stripe,
+    // this completion handler is for when users return from successful payment
     console.log('Voucher purchase completed:', voucherCheckoutData);
     
     // Clear the voucher item from cart
@@ -94,8 +95,12 @@ const CartPage: React.FC = () => {
       removeItem(selectedVoucherItem.id);
     }
     
-    // Navigate to success page or show confirmation
-    navigate('/checkout/success');
+    // Reset voucher flow state
+    setShowVoucherFlow(false);
+    setSelectedVoucherItem(null);
+    
+    // Show success message or redirect
+    alert('Vielen Dank! Ihr personalisierter Gutschein wurde erfolgreich bestellt.');
   };
 
   const handleBackFromVoucherFlow = () => {

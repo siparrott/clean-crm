@@ -23,7 +23,7 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
   onCheckout
 }) => {
   const [email, setEmail] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('paypal');
+  const [paymentMethod, setPaymentMethod] = useState('card');
   const [appliedVoucherCode, setAppliedVoucherCode] = useState<string>();
   const [discount, setDiscount] = useState(0);
   const [showVoucherInput, setShowVoucherInput] = useState(false);
@@ -43,18 +43,50 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
     setDiscount(0);
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async (selectedPaymentMethod?: string) => {
     if (!email.trim() || !voucherData) return;
 
-    const checkoutData: CheckoutData = {
-      email: email.trim(),
-      voucherData,
-      paymentMethod,
-      appliedVoucherCode,
-      discount
-    };
+    const finalPaymentMethod = selectedPaymentMethod || paymentMethod;
 
-    onCheckout(checkoutData);
+    try {
+      // Create Stripe checkout session for voucher
+      const response = await fetch('/api/checkout/create-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: [{
+            name: `Fotoshooting Gutschein - ${voucherData.selectedDesign?.occasion || 'Personalisiert'}`,
+            price: Math.round(total * 100), // Convert to cents
+            quantity: 1,
+            description: `Lieferung: ${voucherData.deliveryOption.name}`
+          }],
+          customerEmail: email.trim(),
+          voucherData: {
+            ...voucherData,
+            customPhoto: voucherData.customPhoto ? 'uploaded' : null // Don't send file object
+          },
+          appliedVoucherCode,
+          discount: Math.round(discount * 100),
+          mode: 'voucher',
+          paymentMethod: finalPaymentMethod
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create checkout session');
+      }
+
+      const { url } = await response.json();
+      
+      // Redirect to Stripe Checkout
+      window.location.href = url;
+      
+    } catch (error) {
+      console.error('Checkout error:', error);
+      alert('Es gab einen Fehler beim Checkout. Bitte versuchen Sie es erneut.');
+    }
   };
 
   return (
@@ -97,20 +129,6 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Column - Checkout Form */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Express Checkout */}
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h2 className="text-xl font-semibold mb-4">Express Checkout</h2>
-              <button className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-semibold py-3 px-6 rounded-lg flex items-center justify-center space-x-2 transition-colors">
-                <span>Pay with</span>
-                <span className="font-bold text-blue-600">PayPal</span>
-              </button>
-              <div className="flex items-center my-4">
-                <div className="flex-1 border-t border-gray-300"></div>
-                <span className="px-4 text-gray-500 text-sm">ODER</span>
-                <div className="flex-1 border-t border-gray-300"></div>
-              </div>
-            </div>
-
             {/* Email Address */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h3 className="text-lg font-semibold mb-4">E-Mail Adresse eingeben</h3>
@@ -140,18 +158,10 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h3 className="text-lg font-semibold mb-4">Zahlungsart</h3>
               <div className="space-y-3">
-                <label className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="paypal"
-                    checked={paymentMethod === 'paypal'}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="text-blue-600"
-                  />
-                  <span className="font-semibold text-blue-600">PayPal</span>
-                </label>
-                <label className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <label 
+                  className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                  onClick={() => email.trim() && voucherData && handleCheckout('card')}
+                >
                   <input
                     type="radio"
                     name="payment"
@@ -161,20 +171,18 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
                     className="text-blue-600"
                   />
                   <CreditCard size={20} className="text-gray-600" />
-                  <span>Kreditkarte</span>
-                </label>
-                <label className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="sofort"
-                    checked={paymentMethod === 'sofort'}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="text-blue-600"
-                  />
-                  <span>Sofort Überweisung</span>
+                  <span>Kreditkarte / Debitkarte / Klarna</span>
+                  {paymentMethod === 'card' && email.trim() && voucherData && (
+                    <span className="ml-auto text-sm text-green-600">✓ Bereit zum Checkout</span>
+                  )}
                 </label>
               </div>
+              
+              {(!email.trim() || !voucherData) && (
+                <p className="text-sm text-gray-500 mt-3">
+                  Bitte geben Sie Ihre E-Mail-Adresse ein, um eine Zahlungsart zu wählen.
+                </p>
+              )}
             </div>
           </div>
 
@@ -212,7 +220,7 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
                     )}
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold">Massage Gutschein</h3>
+                    <h3 className="font-semibold">Fotoshooting Gutschein</h3>
                     <p className="text-sm text-gray-600">
                       {voucherData.selectedDesign?.occasion || 'Eigenes Foto'}
                     </p>

@@ -130,7 +130,8 @@ const NewbornGutscheinPage: React.FC = () => {
       title: `Neugeborenen Fotoshooting - ${pkg.title}`,
       price: pkg.price,
       quantity: 1,
-      packageType: pkg.subtitle
+      packageType: pkg.subtitle,
+      type: 'voucher'
     });
     // Scroll to top before navigating
     window.scrollTo({ top: 0, behavior: 'smooth' });

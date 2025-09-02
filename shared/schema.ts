@@ -222,7 +222,7 @@ export const voucherProducts = pgTable("voucher_products", {
   sessionType: text("session_type"), // links to photography session types
   
   // Voucher details
-  validityPeriod: integer("validity_period").default(365), // days
+  validityPeriod: integer("validity_period").default(1460), // 48 months in days
   redemptionInstructions: text("redemption_instructions"),
   termsAndConditions: text("terms_and_conditions"),
   

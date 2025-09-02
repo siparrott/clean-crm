@@ -6,9 +6,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export interface CheckoutSessionData {
   items: Array<{
-    title: string;
+    name?: string;
+    title?: string;
     price: number;
     quantity: number;
+    description?: string;
   }>;
   appliedVoucher?: {
     code: string;
@@ -17,8 +19,13 @@ export interface CheckoutSessionData {
     stripePromotionCodeId?: string;
   };
   customerEmail?: string;
-  successUrl: string;
-  cancelUrl: string;
+  voucherData?: any; // Voucher personalization data
+  appliedVoucherCode?: string;
+  discount?: number;
+  mode?: string;
+  paymentMethod?: string; // 'paypal', 'card', 'sofort'
+  successUrl?: string;
+  cancelUrl?: string;
 }
 
 export class StripeVoucherService {
@@ -73,23 +80,45 @@ export class StripeVoucherService {
    * Create checkout session with voucher support
    */
   static async createCheckoutSession(data: CheckoutSessionData): Promise<Stripe.Checkout.Session> {
+    // Set default URLs if not provided
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:10000';
+    const successUrl = data.successUrl || `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = data.cancelUrl || `${baseUrl}/cart`;
+
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = data.items.map(item => ({
       price_data: {
         currency: 'eur',
         product_data: {
-          name: item.title,
+          name: item.name || item.title || 'Fotoshooting Gutschein',
+          description: item.description,
         },
-        unit_amount: Math.round(item.price * 100), // Convert to cents
+        unit_amount: Math.round(item.price), // Already in cents from frontend
       },
       quantity: item.quantity,
     }));
 
+    // Configure payment methods based on user selection
+    let paymentMethodTypes: string[] = ['card']; // Default to card
+    
+    if (data.paymentMethod) {
+      switch (data.paymentMethod) {
+        case 'card':
+          paymentMethodTypes = ['card', 'klarna'];
+          break;
+        default:
+          paymentMethodTypes = ['card', 'klarna'];
+      }
+    } else {
+      // If no specific method selected, offer all available options
+      paymentMethodTypes = ['card', 'klarna'];
+    }
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      payment_method_types: ['card', 'sepa_debit'],
+      payment_method_types: paymentMethodTypes,
       line_items: lineItems,
       mode: 'payment',
-      success_url: data.successUrl,
-      cancel_url: data.cancelUrl,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       customer_email: data.customerEmail,
       shipping_address_collection: {
         allowed_countries: ['DE', 'AT', 'CH'],
@@ -97,40 +126,59 @@ export class StripeVoucherService {
       billing_address_collection: 'required',
       // Allow promotion codes to be entered in Stripe checkout
       allow_promotion_codes: true,
+      locale: 'de',
     };
 
-    // If a voucher is pre-applied, add it as a discount
-    if (data.appliedVoucher) {
-      // Method 1: Use coupon directly
-      if (data.appliedVoucher.type === 'percentage') {
-        // Create or use existing coupon
-        try {
-          const coupon = await stripe.coupons.retrieve(data.appliedVoucher.code);
-          sessionParams.discounts = [{ coupon: coupon.id }];
-        } catch (error) {
-          // Coupon doesn't exist, create it
-          const newCoupon = await this.createCoupon({
-            id: data.appliedVoucher.code,
-            code: data.appliedVoucher.code,
-            type: data.appliedVoucher.type,
-            value: data.appliedVoucher.discount,
-          });
-          sessionParams.discounts = [{ coupon: newCoupon.id }];
-        }
+    // Handle voucher code discount
+    if (data.appliedVoucherCode && data.discount && data.discount > 0) {
+      try {
+        // Try to create or retrieve coupon for the discount
+        const coupon = await stripe.coupons.create({
+          id: `voucher_${data.appliedVoucherCode}_${Date.now()}`,
+          name: `Gutschein: ${data.appliedVoucherCode}`,
+          amount_off: Math.round(data.discount), // Already in cents
+          currency: 'eur',
+          duration: 'once',
+        });
+        sessionParams.discounts = [{ coupon: coupon.id }];
+      } catch (error) {
+        console.warn('Could not apply voucher discount:', error);
       }
+    }
 
-      // Method 2: Use promotion code if available
-      if (data.appliedVoucher.stripePromotionCodeId) {
-        sessionParams.discounts = [{ 
-          promotion_code: data.appliedVoucher.stripePromotionCodeId 
-        }];
+    // If a voucher is pre-applied via the old method
+    if (data.appliedVoucher) {
+      try {
+        if (data.appliedVoucher.type === 'percentage') {
+          const coupon = await stripe.coupons.create({
+            id: `voucher_${data.appliedVoucher.code}_${Date.now()}`,
+            name: `Gutschein: ${data.appliedVoucher.code}`,
+            percent_off: data.appliedVoucher.discount,
+            duration: 'once',
+          });
+          sessionParams.discounts = [{ coupon: coupon.id }];
+        } else {
+          const coupon = await stripe.coupons.create({
+            id: `voucher_${data.appliedVoucher.code}_${Date.now()}`,
+            name: `Gutschein: ${data.appliedVoucher.code}`,
+            amount_off: data.appliedVoucher.discount,
+            currency: 'eur',
+            duration: 'once',
+          });
+          sessionParams.discounts = [{ coupon: coupon.id }];
+        }
+      } catch (error) {
+        console.warn('Could not apply voucher discount:', error);
       }
     }
 
     // Add metadata for tracking
     sessionParams.metadata = {
       source: 'photography_website',
-      voucher_used: data.appliedVoucher?.code || 'none',
+      voucher_used: data.appliedVoucherCode || data.appliedVoucher?.code || 'none',
+      mode: data.mode || 'standard',
+      payment_method_preference: data.paymentMethod || 'card',
+      voucher_data: data.voucherData ? JSON.stringify(data.voucherData).substring(0, 500) : '', // Stripe metadata limit
     };
 
     return await stripe.checkout.sessions.create(sessionParams);

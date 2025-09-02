@@ -27,10 +27,12 @@ const VoucherFlow: React.FC<VoucherFlowProps> = ({
   };
 
   const handleCheckoutComplete = (checkoutData: any) => {
-    onComplete({
-      ...checkoutData,
-      voucherData
-    });
+    // Since EnhancedCheckoutPage now redirects to Stripe directly,
+    // this might not be called. But if it is, we handle it gracefully.
+    console.log('Checkout initiated with Stripe:', checkoutData);
+    
+    // The actual completion will happen on the Stripe success page
+    // For now, we can just show a loading state or redirect
     setCurrentStep('confirmation');
   };
 

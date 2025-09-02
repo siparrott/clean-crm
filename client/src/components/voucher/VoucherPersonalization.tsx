@@ -7,6 +7,7 @@ interface DeliveryOption {
   description: string;
   price: number;
   image: string;
+  detailedDescription?: string;
   isSelected?: boolean;
 }
 
@@ -50,41 +51,43 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
       name: 'PDF Versand',
       description: 'Kostenlos',
       price: 0,
-      image: 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=400&h=300&fit=crop'
+      image: 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=400&h=300&fit=crop',
+      detailedDescription: 'Sofort downloaden und ausdrucken'
     },
     {
       id: 'post-standard',
       name: 'POST Standard',
       description: '4,49 €',
       price: 4.49,
-      image: 'https://images.unsplash.com/photo-1566125882500-87e10f726cdc?w=400&h=300&fit=crop'
+      image: 'https://images.unsplash.com/photo-1566125882500-87e10f726cdc?w=400&h=300&fit=crop',
+      detailedDescription: 'Farbdruck auf 200g Papier | Versand per Post (3-5 Werktage)'
     },
     {
       id: 'post-premium',
       name: 'POST Premium',
       description: '6,49 €',
       price: 6.49,
-      image: 'https://images.unsplash.com/photo-1607344645866-009c7d0841f0?w=400&h=300&fit=crop'
+      image: 'https://i.postimg.cc/RZ7PBrvT/firstvoucher-lettershop-premium.webp',
+      detailedDescription: 'Farbdruck auf hochwertigem 300g Papier inkl. passendem Umschlag | Versand per Post (3-5 Werktage)'
     },
     {
       id: 'post-geschenkbox',
       name: 'POST Geschenkbox',
       description: '34,95 €',
       price: 34.95,
-      image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400&h=300&fit=crop'
+      image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400&h=300&fit=crop',
+      detailedDescription: 'Premium-Gutschein in Geschenkbox | Premium-Seife (250 ml) & Premium-Schokoladen | Versand per Post (3-5 Werktage) - Kostenloser Versand innerhalb Österreichs'
     }
   ];
 
   const designTemplates: DesignTemplate[] = [
-    { id: 'massage', name: 'Massage Template', category: 'wellness', image: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=300&fit=crop', occasion: 'Entspannung' },
-    { id: 'birthday', name: 'Birthday Celebration', category: 'birthday', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop', occasion: 'Happy Birthday' },
+    { id: 'birthday', name: 'Birthday Celebration', category: 'birthday', image: 'https://i.postimg.cc/cCLh7639/827ee647-a4cc-4f99-ac43-a7165efa0314.webp', occasion: 'Happy Birthday' },
     { id: 'anniversary', name: 'Anniversary', category: 'anniversary', image: 'https://images.unsplash.com/photo-1469371670807-013ccf25f16a?w=400&h=300&fit=crop', occasion: 'Happy Anniversary' },
-    { id: 'mothers-day', name: 'Mother\'s Day', category: 'mothers-day', image: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=400&h=300&fit=crop', occasion: 'Happy Mother\'s Day' },
+    { id: 'mothers-day', name: 'Mother\'s Day', category: 'mothers-day', image: 'https://i.postimg.cc/br5xQgpr/stock-photo-top-view-greeting-card-happy-mothers-day-lettering-pink-carnations.webp', occasion: 'Happy Mother\'s Day' },
     { id: 'valentines', name: 'Valentine\'s Day', category: 'love', image: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=400&h=300&fit=crop', occasion: 'I Love You' },
     { id: 'christmas', name: 'Christmas', category: 'christmas', image: 'https://images.unsplash.com/photo-1512389098783-66b81f86e199?w=400&h=300&fit=crop', occasion: 'Merry Christmas' },
-    { id: 'thank-you', name: 'Thank You', category: 'gratitude', image: 'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=400&h=300&fit=crop', occasion: 'Thank You' },
-    { id: 'congratulations', name: 'Congratulations', category: 'celebration', image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400&h=300&fit=crop', occasion: 'Congratulations' },
-    { id: 'get-well', name: 'Get Well Soon', category: 'wellness', image: 'https://images.unsplash.com/photo-1481349518771-20055b2a7b24?w=400&h=300&fit=crop', occasion: 'Get Well Soon' }
+    { id: 'thank-you', name: 'Thank You', category: 'gratitude', image: 'https://i.postimg.cc/Mp5y5zWg/writing-thank-you.webp', occasion: 'Thank You' },
+    { id: 'congratulations', name: 'Congratulations', category: 'celebration', image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400&h=300&fit=crop', occasion: 'Congratulations' }
   ];
 
   const handleDeliverySelect = (delivery: DeliveryOption) => {
@@ -104,12 +107,6 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
     if (file) {
       setCustomPhoto(file);
       setSelectedDesign(null);
-    }
-  };
-
-  const handleContinueToPersonalization = () => {
-    if (selectedDelivery?.id === 'pdf') {
-      setCurrentStep(3);
     }
   };
 
@@ -199,6 +196,9 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
                 </div>
                 <h3 className="font-semibold text-center">{option.name}</h3>
                 <p className="text-center text-gray-600">{option.description}</p>
+                {option.detailedDescription && (
+                  <p className="text-center text-sm text-gray-500 mt-1">{option.detailedDescription}</p>
+                )}
                 {selectedDelivery?.id === option.id && (
                   <div className="flex justify-center mt-2">
                     <Check className="text-blue-500" size={20} />
@@ -222,86 +222,156 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
 
       {/* Step 2: Design/Photo Selection */}
       {currentStep === 2 && (
-        <div>
-          <h2 className="text-2xl font-bold mb-6 text-center">Motiv wählen / Foto hochladen</h2>
-          
-          {/* Custom Photo Upload */}
-          <div className="mb-8">
-            <label className="block w-full">
-              <div className={`
-                border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all
-                ${customPhoto ? 'border-green-500 bg-green-50' : 'border-blue-500 bg-blue-50'}
-                hover:bg-blue-100
-              `}>
-                <Camera size={48} className="mx-auto mb-4 text-blue-500" />
-                <p className="text-lg font-semibold text-blue-600 mb-2">Foto suchen</p>
-                <p className="text-gray-600">Klicken Sie hier, um Ihr eigenes Foto hochzuladen</p>
-                {customPhoto && (
-                  <p className="text-green-600 mt-2 font-semibold">
-                    ✓ {customPhoto.name} ausgewählt
-                  </p>
-                )}
-              </div>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleCustomPhotoUpload}
-                className="hidden"
-              />
-            </label>
-          </div>
-
-          {/* Design Templates Grid */}
-          <div className="grid grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-            {designTemplates.map((template) => (
-              <div
-                key={template.id}
-                onClick={() => handleDesignSelect(template)}
-                className={`
-                  border-2 rounded-lg cursor-pointer transition-all hover:shadow-lg
-                  ${selectedDesign?.id === template.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}
-                `}
-              >
-                <div className="aspect-square bg-gray-100 rounded-t-lg overflow-hidden">
-                  <img 
-                    src={template.image} 
-                    alt={template.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                      (e.target as HTMLImageElement).parentElement!.innerHTML = `
-                        <div class="w-full h-full flex items-center justify-center text-gray-400">
-                          <div class="text-center">
-                            <div class="text-2xl mb-1">🎨</div>
-                            <div class="text-xs">${template.occasion}</div>
-                          </div>
-                        </div>
-                      `;
-                    }}
-                  />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column: Design Selection */}
+          <div>
+            <h2 className="text-2xl font-bold mb-6 text-center">Motiv wählen / Foto hochladen</h2>
+            
+            {/* Custom Photo Upload */}
+            <div className="mb-8">
+              <label className="block w-full">
+                <div className={`
+                  border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all
+                  ${customPhoto ? 'border-green-500 bg-green-50' : 'border-blue-500 bg-blue-50'}
+                  hover:bg-blue-100
+                `}>
+                  <Camera size={48} className="mx-auto mb-4 text-blue-500" />
+                  <p className="text-lg font-semibold text-blue-600 mb-2">Foto suchen</p>
+                  <p className="text-gray-600">Klicken Sie hier, um Ihr eigenes Foto hochzuladen</p>
+                  {customPhoto && (
+                    <p className="text-green-600 mt-2 font-semibold">
+                      ✓ {customPhoto.name} ausgewählt
+                    </p>
+                  )}
                 </div>
-                <div className="p-2 text-center">
-                  <p className="text-sm font-medium">{template.occasion}</p>
-                </div>
-                {selectedDesign?.id === template.id && (
-                  <div className="flex justify-center pb-2">
-                    <Check className="text-blue-500" size={16} />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {(selectedDesign || customPhoto) && (
-            <div className="text-center">
-              <button
-                onClick={handleContinueToPersonalization}
-                className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-              >
-                Weiter zur Personalisierung
-              </button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCustomPhotoUpload}
+                  className="hidden"
+                />
+              </label>
             </div>
-          )}
+
+            {/* Design Templates Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+              {designTemplates.map((template) => (
+                <div
+                  key={template.id}
+                  onClick={() => handleDesignSelect(template)}
+                  className={`
+                    border-2 rounded-lg cursor-pointer transition-all hover:shadow-lg
+                    ${selectedDesign?.id === template.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}
+                  `}
+                >
+                  <div className="aspect-square bg-gray-100 rounded-t-lg overflow-hidden">
+                    <img 
+                      src={template.image} 
+                      alt={template.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        (e.target as HTMLImageElement).parentElement!.innerHTML = `
+                          <div class="w-full h-full flex items-center justify-center text-gray-400">
+                            <div class="text-center">
+                              <div class="text-2xl mb-1">🎨</div>
+                              <div class="text-xs">${template.occasion}</div>
+                            </div>
+                          </div>
+                        `;
+                      }}
+                    />
+                  </div>
+                  <div className="p-2 text-center">
+                    <p className="text-sm font-medium">{template.occasion}</p>
+                  </div>
+                  {selectedDesign?.id === template.id && (
+                    <div className="flex justify-center pb-2">
+                      <Check className="text-blue-500" size={16} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Column: Voucher Preview */}
+          <div className="lg:pl-8">
+            <h3 className="text-xl font-bold mb-6 text-center">Vorschau</h3>
+            
+            {(selectedDesign || customPhoto) ? (
+              <div className="relative">
+                {/* Animated Voucher Preview */}
+                <div className="bg-white rounded-lg shadow-xl p-6 mb-6 transform transition-all duration-500 hover:scale-105">
+                  <div className="relative overflow-hidden rounded-lg">
+                    {/* Main Voucher Image */}
+                    <div className="h-64 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg mb-4 flex items-center justify-center relative">
+                      {selectedDesign ? (
+                        <img 
+                          src={selectedDesign.image} 
+                          alt={selectedDesign.name}
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : customPhoto ? (
+                        <img 
+                          src={URL.createObjectURL(customPhoto)} 
+                          alt="Custom uploaded photo"
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : null}
+                      
+                      {/* Voucher Overlay */}
+                      <div className="absolute inset-0 bg-black bg-opacity-20 rounded-lg flex items-center justify-center">
+                        <div className="text-white text-center">
+                          <h4 className="text-2xl font-bold mb-2">Gutschein</h4>
+                          <p className="text-lg">{selectedDesign?.occasion || 'Eigenes Foto'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Voucher Details */}
+                    <div className="bg-white p-4 rounded-lg border-t-4 border-blue-500">
+                      <div className="flex justify-between items-center mb-3">
+                        <div>
+                          <h5 className="font-bold text-lg">Fotoshooting Gutschein</h5>
+                          <p className="text-gray-600 text-sm">1 Person, ca. 30 min</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-blue-600">{voucherAmount},00 €</p>
+                        </div>
+                      </div>
+                      
+                      <div className="border-t pt-3">
+                        <p className="text-xs text-gray-500 mb-2">Einlösbar bis: 48 Monate ab Kaufdatum</p>
+                        <div className="bg-gray-100 p-2 rounded text-center">
+                          <p className="text-xs font-mono">DEMO-GUTSCHEIN-2024</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Continue Button */}
+                <div className="text-center">
+                  <button
+                    onClick={() => setCurrentStep(3)}
+                    className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors w-full lg:w-auto"
+                  >
+                    Persönliche Nachricht hinzufügen
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center p-12 border-2 border-dashed border-gray-300 rounded-lg">
+                <div className="text-gray-400 mb-4">
+                  <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <p className="text-gray-500">Wählen Sie ein Design oder laden Sie ein Foto hoch, um eine Vorschau zu sehen</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -376,7 +446,7 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
                 <span className="text-xs text-center">Voucher<br/>Preview</span>
               </div>
               <div>
-                <h3 className="font-semibold">Massage Gutschein</h3>
+                <h3 className="font-semibold">Fotoshooting Gutschein</h3>
                 <p className="text-sm text-gray-600">
                   {selectedDelivery.name} | {selectedDesign?.occasion || customPhoto?.name || 'Eigenes Foto'}
                 </p>
