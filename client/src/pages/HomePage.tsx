@@ -522,11 +522,11 @@ const HomePage: React.FC = () => {
                   <p className="text-purple-100">Wunschbetrag</p>
                 </div>
                 <div className="p-6">
-                  <div className="text-3xl font-bold text-purple-600 mb-4">€50-500</div>
+                  <div className="text-3xl font-bold text-purple-600 mb-4">€100</div>
                   <ul className="text-gray-600 mb-6 space-y-2">
                     <li>• Freie Betragsauswahl</li>
                     <li>• Anrechenbar auf alle Services</li>
-                    <li>• 12 Monate gültig</li>
+                    <li>• 48 Monate gültig</li>
                     <li>• Individuell gestaltbar</li>
                   </ul>
                   <button
