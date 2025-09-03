@@ -279,12 +279,15 @@ const ClientsPage: React.FC = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-bold text-gray-900">
-                        {client.last_name && client.first_name 
-                          ? `${client.last_name}, ${client.first_name}`
-                          : client.email || 'Unnamed Client'
+                        {client.last_name || client.first_name 
+                          ? `${client.last_name || ''}, ${client.first_name || ''}`.replace(/^,\s*/, '').replace(/,\s*$/, '')
+                          : 'Unnamed Client'
                         }
                       </h3>
                       <p className="text-xs text-gray-500 mt-1">
+                        {client.email}
+                      </p>
+                      <p className="text-xs text-gray-500">
                         ID: {client.client_id}
                       </p>
                     </div>
@@ -292,9 +295,6 @@ const ClientsPage: React.FC = () => {
 
                   <div className="space-y-2 mb-4">
                     <p className="text-sm text-gray-600 flex items-center">
-                      <Mail size={14} className="mr-2" />
-                      {client.email}
-                    </p>                    <p className="text-sm text-gray-600 flex items-center">
                       <Phone size={14} className="mr-2" />
                       {client.phone || t('clients.no_phone')}
                     </p>
