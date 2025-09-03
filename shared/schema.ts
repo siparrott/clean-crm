@@ -334,17 +334,116 @@ export const couponUsage = pgTable("coupon_usage", {
   usedAt: timestamp("used_at").defaultNow(),
 });
 
-// CRM Messages
+// CRM Messages (Enhanced with Email/SMS tracking)
 export const crmMessages = pgTable("crm_messages", {
   id: uuid("id").primaryKey().defaultRandom(),
   senderName: text("sender_name").notNull(),
   senderEmail: text("sender_email").notNull(),
   subject: text("subject").notNull(),
   content: text("content").notNull(),
-  status: text("status").default("unread"),
+  messageType: text("message_type").notNull().default("email"), // "email", "sms", "note"
+  status: text("status").default("unread"), // "unread", "read", "replied", "sent", "delivered", "failed"
+  direction: text("direction").default("inbound"), // "inbound", "outbound"
   clientId: uuid("client_id").references(() => crmClients.id),
   assignedTo: uuid("assigned_to").references(() => users.id),
+  
+  // Email specific fields
+  emailMessageId: text("email_message_id"), // for tracking email threads
+  emailHeaders: jsonb("email_headers"),
+  attachments: jsonb("attachments"), // array of attachment info
+  
+  // SMS specific fields
+  smsMessageId: text("sms_message_id"),
+  phoneNumber: text("phone_number"),
+  smsProvider: text("sms_provider"), // "twilio", "vonage", etc.
+  smsStatus: text("sms_status"), // "queued", "sent", "delivered", "failed"
+  
+  // Bulk messaging
+  campaignId: uuid("campaign_id"), // links to bulk campaigns
+  
+  // Timestamps
+  sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  readAt: timestamp("read_at"),
   repliedAt: timestamp("replied_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Bulk Message Campaigns
+export const messageCampaigns = pgTable("message_campaigns", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  messageType: text("message_type").notNull(), // "email", "sms"
+  subject: text("subject"), // for email campaigns
+  content: text("content").notNull(),
+  
+  // Targeting criteria
+  targetType: text("target_type").notNull(), // "all", "leads", "clients", "custom", "segment"
+  targetCriteria: jsonb("target_criteria"), // filters like status, spend amount, etc.
+  targetClientIds: text("target_client_ids").array(), // for custom targeting
+  
+  // Campaign settings
+  scheduledAt: timestamp("scheduled_at"),
+  status: text("status").default("draft"), // "draft", "scheduled", "sending", "sent", "completed", "failed"
+  
+  // Results
+  totalRecipients: integer("total_recipients").default(0),
+  sentCount: integer("sent_count").default(0),
+  deliveredCount: integer("delivered_count").default(0),
+  failedCount: integer("failed_count").default(0),
+  
+  // Metadata
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Studio Calendar & Appointments
+export const studioAppointments = pgTable("studio_appointments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientId: uuid("client_id").references(() => crmClients.id).notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  appointmentType: text("appointment_type").notNull(), // "consultation", "photoshoot", "delivery", "meeting"
+  status: text("status").notNull().default("scheduled"), // "scheduled", "confirmed", "completed", "cancelled", "no_show"
+  startDateTime: timestamp("start_date_time").notNull(),
+  endDateTime: timestamp("end_date_time").notNull(),
+  location: text("location").default("Studio"),
+  googleCalendarEventId: text("google_calendar_event_id"), // For Google Calendar sync
+  notes: text("notes"),
+  reminderSent: boolean("reminder_sent").default(false),
+  reminderDateTime: timestamp("reminder_date_time"),
+  createdBy: text("created_by").notNull().default("system"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Google Calendar Integration Settings
+export const googleCalendarConfig = pgTable("google_calendar_config", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  calendarId: text("calendar_id").notNull(), // Google Calendar ID
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  clientId: text("client_id"),
+  clientSecret: text("client_secret"),
+  isActive: boolean("is_active").default(false),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// SMS Configuration
+export const smsConfig = pgTable("sms_config", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  provider: text("provider").notNull().default("twilio"), // "twilio", "vonage", "messagebird"
+  accountSid: text("account_sid"),
+  authToken: text("auth_token"),
+  fromNumber: text("from_number"),
+  webhookUrl: text("webhook_url"),
+  apiKey: text("api_key"), // For Vonage
+  apiSecret: text("api_secret"), // For Vonage
+  isActive: boolean("is_active").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -743,9 +842,31 @@ export const insertCrmMessageSchema = createInsertSchema(crmMessages).pick({
   senderEmail: true,
   subject: true,
   content: true,
+  messageType: true,
   status: true,
+  direction: true,
   clientId: true,
-  assignedTo: true,
+  phoneNumber: true,
+  campaignId: true,
+});
+
+export const insertMessageCampaignSchema = createInsertSchema(messageCampaigns).pick({
+  name: true,
+  messageType: true,
+  subject: true,
+  content: true,
+  targetType: true,
+  targetCriteria: true,
+  targetClientIds: true,
+  scheduledAt: true,
+});
+
+export const insertSMSConfigSchema = createInsertSchema(smsConfig).pick({
+  provider: true,
+  accountSid: true,
+  authToken: true,
+  fromNumber: true,
+  isActive: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -1045,3 +1166,9 @@ export type AiPolicy = typeof aiPolicies.$inferSelect;
 export type InsertAiPolicy = z.infer<typeof insertAiPolicySchema>;
 export type AgentActionLog = typeof agentActionLog.$inferSelect;
 export type InsertAgentActionLog = z.infer<typeof insertAgentActionLogSchema>;
+
+// Communication types
+export type MessageCampaign = typeof messageCampaigns.$inferSelect;
+export type InsertMessageCampaign = z.infer<typeof insertMessageCampaignSchema>;
+export type SMSConfig = typeof smsConfig.$inferSelect;
+export type InsertSMSConfig = z.infer<typeof insertSMSConfigSchema>;

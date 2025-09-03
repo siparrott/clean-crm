@@ -78,6 +78,7 @@ import ChatBot from './components/chat/ChatBot';
 import { GalleryShopTest } from './pages/GalleryShopTest';
 import DownloadDataPage from './pages/DownloadDataPage';
 import MockSuccessPage from './pages/MockSuccessPage';
+import CommunicationsPage from './pages/CommunicationsPage';
 
 function App() {
   return (
@@ -299,6 +300,14 @@ function App() {
                   element={
                     <NeonProtectedRoute>
                       <AdminInboxPageV2 />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/communications"
+                  element={
+                    <NeonProtectedRoute>
+                      <CommunicationsPage />
                     </NeonProtectedRoute>
                   }
                 />

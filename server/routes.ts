@@ -1071,6 +1071,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Calendar routes (Studio Appointments)
+  app.post("/api/calendar/appointments", async (req: Request, res: Response) => {
+    try {
+      const { createAppointment } = await import("./controllers/calendarController");
+      await createAppointment(req, res);
+    } catch (error) {
+      console.error('Create appointment not available:', error);
+      res.status(500).json({ error: 'Calendar service unavailable' });
+    }
+  });
+
+  app.get("/api/calendar/appointments", async (req: Request, res: Response) => {
+    try {
+      const { getAppointments } = await import("./controllers/calendarController");
+      await getAppointments(req, res);
+    } catch (error) {
+      console.error('Get appointments not available:', error);
+      res.status(500).json({ error: 'Calendar service unavailable' });
+    }
+  });
+
+  app.put("/api/calendar/appointments/:appointmentId", async (req: Request, res: Response) => {
+    try {
+      const { updateAppointment } = await import("./controllers/calendarController");
+      await updateAppointment(req, res);
+    } catch (error) {
+      console.error('Update appointment not available:', error);
+      res.status(500).json({ error: 'Calendar service unavailable' });
+    }
+  });
+
+  app.delete("/api/calendar/appointments/:appointmentId", async (req: Request, res: Response) => {
+    try {
+      const { deleteAppointment } = await import("./controllers/calendarController");
+      await deleteAppointment(req, res);
+    } catch (error) {
+      console.error('Delete appointment not available:', error);
+      res.status(500).json({ error: 'Calendar service unavailable' });
+    }
+  });
+
+  app.get("/api/calendar/appointments/client/:clientId", async (req: Request, res: Response) => {
+    try {
+      const { getClientAppointments } = await import("./controllers/calendarController");
+      await getClientAppointments(req, res);
+    } catch (error) {
+      console.error('Get client appointments not available:', error);
+      res.status(500).json({ error: 'Calendar service unavailable' });
+    }
+  });
+
+  app.get("/api/calendar/available-slots", async (req: Request, res: Response) => {
+    try {
+      const { getAvailableSlots } = await import("./controllers/calendarController");
+      await getAvailableSlots(req, res);
+    } catch (error) {
+      console.error('Get available slots not available:', error);
+      res.status(500).json({ error: 'Calendar service unavailable' });
+    }
+  });
+
+  // Communication routes (Email & SMS)
+  app.post("/api/communications/email/send", async (req: Request, res: Response) => {
+    try {
+      const { sendEmail } = await import("./controllers/communicationController");
+      await sendEmail(req, res);
+    } catch (error) {
+      console.error('Send email not available:', error);
+      res.status(500).json({ error: 'Email service unavailable' });
+    }
+  });
+
+  app.post("/api/communications/sms/send", async (req: Request, res: Response) => {
+    try {
+      const { sendSMS } = await import("./controllers/communicationController");
+      await sendSMS(req, res);
+    } catch (error) {
+      console.error('Send SMS not available:', error);
+      res.status(500).json({ error: 'SMS service unavailable' });
+    }
+  });
+
+  app.post("/api/communications/sms/bulk", async (req: Request, res: Response) => {
+    try {
+      const { sendBulkSMS } = await import("./controllers/communicationController");
+      await sendBulkSMS(req, res);
+    } catch (error) {
+      console.error('Bulk SMS not available:', error);
+      res.status(500).json({ error: 'Bulk SMS service unavailable' });
+    }
+  });
+
+  app.get("/api/communications/client/:clientId", async (req: Request, res: Response) => {
+    try {
+      const { getClientCommunications } = await import("./controllers/communicationController");
+      await getClientCommunications(req, res);
+    } catch (error) {
+      console.error('Get client communications not available:', error);
+      res.status(500).json({ error: 'Communications service unavailable' });
+    }
+  });
+
+  app.get("/api/communications/all", async (req: Request, res: Response) => {
+    try {
+      const { getAllCommunications } = await import("./controllers/communicationController");
+      await getAllCommunications(req, res);
+    } catch (error) {
+      console.error('Get all communications not available:', error);
+      res.status(500).json({ error: 'Communications service unavailable' });
+    }
+  });
+
+  app.get("/api/communications/sms/config", async (req: Request, res: Response) => {
+    try {
+      const { getSMSConfig } = await import("./controllers/communicationController");
+      await getSMSConfig(req, res);
+    } catch (error) {
+      console.error('Get SMS config not available:', error);
+      res.status(500).json({ error: 'SMS config service unavailable' });
+    }
+  });
+
+  app.post("/api/communications/sms/config", async (req: Request, res: Response) => {
+    try {
+      const { updateSMSConfig } = await import("./controllers/communicationController");
+      await updateSMSConfig(req, res);
+    } catch (error) {
+      console.error('Update SMS config not available:', error);
+      res.status(500).json({ error: 'SMS config service unavailable' });
+    }
+  });
+
+  app.post("/api/communications/bulk/preview", async (req: Request, res: Response) => {
+    try {
+      const { getBulkTargetPreview } = await import("./controllers/communicationController");
+      await getBulkTargetPreview(req, res);
+    } catch (error) {
+      console.error('Get bulk target preview not available:', error);
+      res.status(500).json({ error: 'Bulk preview service unavailable' });
+    }
+  });
+
+  app.patch("/api/communications/:messageId/read", async (req: Request, res: Response) => {
+    try {
+      const { markMessageAsRead } = await import("./controllers/communicationController");
+      await markMessageAsRead(req, res);
+    } catch (error) {
+      console.error('Mark message as read not available:', error);
+      res.status(500).json({ error: 'Message service unavailable' });
+    }
+  });
+
+  app.post("/api/communications/email/test", async (req: Request, res: Response) => {
+    try {
+      const { testEmailConfig } = await import("./controllers/communicationController");
+      await testEmailConfig(req, res);
+    } catch (error) {
+      console.error('Test email config not available:', error);
+      res.status(500).json({ error: 'Email test service unavailable' });
+    }
+  });
+
   // Import and register CRM agent router
   try {
     const { crmAgentRouter } = await import("./routes/crm-agent");

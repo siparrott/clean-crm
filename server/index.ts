@@ -10,6 +10,12 @@ import "./jobs";
 // Import and configure session middleware
 import { sessionConfig } from './auth';
 
+// Import email service for initialization
+import { EnhancedEmailService } from './services/enhancedEmailService';
+import { SMSService } from './services/smsService';
+import { sql } from 'drizzle-orm';
+import { db } from './db';
+
 // Override demo mode for production New Age Fotografie site
 // This is NOT a demo - it's the live business website
 if (!process.env.DEMO_MODE || process.env.DEMO_MODE === 'true') {
@@ -77,6 +83,74 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Run database migration for communication tables
+  try {
+    console.log('🔄 Checking communication database schema...');
+    
+    // Add missing columns to crm_messages table
+    await db.execute(sql`
+      ALTER TABLE crm_messages 
+      ADD COLUMN IF NOT EXISTS message_type varchar(20) DEFAULT 'email'
+    `);
+    
+    await db.execute(sql`
+      ALTER TABLE crm_messages 
+      ADD COLUMN IF NOT EXISTS phone_number varchar(20)
+    `);
+
+    // Create sms_config table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS sms_config (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider varchar(50) NOT NULL,
+        account_sid varchar(255),
+        auth_token varchar(255),
+        from_number varchar(20),
+        api_key varchar(255),
+        api_secret varchar(255),
+        webhook_url varchar(255),
+        is_active boolean DEFAULT false,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )
+    `);
+
+    // Create message_campaigns table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS message_campaigns (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        name varchar(255) NOT NULL,
+        type varchar(20) NOT NULL,
+        content text NOT NULL,
+        target_type varchar(50) NOT NULL,
+        target_criteria jsonb,
+        status varchar(20) DEFAULT 'draft',
+        scheduled_at timestamp,
+        sent_at timestamp,
+        total_recipients integer DEFAULT 0,
+        successful_sends integer DEFAULT 0,
+        failed_sends integer DEFAULT 0,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )
+    `);
+
+    // Insert default SMS configuration if none exists
+    await db.execute(sql`
+      INSERT INTO sms_config (provider, account_sid, auth_token, from_number, is_active)
+      SELECT 'demo', 'demo_account', 'demo_token', '+43123456789', false
+      WHERE NOT EXISTS (SELECT 1 FROM sms_config LIMIT 1)
+    `);
+
+    console.log('✅ Communication database schema updated');
+  } catch (error) {
+    console.log('⚠️ Database schema update failed (may already exist):', error.message);
+  }
+
+  // Initialize services
+  await EnhancedEmailService.initialize();
+  await SMSService.initialize();
+  
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

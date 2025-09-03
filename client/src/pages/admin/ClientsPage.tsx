@@ -16,7 +16,10 @@ import {
   Building,
   Upload,
   Download,
-  FileText
+  FileText,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 interface Client {
@@ -46,14 +49,16 @@ const ClientsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useState<'name' | 'created'>('name');
 
   useEffect(() => {
     fetchClients();
   }, []);
 
   useEffect(() => {
-    filterClients();
-  }, [clients, searchTerm]);
+    filterAndSortClients();
+  }, [clients, searchTerm, sortOrder, sortBy]);
 
   const fetchClients = async () => {
     try {
@@ -97,22 +102,42 @@ const ClientsPage: React.FC = () => {
     }
   };
 
-  const filterClients = () => {
-    if (!searchTerm.trim()) {
-      setFilteredClients(clients);
-      return;
+  const filterAndSortClients = () => {
+    let filtered = clients;
+    
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      filtered = clients.filter(client => 
+        client.first_name.toLowerCase().includes(lowerSearchTerm) ||
+        client.last_name.toLowerCase().includes(lowerSearchTerm) ||
+        client.email.toLowerCase().includes(lowerSearchTerm) ||
+        client.phone.toLowerCase().includes(lowerSearchTerm) ||
+        client.client_id.toLowerCase().includes(lowerSearchTerm)
+      );
     }
     
-    const lowerSearchTerm = searchTerm.toLowerCase();
-    const filtered = clients.filter(client => 
-      client.first_name.toLowerCase().includes(lowerSearchTerm) ||
-      client.last_name.toLowerCase().includes(lowerSearchTerm) ||
-      client.email.toLowerCase().includes(lowerSearchTerm) ||
-      client.phone.toLowerCase().includes(lowerSearchTerm) ||
-      client.client_id.toLowerCase().includes(lowerSearchTerm)
-    );
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      if (sortBy === 'name') {
+        // Sort by last name, then first name
+        const aName = `${a.last_name} ${a.first_name}`.toLowerCase();
+        const bName = `${b.last_name} ${b.first_name}`.toLowerCase();
+        comparison = aName.localeCompare(bName);
+      } else if (sortBy === 'created') {
+        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
     
     setFilteredClients(filtered);
+  };
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
   };
 
   const handleViewClient = (clientId: string) => {
@@ -195,9 +220,10 @@ const ClientsPage: React.FC = () => {
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />              <input
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input
                 type="text"
                 placeholder={t('clients.search')}
                 value={searchTerm}
@@ -206,10 +232,33 @@ const ClientsPage: React.FC = () => {
               />
             </div>
             
+            <div className="flex space-x-2">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'name' | 'created')}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              >
+                <option value="name">Sort by Name</option>
+                <option value="created">Sort by Date Added</option>
+              </select>
+              
+              <button
+                onClick={toggleSortOrder}
+                className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}
+              >
+                {sortOrder === 'asc' ? <ArrowUp size={20} /> : <ArrowDown size={20} />}
+              </button>
+            </div>
+            
             <button className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
               <Filter size={20} className="mr-2" />
               {t('clients.more_filters')}
             </button>
+            
+            <div className="text-sm text-gray-600 flex items-center">
+              Showing {filteredClients.length} of {clients.length} clients
+            </div>
           </div>
         </div>
 
@@ -229,7 +278,9 @@ const ClientsPage: React.FC = () => {
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{client.first_name} {client.last_name}</h3>
+                      <h3 className="text-lg font-bold text-gray-900">
+                        {client.last_name}, {client.first_name}
+                      </h3>
                       {client.company && (
                         <p className="text-sm text-gray-600 flex items-center mt-1">
                           <Building size={14} className="mr-1" />
