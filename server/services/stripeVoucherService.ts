@@ -1,14 +1,23 @@
 import Stripe from 'stripe';
+import { VoucherGenerationService, GeneratedVoucher } from './voucherGenerationService';
 
 // Check if Stripe key is properly configured
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-if (!stripeSecretKey || stripeSecretKey.includes('dummy')) {
-  console.warn('WARNING: Stripe not configured properly. Using mock mode for development.');
+if (!stripeSecretKey) {
+  console.error('STRIPE_SECRET_KEY is missing from environment variables');
+  throw new Error('STRIPE_SECRET_KEY is required');
 }
 
-const stripe = stripeSecretKey && !stripeSecretKey.includes('dummy') 
-  ? new Stripe(stripeSecretKey, { apiVersion: '2024-06-20' })
-  : null;
+if (stripeSecretKey.includes('dummy') || stripeSecretKey.includes('xxx') || stripeSecretKey.length < 20) {
+  console.error('Invalid Stripe secret key detected. Please use a real test key from your Stripe dashboard.');
+  console.error('Current key starts with:', stripeSecretKey.substring(0, 10) + '...');
+  throw new Error('Invalid STRIPE_SECRET_KEY - please use a real test key');
+}
+
+const stripe = new Stripe(stripeSecretKey, { 
+  apiVersion: '2024-06-20',
+  typescript: true 
+});
 
 export interface CheckoutSessionData {
   items: Array<{
@@ -86,125 +95,139 @@ export class StripeVoucherService {
    * Create checkout session with voucher support
    */
   static async createCheckoutSession(data: CheckoutSessionData): Promise<Stripe.Checkout.Session> {
-    // Handle mock mode for development when Stripe is not configured
     if (!stripe) {
-      console.log('Mock checkout session created (Stripe not configured)');
-      return {
-        id: 'cs_mock_' + Date.now(),
-        url: `http://localhost:10000/voucher-success?session_id=cs_mock_${Date.now()}`,
-        payment_status: 'unpaid',
-        status: 'open'
-      } as Stripe.Checkout.Session;
+      throw new Error('Stripe is not properly configured. Please check your STRIPE_SECRET_KEY.');
     }
 
-    // Set default URLs if not provided
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:10000';
-    const successUrl = data.successUrl || `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = data.cancelUrl || `${baseUrl}/cart`;
+    try {
+      // Set default URLs if not provided
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const successUrl = data.successUrl || `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = data.cancelUrl || `${baseUrl}/cart`;
 
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = data.items.map(item => ({
-      price_data: {
-        currency: 'eur',
-        product_data: {
-          name: item.name || item.title || 'Fotoshooting Gutschein',
-          description: item.description,
-        },
-        unit_amount: Math.round(item.price), // Already in cents from frontend
-      },
-      quantity: item.quantity,
-    }));
-
-    // Configure payment methods based on user selection
-    let paymentMethodTypes: string[] = ['card']; // Default to card
-    
-    if (data.paymentMethod) {
-      switch (data.paymentMethod) {
-        case 'card':
-          paymentMethodTypes = ['card', 'klarna'];
-          break;
-        default:
-          paymentMethodTypes = ['card', 'klarna'];
-      }
-    } else {
-      // If no specific method selected, offer all available options
-      paymentMethodTypes = ['card', 'klarna'];
-    }
-
-    const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      payment_method_types: paymentMethodTypes,
-      line_items: lineItems,
-      mode: 'payment',
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      customer_email: data.customerEmail,
-      shipping_address_collection: {
-        allowed_countries: ['DE', 'AT', 'CH'],
-      },
-      billing_address_collection: 'required',
-      // Allow promotion codes to be entered in Stripe checkout
-      allow_promotion_codes: true,
-      locale: 'de',
-    };
-
-    // Handle voucher code discount
-    if (data.appliedVoucherCode && data.discount && data.discount > 0) {
-      try {
-        // Try to create or retrieve coupon for the discount
-        const coupon = await stripe.coupons.create({
-          id: `voucher_${data.appliedVoucherCode}_${Date.now()}`,
-          name: `Gutschein: ${data.appliedVoucherCode}`,
-          amount_off: Math.round(data.discount), // Already in cents
+      const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = data.items.map(item => ({
+        price_data: {
           currency: 'eur',
-          duration: 'once',
-        });
-        sessionParams.discounts = [{ coupon: coupon.id }];
-      } catch (error) {
-        console.warn('Could not apply voucher discount:', error);
-      }
-    }
+          product_data: {
+            name: item.name || item.title || 'Fotoshooting Gutschein',
+            description: item.description,
+          },
+          unit_amount: Math.round(item.price), // Already in cents from frontend
+        },
+        quantity: item.quantity,
+      }));
 
-    // If a voucher is pre-applied via the old method
-    if (data.appliedVoucher) {
-      try {
-        if (data.appliedVoucher.type === 'percentage') {
+      // Configure payment methods based on user selection
+      let paymentMethodTypes: string[] = ['card']; // Default to card
+      
+      if (data.paymentMethod) {
+        switch (data.paymentMethod) {
+          case 'card':
+            paymentMethodTypes = ['card', 'klarna'];
+            break;
+          default:
+            paymentMethodTypes = ['card', 'klarna'];
+        }
+      } else {
+        // If no specific method selected, offer all available options
+        paymentMethodTypes = ['card', 'klarna'];
+      }
+
+      const sessionParams: Stripe.Checkout.SessionCreateParams = {
+        payment_method_types: paymentMethodTypes,
+        line_items: lineItems,
+        mode: 'payment',
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        customer_email: data.customerEmail,
+        shipping_address_collection: {
+          allowed_countries: ['DE', 'AT', 'CH'],
+        },
+        billing_address_collection: 'required',
+        // Allow promotion codes to be entered in Stripe checkout
+        allow_promotion_codes: true,
+        locale: 'de',
+      };
+
+      // Handle voucher code discount
+      if (data.appliedVoucherCode && data.discount && data.discount > 0) {
+        try {
+          // Try to create or retrieve coupon for the discount
           const coupon = await stripe.coupons.create({
-            id: `voucher_${data.appliedVoucher.code}_${Date.now()}`,
-            name: `Gutschein: ${data.appliedVoucher.code}`,
-            percent_off: data.appliedVoucher.discount,
-            duration: 'once',
-          });
-          sessionParams.discounts = [{ coupon: coupon.id }];
-        } else {
-          const coupon = await stripe.coupons.create({
-            id: `voucher_${data.appliedVoucher.code}_${Date.now()}`,
-            name: `Gutschein: ${data.appliedVoucher.code}`,
-            amount_off: data.appliedVoucher.discount,
+            id: `voucher_${data.appliedVoucherCode}_${Date.now()}`,
+            name: `Gutschein: ${data.appliedVoucherCode}`,
+            amount_off: Math.round(data.discount), // Already in cents
             currency: 'eur',
             duration: 'once',
           });
           sessionParams.discounts = [{ coupon: coupon.id }];
+        } catch (error) {
+          console.warn('Could not apply voucher discount:', error);
         }
-      } catch (error) {
-        console.warn('Could not apply voucher discount:', error);
       }
+
+      // If a voucher is pre-applied via the old method
+      if (data.appliedVoucher) {
+        try {
+          if (data.appliedVoucher.type === 'percentage') {
+            const coupon = await stripe.coupons.create({
+              id: `voucher_${data.appliedVoucher.code}_${Date.now()}`,
+              name: `Gutschein: ${data.appliedVoucher.code}`,
+              percent_off: data.appliedVoucher.discount,
+              duration: 'once',
+            });
+            sessionParams.discounts = [{ coupon: coupon.id }];
+          } else {
+            const coupon = await stripe.coupons.create({
+              id: `voucher_${data.appliedVoucher.code}_${Date.now()}`,
+              name: `Gutschein: ${data.appliedVoucher.code}`,
+              amount_off: data.appliedVoucher.discount,
+              currency: 'eur',
+              duration: 'once',
+            });
+            sessionParams.discounts = [{ coupon: coupon.id }];
+          }
+        } catch (error) {
+          console.warn('Could not apply voucher discount:', error);
+        }
+      }
+
+      // Add metadata for tracking
+      sessionParams.metadata = {
+        source: 'photography_website',
+        voucher_used: data.appliedVoucherCode || data.appliedVoucher?.code || 'none',
+        mode: data.mode || 'standard',
+        payment_method_preference: data.paymentMethod || 'card',
+        voucher_data: data.voucherData ? JSON.stringify(data.voucherData).substring(0, 500) : '', // Stripe metadata limit
+      };
+
+      console.log('Creating Stripe checkout session with params:', {
+        lineItems: lineItems.length,
+        discounts: sessionParams.discounts?.length || 0,
+        paymentMethods: paymentMethodTypes,
+        successUrl,
+        cancelUrl
+      });
+
+      const session = await stripe.checkout.sessions.create(sessionParams);
+      
+      console.log('Stripe checkout session created successfully:', session.id);
+      return session;
+
+    } catch (error) {
+      console.error('Stripe checkout session creation failed:', error);
+      throw new Error(`Failed to create checkout session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    // Add metadata for tracking
-    sessionParams.metadata = {
-      source: 'photography_website',
-      voucher_used: data.appliedVoucherCode || data.appliedVoucher?.code || 'none',
-      mode: data.mode || 'standard',
-      payment_method_preference: data.paymentMethod || 'card',
-      voucher_data: data.voucherData ? JSON.stringify(data.voucherData).substring(0, 500) : '', // Stripe metadata limit
-    };
-
-    return await stripe.checkout.sessions.create(sessionParams);
   }
 
   /**
    * Retrieve checkout session
    */
   static async retrieveSession(sessionId: string): Promise<Stripe.Checkout.Session> {
+    if (!stripe) {
+      throw new Error('Stripe is not properly configured. Please check your STRIPE_SECRET_KEY.');
+    }
+    
     return await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['line_items', 'total_details'],
     });
@@ -216,20 +239,80 @@ export class StripeVoucherService {
   static async handleSuccessfulPayment(sessionId: string): Promise<{
     session: Stripe.Checkout.Session;
     voucherUsed?: string;
+    generatedVoucher?: GeneratedVoucher;
   }> {
     const session = await this.retrieveSession(sessionId);
     
     // Track voucher usage if applicable
     const voucherUsed = session.metadata?.voucher_used;
     if (voucherUsed && voucherUsed !== 'none') {
-      // Update your database to increment voucher usage count
       await this.trackVoucherUsage(voucherUsed, session.customer_email as string);
+    }
+
+    // Generate new voucher if this was a voucher purchase
+    let generatedVoucher: GeneratedVoucher | undefined;
+    
+    if (session.metadata?.voucher_data) {
+      try {
+        const voucherData = JSON.parse(session.metadata.voucher_data);
+        
+        // Create the voucher with sequential security code
+        generatedVoucher = await VoucherGenerationService.createGiftVoucher({
+          recipientEmail: voucherData.recipientEmail || session.customer_email || '',
+          recipientName: voucherData.recipientName,
+          amount: session.amount_total || 0,
+          type: voucherData.type || 'Fotoshooting Gutschein',
+          message: voucherData.message,
+          deliveryMethod: voucherData.deliveryMethod || 'email',
+          deliveryDate: voucherData.deliveryDate ? new Date(voucherData.deliveryDate) : undefined,
+          senderName: voucherData.senderName,
+          senderEmail: session.customer_email || undefined
+        });
+
+        console.log('Generated voucher with security code:', generatedVoucher.securityCode);
+        
+        // Send voucher email or schedule delivery
+        if (generatedVoucher.deliveryMethod === 'email') {
+          await this.sendVoucherEmail(generatedVoucher);
+        }
+        
+      } catch (error) {
+        console.error('Error generating voucher:', error);
+      }
     }
 
     return {
       session,
       voucherUsed: voucherUsed !== 'none' ? voucherUsed : undefined,
+      generatedVoucher
     };
+  }
+
+  /**
+   * Send voucher email to recipient
+   */
+  private static async sendVoucherEmail(voucher: GeneratedVoucher): Promise<void> {
+    try {
+      const voucherDocument = VoucherGenerationService.generateVoucherDocument(voucher);
+      
+      // Here you would integrate with your email service (SendGrid, etc.)
+      console.log('Voucher email would be sent to:', voucher.recipientEmail);
+      console.log('Security code:', voucher.securityCode);
+      
+      // Example email service integration:
+      // await emailService.send({
+      //   to: voucher.recipientEmail,
+      //   subject: 'Ihr Geschenkgutschein von New Age Fotografie',
+      //   html: voucherDocument.htmlContent,
+      //   attachments: voucherDocument.pdfBuffer ? [{
+      //     filename: `Gutschein_${voucher.securityCode}.pdf`,
+      //     content: voucherDocument.pdfBuffer
+      //   }] : []
+      // });
+      
+    } catch (error) {
+      console.error('Error sending voucher email:', error);
+    }
   }
 
   /**

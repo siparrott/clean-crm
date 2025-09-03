@@ -1050,6 +1050,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Stripe connection test routes
+  app.get("/api/stripe/test", async (req: Request, res: Response) => {
+    try {
+      const { testStripeConnection } = await import("./controllers/stripeTestController");
+      await testStripeConnection(req, res);
+    } catch (error) {
+      console.error('Stripe test not available:', error);
+      res.status(500).json({ error: 'Stripe test service unavailable' });
+    }
+  });
+
+  app.get("/api/stripe/config", async (req: Request, res: Response) => {
+    try {
+      const { getStripePublishableKey } = await import("./controllers/stripeTestController");
+      await getStripePublishableKey(req, res);
+    } catch (error) {
+      console.error('Stripe config not available:', error);
+      res.status(500).json({ error: 'Stripe config service unavailable' });
+    }
+  });
+
   // Import and register CRM agent router
   try {
     const { crmAgentRouter } = await import("./routes/crm-agent");
