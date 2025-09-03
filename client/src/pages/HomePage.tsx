@@ -182,7 +182,7 @@ const HomePage: React.FC = () => {
             <div className="md:w-1/3">
               <div className="aspect-[4/3] overflow-hidden rounded-lg shadow-lg">
                 <ZoomableImage 
-                  src="https://i.postimg.cc/nc2MMJvL/photo-grid.jpg"
+                  src="https://i.postimg.cc/J7bDNtGx/Familienportrat-Wien-Krchnavy-Stolz-0105-1024x683-1.jpg"
                   alt="Familienfotografie Wien - Professionelle Familienporträts im Studio"
                   className="w-full h-full object-cover"
                   loading="lazy"
