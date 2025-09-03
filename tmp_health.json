@@ -1,0 +1,14 @@
+﻿Invoke-RestMethod : Unable to connect to the remote 
+server
+At line:1 char:7
++ try { Invoke-RestMethod -Uri 
+'http://localhost:10001/api/health' -Met ...
++       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System. 
+   Net.HttpWebRequest:HttpWebRequest) [Invoke-RestMetho  
+  d], WebException
+    + FullyQualifiedErrorId : WebCmdletWebResponseExcept 
+   ion,Microsoft.PowerShell.Commands.InvokeRestMethodCo  
+  mmand
+ 

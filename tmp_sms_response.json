@@ -1,0 +1,12 @@
+﻿Invoke-RestMethod : Unable to connect to the remote 
+server
+At line:1 char:39
++ ... y { $resp = Invoke-RestMethod -Uri 
+'http://localhost:10001/api/commun ...
++                 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Invoke- 
+   RestMethod], WebException
+    + FullyQualifiedErrorId : System.Net.WebException,Mi 
+   crosoft.PowerShell.Commands.InvokeRestMethodCommand
+ 

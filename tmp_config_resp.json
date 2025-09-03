@@ -1,0 +1,11 @@
+﻿{
+    "success":  true,
+    "message":  "Vonage configuration updated successfully",
+    "config":  {
+                   "provider":  "vonage",
+                   "fromNumber":  "TogNinja CRM",
+                   "isActive":  true,
+                   "hasApiKey":  true,
+                   "hasApiSecret":  false
+               }
+}
