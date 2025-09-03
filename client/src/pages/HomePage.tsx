@@ -124,8 +124,8 @@ const HomePage: React.FC = () => {
           </div>
           <div className="md:w-2/5">
             <ZoomableImage 
-              src="https://i.postimg.cc/fyp5F43W/Familienportrat-Wien-Krchnavy-Stolz-0105-1024x683-1.jpg"
-              alt="Familienporträt Wien - Professionelle Familienfotografie im Studio"
+              src="https://i.postimg.cc/wTdZVLdC/photo-grid.jpg"
+              alt="Comprehensive family portrait showcase featuring various photography styles including family groups, couples, newborns, maternity, and lifestyle sessions"
               className="w-full rounded-lg shadow-lg"
               onError={(e) => {
                 // Fallback for mobile/loading issues
