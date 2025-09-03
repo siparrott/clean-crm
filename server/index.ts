@@ -18,10 +18,8 @@ import { db } from './db';
 
 // Override demo mode for production New Age Fotografie site
 // This is NOT a demo - it's the live business website
-if (!process.env.DEMO_MODE || process.env.DEMO_MODE === 'true') {
-  process.env.DEMO_MODE = 'false';
-  // New Age Fotografie CRM - Live Production Site (Demo Mode Disabled)
-}
+process.env.DEMO_MODE = 'false';
+process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
 const app = express();
 app.use(express.json());
@@ -83,146 +81,99 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Run database migration for communication tables
   try {
-    console.log('🔄 Checking communication database schema...');
+    console.log('� Starting New Age Fotografie CRM server...');
     
-    // Add missing columns to crm_messages table
-    await db.execute(sql`
-      ALTER TABLE crm_messages 
-      ADD COLUMN IF NOT EXISTS message_type varchar(20) DEFAULT 'email'
-    `);
+    // Initialize services with error handling
+    try {
+      await EnhancedEmailService.initialize();
+      console.log('✅ Email service initialized');
+    } catch (error) {
+      console.warn('⚠️ Email service initialization failed:', error.message);
+    }
+
+    try {
+      await SMSService.initialize();
+      console.log('✅ SMS service initialized');
+    } catch (error) {
+      console.warn('⚠️ SMS service initialization failed:', error.message);
+    }
+
+    // Skip complex database migrations for now to avoid startup issues
+    try {
+      // Quick database test
+      await db.execute(sql`SELECT 1 as test`);
+      console.log('✅ Database connection verified');
+    } catch (error) {
+      console.warn('⚠️ Database connection issue:', error.message);
+    }
     
-    await db.execute(sql`
-      ALTER TABLE crm_messages 
-      ADD COLUMN IF NOT EXISTS phone_number varchar(20)
-    `);
+    const server = await registerRoutes(app);
 
-    // Create sms_config table
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS sms_config (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        provider varchar(50) NOT NULL,
-        account_sid varchar(255),
-        auth_token varchar(255),
-        from_number varchar(20),
-        api_key varchar(255),
-        api_secret varchar(255),
-        webhook_url varchar(255),
-        is_active boolean DEFAULT false,
-        created_at timestamp DEFAULT now(),
-        updated_at timestamp DEFAULT now()
-      )
-    `);
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
 
-    // Create message_campaigns table
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS message_campaigns (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        name varchar(255) NOT NULL,
-        type varchar(20) NOT NULL,
-        content text NOT NULL,
-        target_type varchar(50) NOT NULL,
-        target_criteria jsonb,
-        status varchar(20) DEFAULT 'draft',
-        scheduled_at timestamp,
-        sent_at timestamp,
-        total_recipients integer DEFAULT 0,
-        successful_sends integer DEFAULT 0,
-        failed_sends integer DEFAULT 0,
-        created_at timestamp DEFAULT now(),
-        updated_at timestamp DEFAULT now()
-      )
-    `);
-
-    // Insert default SMS configuration if none exists
-    await db.execute(sql`
-      INSERT INTO sms_config (provider, account_sid, auth_token, from_number, is_active)
-      SELECT 'demo', 'demo_account', 'demo_token', '+43123456789', false
-      WHERE NOT EXISTS (SELECT 1 FROM sms_config LIMIT 1)
-    `);
-
-    console.log('✅ Communication database schema updated');
-  } catch (error) {
-    console.log('⚠️ Database schema update failed (may already exist):', error.message);
-  }
-
-  // Initialize services
-  await EnhancedEmailService.initialize();
-  await SMSService.initialize();
-  
-  const server = await registerRoutes(app);
-
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    // Enhanced error logging for production debugging
-    console.error('Server Error:', {
-      status,
-      message,
-      stack: err.stack,
-      url: _req.url,
-      method: _req.method,
-      timestamp: new Date().toISOString()
-    });
-
-    res.status(status).json({ message });
-  });
-
-  // Add a specific middleware to protect API routes from Vite's catch-all
-  app.use('/api/*', (req, res, next) => {
-    // Skip Vite handling for API routes
-    next();
-  });
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-
-  // For deployment, we'll use development Vite middleware since the build is too complex
-  // This serves the React app properly while keeping production API endpoints
-  if (app.get("env") === "development" || process.env.NODE_ENV === "production") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
-
-  // Dynamically find available port starting from 5000
-  const findPort = async (startPort: number): Promise<number> => {
-    return new Promise((resolve, reject) => {
-      const testServer = server.listen(startPort, '0.0.0.0', (err?: Error) => {
-        if (err) {
-          // Port is busy, try next one
-          testServer.close();
-          if (startPort < 5010) {
-            findPort(startPort + 1).then(resolve).catch(reject);
-          } else {
-            reject(new Error('No available ports found between 5000-5010'));
-          }
-        } else {
-          testServer.close(() => {
-            resolve(startPort);
-          });
-        }
+      // Enhanced error logging for production debugging
+      console.error('Server Error:', {
+        status,
+        message,
+        stack: err.stack,
+        url: _req.url,
+        method: _req.method,
+        timestamp: new Date().toISOString()
       });
+
+      res.status(status).json({ message });
     });
-  };
 
-  // Coerce and validate PORT from environment. If invalid, fall back to 10000.
-  let requestedPort = parseInt(process.env.PORT ?? '', 10);
-  if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) {
-    console.warn(`Invalid or missing PORT environment variable (${process.env.PORT}). Falling back to 10000.`);
-    requestedPort = 10000;
+    // For production on Heroku, serve static files differently
+    if (process.env.NODE_ENV === "production" && process.env.PORT) {
+      // Heroku production mode - serve built files
+      const path = await import('path');
+      const fs = await import('fs');
+      
+      const distPath = path.join(process.cwd(), 'dist');
+      
+      if (fs.existsSync(distPath)) {
+        app.use(express.static(distPath));
+        
+        // SPA fallback for production
+        app.get('*', (req, res) => {
+          if (req.path.startsWith('/api')) {
+            return res.status(404).json({ message: 'API endpoint not found' });
+          }
+          
+          const indexPath = path.join(distPath, 'index.html');
+          if (fs.existsSync(indexPath)) {
+            res.sendFile(indexPath);
+          } else {
+            res.status(404).send('Frontend build not found');
+          }
+        });
+      } else {
+        console.warn('⚠️ No dist folder found, falling back to development mode');
+        await setupVite(app, server);
+      }
+    } else {
+      // Development or local production
+      await setupVite(app, server);
+    }
+
+    // Heroku provides the PORT, use it exactly as provided
+    const port = parseInt(process.env.PORT || '10000', 10);
+    const host = "0.0.0.0";
+
+    server.listen(port, host, () => {
+      console.log(`✅ New Age Fotografie CRM successfully started on ${host}:${port}`);
+      console.log(`Environment: ${process.env.NODE_ENV}`);
+      console.log(`Working directory: ${process.cwd()}`);
+      console.log(`Demo mode: ${process.env.DEMO_MODE}`);
+      console.log(`Database URL configured: ${!!process.env.DATABASE_URL}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    console.error('Stack trace:', error.stack);
+    process.exit(1);
   }
-
-  const port = await findPort(requestedPort);
-  const host = "0.0.0.0";
-
-  server.listen(port, host, () => {
-    log(`✅ New Age Fotografie CRM successfully started on ${host}:${port}`);
-    log(`Environment: ${process.env.NODE_ENV}`);
-    log(`Working directory: ${process.cwd()}`);
-    log(`Demo mode: ${process.env.DEMO_MODE}`);
-  });
 })();

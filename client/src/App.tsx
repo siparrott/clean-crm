@@ -49,6 +49,7 @@ import QuestionnairesPageV2 from './pages/admin/QuestionnairesPageV2';
 import ComprehensiveReportsPage from './pages/admin/ComprehensiveReportsPage';
 import CustomizationPage from './pages/admin/CustomizationPage';
 import StudioCustomization from './pages/admin/StudioCustomization';
+import StudioCalendarPage from './pages/admin/StudioCalendarPage';
 import WebsiteCustomizationWizard from './pages/admin/WebsiteCustomizationWizard';
 import PhotographyCalendarPage from './pages/admin/PhotographyCalendarPageSimple';
 import SurveySystemDemoPage from './pages/SurveySystemDemoPage';
@@ -396,6 +397,14 @@ function App() {
                   element={
                     <NeonProtectedRoute>
                       <PhotographyCalendarPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/studio-calendar"
+                  element={
+                    <NeonProtectedRoute>
+                      <StudioCalendarPage />
                     </NeonProtectedRoute>
                   }
                 />

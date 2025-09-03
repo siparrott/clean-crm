@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Layout from '../components/Layout';
+import AdminLayout from '../../components/admin/AdminLayout';
 
 interface Appointment {
   id: string;
@@ -26,7 +26,7 @@ interface Client {
   phone?: string;
 }
 
-const CalendarPage: React.FC = () => {
+const StudioCalendarPage: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -229,7 +229,7 @@ const CalendarPage: React.FC = () => {
   };
 
   return (
-    <Layout>
+    <AdminLayout>
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-purple-900">Studio Calendar</h1>
@@ -561,8 +561,8 @@ const CalendarPage: React.FC = () => {
           </div>
         )}
       </div>
-    </Layout>
+    </AdminLayout>
   );
 };
 
-export default CalendarPage;
+export default StudioCalendarPage;

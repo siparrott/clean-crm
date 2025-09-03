@@ -228,32 +228,6 @@ export class EnhancedEmailService {
     }
   }
 
-    } catch (error) {
-      console.error('❌ Failed to send email:', error);
-      
-      // Still save failed attempt to database for tracking
-      try {
-        await db.insert(crmMessages).values({
-          senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
-          senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || '',
-          subject: options.subject,
-          content: options.content,
-          messageType: 'email',
-          status: 'failed',
-          direction: 'outbound',
-          clientId: options.clientId,
-        });
-      } catch (dbError) {
-        console.error('Failed to save failed email attempt:', dbError);
-      }
-
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
   /**
    * Get email history for a specific client
    */
