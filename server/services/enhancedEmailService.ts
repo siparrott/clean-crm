@@ -119,7 +119,7 @@ export class EnhancedEmailService {
         console.log('📧 Demo mode: Subject:', options.subject);
         console.log('📧 Demo mode: Content preview:', options.content.substring(0, 100) + '...');
         
-        // Save demo email to database
+        // Save demo email to database (don't write `direction` — some DBs may not have this column)
         const messageRecord = await db.insert(crmMessages).values({
           senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
           senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || 'demo@example.com',
@@ -127,7 +127,6 @@ export class EnhancedEmailService {
           content: options.content,
           messageType: 'email',
           status: 'demo_sent',
-          direction: 'outbound',
           clientId: clientId,
           emailMessageId: 'demo_' + Date.now(),
           sentAt: new Date(),
@@ -152,7 +151,7 @@ export class EnhancedEmailService {
 
       const result = await this.transporter.sendMail(mailOptions);
 
-      // Save to database
+      // Save to database (avoid writing `direction` to be compatible with DBs missing that column)
       const messageRecord = await db.insert(crmMessages).values({
         senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
         senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || '',
@@ -160,7 +159,6 @@ export class EnhancedEmailService {
         content: options.content,
         messageType: 'email',
         status: 'sent',
-        direction: 'outbound',
         clientId: clientId,
         emailMessageId: result.messageId,
         attachments: options.attachments ? JSON.stringify(options.attachments.map(att => ({
@@ -197,7 +195,7 @@ export class EnhancedEmailService {
           }
         }
 
-        // Save demo email to database
+        // Save demo email to database (avoid writing `direction`)
         await db.insert(crmMessages).values({
           senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
           senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || 'demo@example.com',
@@ -205,7 +203,6 @@ export class EnhancedEmailService {
           content: options.content,
           messageType: 'email',
           status: 'demo_sent',
-          direction: 'outbound',
           clientId: clientId,
           emailMessageId: 'demo_fallback_' + Date.now(),
           sentAt: new Date(),
@@ -251,13 +248,12 @@ export class EnhancedEmailService {
    */
   static async getAllEmailHistory(limit = 50) {
     try {
-      return await db
+        return await db
         .select({
           id: crmMessages.id,
           subject: crmMessages.subject,
           senderEmail: crmMessages.senderEmail,
           status: crmMessages.status,
-          direction: crmMessages.direction,
           clientId: crmMessages.clientId,
           sentAt: crmMessages.sentAt,
           createdAt: crmMessages.createdAt,

@@ -149,7 +149,6 @@ export const getAllCommunications = async (req: Request, res: Response) => {
         content: crmMessages.content,
         messageType: crmMessages.messageType,
         status: crmMessages.status,
-        direction: crmMessages.direction,
         phoneNumber: crmMessages.phoneNumber,
         sentAt: crmMessages.sentAt,
         createdAt: crmMessages.createdAt,
@@ -194,9 +193,30 @@ export const getSMSConfig = async (req: Request, res: Response) => {
       .limit(1);
 
     if (config.length === 0) {
+      // No DB config found — check environment variables (Vonage / Twilio)
+      if (process.env.VONAGE_API_KEY && process.env.VONAGE_API_SECRET) {
+        return res.json({
+          configured: true,
+          provider: 'vonage',
+          fromNumber: process.env.VONAGE_PHONE_NUMBER || 'TogNinja CRM',
+          isActive: true,
+          note: 'Configured via environment variables'
+        });
+      }
+
+      if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER) {
+        return res.json({
+          configured: true,
+          provider: 'twilio',
+          fromNumber: process.env.TWILIO_FROM_NUMBER,
+          isActive: true,
+          note: 'Configured via environment variables'
+        });
+      }
+
       return res.json({ 
         configured: false,
-        message: 'SMS not configured' 
+        message: 'SMS not configured'
       });
     }
 
