@@ -279,14 +279,14 @@ const ClientsPage: React.FC = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-bold text-gray-900">
-                        {client.last_name}, {client.first_name}
+                        {client.last_name && client.first_name 
+                          ? `${client.last_name}, ${client.first_name}`
+                          : client.email || 'Unnamed Client'
+                        }
                       </h3>
-                      {client.company && (
-                        <p className="text-sm text-gray-600 flex items-center mt-1">
-                          <Building size={14} className="mr-1" />
-                          {client.company}
-                        </p>
-                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        ID: {client.client_id}
+                      </p>
                     </div>
                   </div>
 
