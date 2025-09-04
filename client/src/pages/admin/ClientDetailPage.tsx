@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { ArrowLeft, Mail, Phone, MapPin, Building, Edit, Trash2, Calendar, Euro } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Building, Edit, Trash2, Calendar, Euro, MessageSquare } from 'lucide-react';
+import { googleCalendarService } from '../../services/googleCalendarService';
 
 interface Client {
   id: string;
@@ -76,6 +77,82 @@ const ClientDetailPage: React.FC = () => {
       navigate('/admin/clients');
     } catch (err) {
       alert('Failed to delete client. Please try again.');
+    }
+  };
+
+  const handleScheduleSession = async () => {
+    if (!client) return;
+    
+    try {
+      // Create a default session event
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(14, 0, 0, 0); // 2 PM tomorrow
+      
+      const endTime = new Date(tomorrow);
+      endTime.setHours(16, 0, 0, 0); // 4 PM (2 hour session)
+      
+      const event = {
+        title: `Fotoshooting - ${client.firstName} ${client.lastName}`,
+        description: `Fotoshooting-Termin mit ${client.firstName} ${client.lastName}\n\nKontakt:\nE-Mail: ${client.email}\nTelefon: ${client.phone || 'Nicht angegeben'}\n\nAdresse: ${client.address || 'Nicht angegeben'}`,
+        startTime: tomorrow,
+        endTime: endTime,
+        location: 'New Age Fotografie Studio, Wehrgasse 11A/2+5, 1050 Wien',
+        attendees: [client.email],
+        clientId: client.id
+      };
+      
+      await googleCalendarService.createEvent(event);
+      
+      // Also navigate to calendar page
+      navigate(`/admin/calendar?clientId=${client.id}&action=new`);
+    } catch (error) {
+      console.error('Failed to schedule session:', error);
+      alert('Failed to schedule session. Please try again.');
+    }
+  };
+
+  const handleCreateInvoice = () => {
+    // Navigate to invoices with pre-filled client data
+    navigate(`/admin/invoices?clientId=${client?.id}&action=new`);
+  };
+
+  const handleSendEmail = async () => {
+    if (!client) return;
+    
+    try {
+      // Open email composition modal or navigate to email page
+      const subject = `New Age Fotografie - ${client.firstName} ${client.lastName}`;
+      const body = `Liebe/r ${client.firstName},\n\nVielen Dank für Ihr Interesse an New Age Fotografie.\n\nMit freundlichen Grüßen,\nIhr New Age Fotografie Team`;
+      
+      // For now, open default email client
+      const mailtoLink = `mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(mailtoLink);
+      
+      // TODO: Implement internal email system
+      // navigate(`/admin/communications?action=email&clientId=${client.id}`);
+    } catch (error) {
+      console.error('Failed to compose email:', error);
+      alert('Failed to open email composer');
+    }
+  };
+
+  const handleSendSMS = async () => {
+    if (!client) return;
+    
+    if (!client.phone) {
+      alert('No phone number available for this client');
+      return;
+    }
+    
+    try {
+      const message = `Hallo ${client.firstName}, vielen Dank für Ihr Interesse an New Age Fotografie. Bei Fragen stehen wir gerne zur Verfügung!`;
+      
+      // Navigate to SMS composition
+      navigate(`/admin/communications?action=sms&clientId=${client.id}&phone=${encodeURIComponent(client.phone)}&message=${encodeURIComponent(message)}`);
+    } catch (error) {
+      console.error('Failed to compose SMS:', error);
+      alert('Failed to open SMS composer');
     }
   };
 
@@ -232,18 +309,35 @@ const ClientDetailPage: React.FC = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 flex items-center justify-center">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <button 
+            onClick={handleScheduleSession}
+            className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 hover:border-purple-300 transition-colors flex items-center justify-center"
+          >
             <Calendar size={20} className="mr-2 text-purple-600" />
             <span>Schedule Session</span>
           </button>
-          <button className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 flex items-center justify-center">
+          <button 
+            onClick={handleCreateInvoice}
+            className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 hover:border-green-300 transition-colors flex items-center justify-center"
+          >
             <Euro size={20} className="mr-2 text-green-600" />
             <span>Create Invoice</span>
           </button>
-          <button className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 flex items-center justify-center">
+          <button 
+            onClick={handleSendEmail}
+            className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 hover:border-blue-300 transition-colors flex items-center justify-center"
+          >
             <Mail size={20} className="mr-2 text-blue-600" />
             <span>Send Email</span>
+          </button>
+          <button 
+            onClick={handleSendSMS}
+            className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 hover:border-orange-300 transition-colors flex items-center justify-center"
+            disabled={!client?.phone}
+          >
+            <MessageSquare size={20} className="mr-2 text-orange-600" />
+            <span>Send SMS</span>
           </button>
         </div>
       </div>

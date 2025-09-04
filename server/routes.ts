@@ -1595,7 +1595,14 @@ Bitte versuchen Sie es später noch einmal.`;
   });
 
   // ==================== CRM CLIENT ROUTES ====================
+  // Test route for debugging
+  app.get("/api/test", (req: Request, res: Response) => {
+    console.log("Test route hit!");
+    res.json({ message: "API is working!", timestamp: new Date().toISOString() });
+  });
+
   app.get("/api/crm/clients", authenticateUser, async (req: Request, res: Response) => {
+    console.log(`/api/crm/clients GET received - query:`, req.query);
     try {
       const clients = await storage.getCrmClients();
       res.json(clients);
@@ -1606,6 +1613,7 @@ Bitte versuchen Sie es später noch einmal.`;
   });
 
   app.get("/api/crm/clients/:id", authenticateUser, async (req: Request, res: Response) => {
+    console.log(`/api/crm/clients/${req.params.id} GET received`);
     try {
       const client = await storage.getCrmClient(req.params.id);
       if (!client) {
@@ -1618,132 +1626,18 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
-  app.post("/api/crm/clients", authenticateUser, async (req: Request, res: Response) => {
-    try {
-      const clientData = insertCrmClientSchema.parse(req.body);
-      const client = await storage.createCrmClient(clientData);
-      res.status(201).json(client);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Validation error", details: error.errors });
-      }
-      console.error("Error creating CRM client:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
   app.put("/api/crm/clients/:id", authenticateUser, async (req: Request, res: Response) => {
+    console.log(`/api/crm/clients/${req.params.id} PUT received - body:`, req.body);
     try {
       const client = await storage.updateCrmClient(req.params.id, req.body);
+      console.log(`/api/crm/clients/${req.params.id} updated:`, client);
       res.json(client);
     } catch (error) {
       console.error("Error updating CRM client:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
-
-  app.delete("/api/crm/clients/:id", authenticateUser, async (req: Request, res: Response) => {
-    try {
-      await storage.deleteCrmClient(req.params.id);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting CRM client:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  // ==================== CRM LEAD ROUTES ====================
-  app.get("/api/crm/leads", authenticateUser, async (req: Request, res: Response) => {
-    try {
-      const status = req.query.status as string;
-      const leads = await storage.getCrmLeads(status);
-      res.json(leads);
-    } catch (error) {
-      console.error("Error fetching CRM leads:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  app.get("/api/crm/leads/:id", authenticateUser, async (req: Request, res: Response) => {
-    try {
-      const lead = await storage.getCrmLead(req.params.id);
-      if (!lead) {
-        return res.status(404).json({ error: "Lead not found" });
-      }
-      res.json(lead);
-    } catch (error) {
-      console.error("Error fetching CRM lead:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  // Public endpoint for form submissions (no authentication required)
-  app.post("/api/public/leads", async (req: Request, res: Response) => {
-    try {
-      const leadData = insertCrmLeadSchema.parse(req.body);
-      const lead = await storage.createCrmLead(leadData);
-      
-      // Send email notification to business owner
-      try {
-        await sendNewLeadNotification(lead);
-      } catch (emailError) {
-        console.error("Failed to send lead notification email:", emailError);
-        // Don't fail the lead creation if email fails
-      }
-      
-      res.status(201).json(lead);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Validation error", details: error.errors });
-      }
-      console.error("Error creating CRM lead:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  app.post("/api/crm/leads", authenticateUser, async (req: Request, res: Response) => {
-    try {
-      const leadData = insertCrmLeadSchema.parse(req.body);
-      const lead = await storage.createCrmLead(leadData);
-      
-      // Send email notification to business owner
-      try {
-        await sendNewLeadNotification(lead);
-      } catch (emailError) {
-        console.error("Failed to send lead notification email:", emailError);
-        // Don't fail the lead creation if email fails
-      }
-      
-      res.status(201).json(lead);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Validation error", details: error.errors });
-      }
-      console.error("Error creating CRM lead:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  app.put("/api/crm/leads/:id", authenticateUser, async (req: Request, res: Response) => {
-    try {
-      const lead = await storage.updateCrmLead(req.params.id, req.body);
-      res.json(lead);
-    } catch (error) {
-      console.error("Error updating CRM lead:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  app.delete("/api/crm/leads/:id", authenticateUser, async (req: Request, res: Response) => {
-    try {
-      await storage.deleteCrmLead(req.params.id);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting CRM lead:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
+  
   // ==================== PHOTOGRAPHY SESSION ROUTES ====================
   app.get("/api/photography/sessions", authenticateUser, async (req: Request, res: Response) => {
     try {
@@ -2279,6 +2173,126 @@ Bitte versuchen Sie es später noch einmal.`;
             title: 'Forest Trail',
             description: 'Peaceful forest path through autumn trees',
             orderIndex: 1,
+            createdAt: new Date().toISOString(),
+            sizeBytes: 2300000,
+            contentType: 'image/jpeg',
+            capturedAt: null
+          },
+          {
+            id: 'sample-3',
+            galleryId: gallery.id,
+            filename: 'lake_reflection.jpg',
+            originalUrl: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
+            displayUrl: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80',
+            thumbUrl: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=400&q=80',
+            title: 'Lake Reflection',
+            description: 'Perfect mirror reflection on a calm mountain lake',
+            orderIndex: 2,
+            createdAt: new Date().toISOString(),
+            sizeBytes: 2800000,
+            contentType: 'image/jpeg',
+            capturedAt: null
+          },
+          {
+            id: 'sample-4',
+            galleryId: gallery.id,
+            filename: 'city_skyline.jpg',
+            originalUrl: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
+            displayUrl: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80',
+            thumbUrl: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=400&q=80',
+            title: 'Urban Evening',
+            description: 'City skyline illuminated at twilight',
+            orderIndex: 3,
+            createdAt: new Date().toISOString(),
+            sizeBytes: 2600000,
+            contentType: 'image/jpeg',
+            capturedAt: null
+          },
+          {
+            id: 'sample-5',
+            galleryId: gallery.id,
+            filename: 'coastal_sunset.jpg',
+            originalUrl: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2156&q=80',
+            displayUrl: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80',
+            thumbUrl: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=400&q=80',
+            title: 'Coastal Sunset',
+            description: 'Golden hour over the ocean coastline',
+            orderIndex: 4,
+            createdAt: new Date().toISOString(),
+            sizeBytes: 2400000,
+            contentType: 'image/jpeg',
+            capturedAt: null
+          }
+        ];
+        
+        res.json(sampleImages);
+        return;
+      }
+      
+      // Return gallery images from Neon database
+      res.json(galleryImages);
+    } catch (error) {
+      console.error("Error fetching gallery images:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ==================== DASHBOARD METRICS ROUTE ====================
+  app.get("/api/crm/dashboard/metrics", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      // Get actual data from database
+      const [invoices, leads, sessions, clients] = await Promise.all([
+        storage.getCrmInvoices(),
+        storage.getCrmLeads(), 
+        storage.getPhotographySessions(),
+        storage.getCrmClients()
+      ]);
+
+      // Calculate revenue metrics from PAID invoices only
+      const paidInvoices = invoices.filter(inv => inv.status === 'paid');
+      const totalRevenue = paidInvoices.reduce((sum, invoice) => {
+        const total = parseFloat(invoice.total?.toString() || '0');
+        return sum + total;
+      }, 0);
+
+      const paidRevenue = totalRevenue; // Same as totalRevenue since we only count paid invoices
+
+      const avgOrderValue = paidInvoices.length > 0 ? totalRevenue / paidInvoices.length : 0;
+
+      // Calculate trend data from PAID invoices over last 7 days
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const recentInvoices = paidInvoices.filter(invoice => {
+        const createdDate = new Date(invoice.createdAt || invoice.created_at);
+        return createdDate >= sevenDaysAgo;
+      });
+
+      const trendData = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        const dayInvoices = recentInvoices.filter(invoice => {
+          const invoiceDate = new Date(invoice.createdAt || invoice.created_at).toISOString().split('T')[0];
+          return invoiceDate === dateStr;
+        });
+        
+        const dayRevenue = dayInvoices.reduce((sum, invoice) => {
+          const total = parseFloat(invoice.total?.toString() || '0');
+          return sum + total;
+        }, 0);
+        
+        trendData.push({ date: dateStr, value: dayRevenue });
+      }
+
+      const metrics = {
+        totalRevenue: Number((totalRevenue || 0).toFixed(2)),
+        paidRevenue: Number((paidRevenue || 0).toFixed(2)),
+        avgOrderValue: Number((avgOrderValue || 0).toFixed(2)),
+        totalInvoices: invoices.length,
+        paidInvoices: paidInvoices.length,
             createdAt: new Date().toISOString(),
             sizeBytes: 2300000,
             contentType: 'image/jpeg',

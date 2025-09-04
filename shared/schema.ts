@@ -777,18 +777,17 @@ export const insertBlogPostSchema = createInsertSchema(blogPosts).pick({
 });
 
 export const insertCrmClientSchema = createInsertSchema(crmClients).pick({
-  name: true,
+  firstName: true,
+  lastName: true,
   email: true,
   phone: true,
   address: true,
   city: true,
   state: true,
-  zipCode: true,
+  zip: true,
   country: true,
-  tags: true,
+  company: true,
   notes: true,
-  source: true,
-  lifetime_value: true,
 });
 
 export const insertCrmLeadSchema = createInsertSchema(crmLeads).pick({

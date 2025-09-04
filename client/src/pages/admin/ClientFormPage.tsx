@@ -1,8 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { supabase } from '../../lib/supabase';
 import { Save, ArrowLeft, User, Mail, MapPin } from 'lucide-react';
+
+// Helper function to capitalize names intelligently
+const capitalizeNames = (name: string): string => {
+  if (!name) return '';
+  
+  // Common prefixes that should remain lowercase
+  const lowercasePrefixes = ['van', 'de', 'der', 'da', 'von', 'del', 'la', 'du', 'di', 'le'];
+  
+  return name
+    .toLowerCase()
+    .split(' ')
+    .map((word, index) => {
+      // First word is always capitalized
+      if (index === 0) {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      }
+      
+      // Check if it's a lowercase prefix (unless it's the first word)
+      if (lowercasePrefixes.includes(word)) {
+        return word;
+      }
+      
+      // Capitalize normally
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+};
 
 const ClientFormPage: React.FC = () => {
   const navigate = useNavigate();
@@ -10,11 +36,15 @@ const ClientFormPage: React.FC = () => {
   const isEditing = Boolean(id);
   
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     phone: '',
     address: '',
     city: '',
+    state: '',
+    zip: '',
+    country: 'Austria',
     company: '',
     notes: ''
   });
@@ -30,36 +60,53 @@ const ClientFormPage: React.FC = () => {
   const fetchClient = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('crm_clients')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
-
+      const response = await fetch(`/api/crm/clients/${id}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch client');
+      }
+      
+      const data = await response.json();
+      
       setFormData({
-        name: data.name || '',
+        firstName: data.firstName || '',
+        lastName: data.lastName || '',
         email: data.email || '',
         phone: data.phone || '',
         address: data.address || '',
         city: data.city || '',
+        state: data.state || '',
+        zip: data.zip || '',
+        country: data.country || 'Austria',
         company: data.company || '',
         notes: data.notes || ''
       });
     } catch (err: any) {
-      // console.error removed
+      console.error('Failed to load client:', err);
       setError('Failed to load client data');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    let processedValue = value;
+    
+    // Auto-capitalize names
+    if (name === 'firstName' || name === 'lastName') {
+      processedValue = capitalizeNames(value);
+    }
+    
+    // Auto-capitalize city names
+    if (name === 'city') {
+      processedValue = capitalizeNames(value);
+    }
+    
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: processedValue
     }));
   };
 
@@ -69,24 +116,34 @@ const ClientFormPage: React.FC = () => {
     setError(null);
 
     try {
-      if (isEditing) {
-        const { error } = await supabase
-          .from('crm_clients')
-          .update(formData)
-          .eq('id', id);
+      const url = isEditing ? `/api/crm/clients/${id}` : '/api/crm/clients';
+      const method = isEditing ? 'PUT' : 'POST';
+      
+      console.log('Submitting client data:', formData);
+      console.log('URL:', url, 'Method:', method);
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
 
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('crm_clients')
-          .insert([formData]);
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
 
-        if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('Error response:', errorData);
+        throw new Error(`Failed to save client: ${response.status} ${errorData}`);
       }
 
+      const result = await response.json();
+      console.log('Success:', result);
       navigate('/admin/clients');
     } catch (err: any) {
-      // console.error removed
+      console.error('Failed to save client:', err);
       setError(err.message || 'Failed to save client');
     } finally {
       setLoading(false);
@@ -138,18 +195,32 @@ const ClientFormPage: React.FC = () => {
                 Personal Information
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Full Name *
+                    First Name *
                   </label>
                   <input
                     type="text"
-                    name="name"
-                    value={formData.name}
+                    name="firstName"
+                    value={formData.firstName}
                     onChange={handleInputChange}
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter full name"
+                    placeholder="Enter first name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Last Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="lastName"
+                    value={formData.lastName}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter last name"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -235,6 +306,52 @@ const ClientFormPage: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter city"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ZIP Code
+                  </label>
+                  <input
+                    type="text"
+                    name="zip"
+                    value={formData.zip}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter ZIP code"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    State/Province
+                  </label>
+                  <input
+                    type="text"
+                    name="state"
+                    value={formData.state}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter state or province"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Country
+                  </label>
+                  <select
+                    name="country"
+                    value={formData.country}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="Austria">Austria</option>
+                    <option value="Germany">Germany</option>
+                    <option value="Switzerland">Switzerland</option>
+                    <option value="Czech Republic">Czech Republic</option>
+                    <option value="Slovakia">Slovakia</option>
+                    <option value="Hungary">Hungary</option>
+                    <option value="Slovenia">Slovenia</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
               </div>
             </div>
