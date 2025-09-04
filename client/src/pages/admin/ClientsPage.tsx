@@ -24,21 +24,20 @@ import {
 
 interface Client {
   id: string;
-  first_name: string;
-  last_name: string;
-  client_id: string;
+  firstName: string;
+  lastName: string;
+  clientId: string;
   email: string;
   phone: string;
-  address1: string;
-  address2: string;
+  address: string;
   city: string;
   state: string;
   zip: string;
   country: string;
   total_sales: number;
   outstanding_balance: number;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const ClientsPage: React.FC = () => {
@@ -76,21 +75,20 @@ const ClientsPage: React.FC = () => {
       // Map database fields to our client interface
       const mappedClients = data?.map((client: any) => ({
         id: client.id,
-        first_name: client.first_name || '',
-        last_name: client.last_name || '',
-        client_id: client.client_id || client.id,
+        firstName: client.firstName || '',
+        lastName: client.lastName || '',
+        clientId: client.clientId || client.id,
         email: client.email || '',
         phone: client.phone || '',
-        address1: client.address || '',
-        address2: client.address2 || '',
+        address: client.address || '',
         city: client.city || '',
         state: client.state || '',
         zip: client.zip || '',
         country: client.country || '',
         total_sales: client.total_sales || 0,
         outstanding_balance: client.outstanding_balance || 0,
-        created_at: client.created_at,
-        updated_at: client.updated_at
+        createdAt: client.createdAt,
+        updatedAt: client.updatedAt
       }));
       
       setClients(mappedClients || []);
@@ -109,11 +107,11 @@ const ClientsPage: React.FC = () => {
     if (searchTerm.trim()) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       filtered = clients.filter(client => 
-        client.first_name.toLowerCase().includes(lowerSearchTerm) ||
-        client.last_name.toLowerCase().includes(lowerSearchTerm) ||
+        client.firstName.toLowerCase().includes(lowerSearchTerm) ||
+        client.lastName.toLowerCase().includes(lowerSearchTerm) ||
         client.email.toLowerCase().includes(lowerSearchTerm) ||
         client.phone.toLowerCase().includes(lowerSearchTerm) ||
-        client.client_id.toLowerCase().includes(lowerSearchTerm)
+        client.clientId.toLowerCase().includes(lowerSearchTerm)
       );
     }
     
@@ -123,11 +121,31 @@ const ClientsPage: React.FC = () => {
       
       if (sortBy === 'name') {
         // Sort by last name, then first name
-        const aName = `${a.last_name} ${a.first_name}`.toLowerCase();
-        const bName = `${b.last_name} ${b.first_name}`.toLowerCase();
-        comparison = aName.localeCompare(bName);
+        const aLastName = a.lastName || '';
+        const aFirstName = a.firstName || '';
+        const bLastName = b.lastName || '';
+        const bFirstName = b.firstName || '';
+        
+        const aName = `${aLastName} ${aFirstName}`.trim().toLowerCase();
+        const bName = `${bLastName} ${bFirstName}`.trim().toLowerCase();
+        
+        // If both have names, sort by name
+        if (aName && bName) {
+          comparison = aName.localeCompare(bName);
+        }
+        // If only one has a name, put that one first
+        else if (aName && !bName) {
+          comparison = -1;
+        }
+        else if (!aName && bName) {
+          comparison = 1;
+        }
+        // If neither has a name, sort by email
+        else {
+          comparison = (a.email || '').toLowerCase().localeCompare((b.email || '').toLowerCase());
+        }
       } else if (sortBy === 'created') {
-        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       }
       
       return sortOrder === 'asc' ? comparison : -comparison;
@@ -149,7 +167,7 @@ const ClientsPage: React.FC = () => {
   };
 
   const handleDeleteClient = async (client: Client) => {
-    if (!window.confirm(`Are you sure you want to delete ${client.first_name} ${client.last_name}? This action cannot be undone.`)) {
+    if (!window.confirm(`Are you sure you want to delete ${client.firstName} ${client.lastName}? This action cannot be undone.`)) {
       return;
     }
     
@@ -279,8 +297,8 @@ const ClientsPage: React.FC = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-bold text-gray-900">
-                        {client.last_name || client.first_name 
-                          ? `${client.last_name || ''}, ${client.first_name || ''}`.replace(/^,\s*/, '').replace(/,\s*$/, '')
+                        {client.lastName || client.firstName 
+                          ? `${client.lastName || ''}, ${client.firstName || ''}`.replace(/^,\s*/, '').replace(/,\s*$/, '')
                           : 'Unnamed Client'
                         }
                       </h3>
@@ -288,7 +306,7 @@ const ClientsPage: React.FC = () => {
                         {client.email}
                       </p>
                       <p className="text-xs text-gray-500">
-                        ID: {client.client_id}
+                        ID: {client.clientId}
                       </p>
                     </div>
                   </div>
@@ -298,10 +316,10 @@ const ClientsPage: React.FC = () => {
                       <Phone size={14} className="mr-2" />
                       {client.phone || t('clients.no_phone')}
                     </p>
-                    {client.address1 && (
+                    {client.address && (
                       <p className="text-sm text-gray-600 flex items-start">
                         <MapPin size={14} className="mr-2 mt-0.5" />
-                        {client.address1}
+                        {client.address}
                         {client.city && `, ${client.city}`}
                       </p>
                     )}
@@ -309,7 +327,7 @@ const ClientsPage: React.FC = () => {
 
                   <div className="flex justify-between items-center pt-4 border-t border-gray-200">
                     <span className="text-xs text-gray-500">
-                      {t('clients.since')} {new Date(client.created_at).toLocaleDateString()}
+                      {t('clients.since')} {new Date(client.createdAt).toLocaleDateString()}
                     </span>
                     <div className="flex space-x-2">
                       <button 
