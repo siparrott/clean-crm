@@ -17,7 +17,7 @@ if (!stripeSecretKey) {
 } else {
   try {
     stripe = new Stripe(stripeSecretKey, { 
-      apiVersion: '2024-06-20',
+      apiVersion: '2025-08-27.basil',
       typescript: true 
     });
     stripeConfigured = true;
@@ -156,7 +156,7 @@ export class StripeVoucherService {
       }
 
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
-        payment_method_types: paymentMethodTypes,
+        payment_method_types: paymentMethodTypes as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
         line_items: lineItems,
         mode: 'payment',
         success_url: successUrl,
@@ -277,7 +277,7 @@ export class StripeVoucherService {
         total_details: {
           amount_total: 19500, // €195.00 in cents
         }
-      } as Stripe.Checkout.Session;
+      } as unknown as Stripe.Checkout.Session;
 
       // Generate a demo voucher
       const generatedVoucher = await VoucherGenerationService.createGiftVoucher({
