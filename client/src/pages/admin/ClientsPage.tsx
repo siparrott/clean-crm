@@ -167,7 +167,7 @@ const ClientsPage: React.FC = () => {
   };
 
   const handleDeleteClient = async (client: Client) => {
-    if (!window.confirm(`Are you sure you want to delete ${client.firstName} ${client.lastName}? This action cannot be undone.`)) {
+    if (!window.confirm(t('message.confirmDelete'))) {
       return;
     }
     
@@ -184,16 +184,49 @@ const ClientsPage: React.FC = () => {
       setClients(prev => prev.filter(c => c.id !== client.id));
       setFilteredClients(prev => prev.filter(c => c.id !== client.id));
       
-      alert('Client deleted successfully');
+      alert(t('message.success'));
     } catch (err: any) {
       // console.error removed
-      alert('Failed to delete client. Please try again.');
+      alert(t('message.error'));
     }
   };
 
   const handleExportCSV = () => {
-    // This would be implemented to export clients to CSV
-    alert('Export functionality would be implemented here');
+    try {
+      // Create CSV content
+      const headers = ['ID', 'First Name', 'Last Name', 'Email', 'Phone', 'Address', 'City', 'State', 'ZIP', 'Country', 'Total Sales', 'Outstanding Balance', 'Created At'];
+      const csvContent = [
+        headers.join(','),
+        ...filteredClients.map(client => [
+          client.clientId,
+          `"${client.firstName || ''}"`,
+          `"${client.lastName || ''}"`,
+          `"${client.email || ''}"`,
+          `"${client.phone || ''}"`,
+          `"${client.address || ''}"`,
+          `"${client.city || ''}"`,
+          `"${client.state || ''}"`,
+          `"${client.zip || ''}"`,
+          `"${client.country || ''}"`,
+          client.total_sales || 0,
+          client.outstanding_balance || 0,
+          client.createdAt
+        ].join(','))
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `clients_export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      alert(t('message.error'));
+    }
   };
 
   return (
@@ -202,14 +235,15 @@ const ClientsPage: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Clients</h1>
-            <p className="text-gray-600">Manage your client database</p>
+            <h1 className="text-2xl font-semibold text-gray-900">{t('page.clients')}</h1>
+            <p className="text-gray-600">{t('clients.manage_database')}</p>
           </div>
           <div className="flex space-x-3">
             <button
               onClick={handleExportCSV}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center"
-            >              <Download size={20} className="mr-2" />
+            >
+              <Download size={20} className="mr-2" />
               {t('action.export')} CSV
             </button>
             <Link
@@ -256,14 +290,14 @@ const ClientsPage: React.FC = () => {
                 onChange={(e) => setSortBy(e.target.value as 'name' | 'created')}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               >
-                <option value="name">Sort by Name</option>
-                <option value="created">Sort by Date Added</option>
+                <option value="name">{t('clients.sort_by_name')}</option>
+                <option value="created">{t('clients.sort_by_date')}</option>
               </select>
               
               <button
                 onClick={toggleSortOrder}
                 className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}
+                title={`${t('action.sort')} ${sortOrder === 'asc' ? t('clients.descending') : t('clients.ascending')}`}
               >
                 {sortOrder === 'asc' ? <ArrowUp size={20} /> : <ArrowDown size={20} />}
               </button>
@@ -275,7 +309,7 @@ const ClientsPage: React.FC = () => {
             </button>
             
             <div className="text-sm text-gray-600 flex items-center">
-              Showing {filteredClients.length} of {clients.length} clients
+              {t('pagination.showing')} {filteredClients.length} {t('common.of')} {clients.length} {t('clients.clients')}
             </div>
           </div>
         </div>
@@ -299,7 +333,7 @@ const ClientsPage: React.FC = () => {
                       <h3 className="text-lg font-bold text-gray-900">
                         {client.lastName || client.firstName 
                           ? `${client.lastName || ''}, ${client.firstName || ''}`.replace(/^,\s*/, '').replace(/,\s*$/, '')
-                          : 'Unnamed Client'
+                          : t('clients.unnamed_client')
                         }
                       </h3>
                       <p className="text-xs text-gray-500 mt-1">
@@ -333,21 +367,21 @@ const ClientsPage: React.FC = () => {
                       <button 
                         onClick={() => handleViewClient(client.id)}
                         className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
-                        title="View Client Profile"
+                        title={t('action.view')}
                       >
                         <Eye size={16} />
                       </button>
                       <button 
                         onClick={() => handleEditClient(client.id)}
                         className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
-                        title="Edit Client"
+                        title={t('action.edit')}
                       >
                         <Edit size={16} />
                       </button>
                       <button 
                         onClick={() => handleDeleteClient(client)}
                         className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
-                        title="Delete Client"
+                        title={t('action.delete')}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -359,7 +393,7 @@ const ClientsPage: React.FC = () => {
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-gray-500">No clients found matching your criteria.</p>
+            <p className="text-gray-500">{t('clients.no_clients_found')}</p>
           </div>
         )}
       </div>
