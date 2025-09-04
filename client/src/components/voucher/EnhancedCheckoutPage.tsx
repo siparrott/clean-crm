@@ -75,17 +75,24 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create checkout session');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create checkout session');
       }
 
       const { url } = await response.json();
       
-      // Redirect to Stripe Checkout
+      // Redirect to checkout page (either Stripe or demo)
       window.location.href = url;
       
     } catch (error) {
       console.error('Checkout error:', error);
-      alert('Es gab einen Fehler beim Checkout. Bitte versuchen Sie es erneut.');
+      
+      // Show a more user-friendly error message
+      if (error instanceof Error && error.message.includes('Stripe')) {
+        alert('Das Zahlungssystem wird gerade eingerichtet. Bitte versuchen Sie es später erneut oder kontaktieren Sie uns direkt unter +43 677 933 99210.');
+      } else {
+        alert('Es gab einen Fehler beim Checkout. Bitte versuchen Sie es erneut oder kontaktieren Sie uns unter +43 677 933 99210.');
+      }
     }
   };
 
