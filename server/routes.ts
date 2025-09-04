@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { registerTestRoutes } from "./routes-test";
 import { storage } from "./storage";
@@ -427,7 +427,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 // Authentication middleware placeholder - replace with actual auth
-const authenticateUser = async (req: Request, res: Response, next: Function) => {
+const authenticateUser = async (req: Request, res: Response, next: NextFunction) => {
   // For now, skip authentication and set a default user with valid UUID
   // In production, validate JWT token and get user from database
   req.user = { id: "550e8400-e29b-41d4-a716-446655440000", email: "admin@example.com", isAdmin: true };
