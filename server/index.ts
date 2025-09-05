@@ -96,6 +96,17 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
+    // Global error handlers to surface startup/runtime issues clearly
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    });
+
+    process.on('uncaughtException', (err) => {
+      console.error('Uncaught Exception thrown:', err);
+      // Give logs a moment before exiting in Heroku
+      setTimeout(() => process.exit(1), 1000);
+    });
+
     console.log('� Starting New Age Fotografie CRM server...');
     
     // Initialize services with error handling

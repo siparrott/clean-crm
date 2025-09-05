@@ -427,10 +427,23 @@ Vielen Dank für Ihr Vertrauen!
   `.trim();
 }
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-08-27.basil',
-});
+// Guarded Stripe initialization - avoid crashing the app if env var missing
+let stripe: Stripe | null = null;
+let stripeConfigured = false;
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+if (!stripeSecretKey) {
+  console.warn('⚠️ STRIPE_SECRET_KEY missing - Stripe disabled. Set STRIPE_SECRET_KEY to enable payments.');
+} else if (stripeSecretKey.includes('dummy') || stripeSecretKey.includes('xxx') || stripeSecretKey.length < 20) {
+  console.warn('⚠️ STRIPE_SECRET_KEY looks invalid. Stripe disabled.');
+} else {
+  try {
+    stripe = new Stripe(stripeSecretKey, { apiVersion: '2025-08-27.basil' });
+    stripeConfigured = true;
+    console.log('✅ Stripe initialized in routes');
+  } catch (err) {
+    console.warn('⚠️ Failed to initialize Stripe in routes:', err);
+  }
+}
 
 // Authentication middleware placeholder - replace with actual auth
 const authenticateUser = async (req: Request, res: Response, next: NextFunction) => {
@@ -4101,7 +4114,7 @@ Bitte versuchen Sie es später noch einmal.`;
           password: process.env.EMAIL_PASSWORD || 'HoveBN41!',
           useTLS: true,
           since: lastImportTime // Only fetch emails since last import
-        });
+        } as any);
 
         // Store only genuinely new emails with advanced duplicate prevention
         let newEmailCount = 0;
@@ -5040,10 +5053,9 @@ New Age Fotografie CRM System
         knowledgeBaseIds: Array.isArray(result.data.knowledgeBaseIds) ? result.data.knowledgeBaseIds : (result.data.knowledgeBaseIds ? [result.data.knowledgeBaseIds] : []),
         openaiAssistantId,
         createdBy: req.user.id,
-      } as any;
-+
-+
-+      const [assistant] = await db.insert(openaiAssistants).values(assistantData).returning();
+  } as any;
+
+  const [assistant] = await db.insert(openaiAssistants).values(assistantData).returning();
 
       res.status(201).json(assistant);
     } catch (error) {
@@ -5063,9 +5075,9 @@ New Age Fotografie CRM System
         ...result.data,
         isActive: typeof result.data.isActive === 'boolean' ? result.data.isActive : undefined,
         updatedAt: new Date(),
-      } as any;
-+
-+      const [assistant] = await db.update(openaiAssistants)
+  } as any;
+
+  const [assistant] = await db.update(openaiAssistants)
         .set(updateAssistant)
         .where(eq(openaiAssistants.id, req.params.id))
         .returning();
@@ -5481,7 +5493,7 @@ Was interessiert Sie am meisten?`;
         value: 0,
         tags: ['chat', 'website'],
         followUpDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
-      }).returning();
+      } as any).returning();
 
       // If conversation history exists, save it as a message
       if (conversation && conversation.length > 0) {
@@ -5489,7 +5501,7 @@ Was interessiert Sie am meisten?`;
           `${msg.isUser ? 'Kunde' : 'Alex'}: ${msg.text}`
         ).join('\n');
         
-        await db.insert(crmMessages).values({
+  await db.insert(crmMessages).values({
           senderName: name || 'Chat Visitor',
           senderEmail: email || 'chat@website.com',
           subject: 'Website Chat Conversation',
@@ -5497,7 +5509,7 @@ Was interessiert Sie am meisten?`;
           status: 'unread',
           clientId: null,
           assignedTo: null,
-        });
+  } as any);
       }
 
       res.json({ success: true, leadId: lead.id });
@@ -5537,7 +5549,7 @@ Was interessiert Sie am meisten?`;
       if (file.mimetype.startsWith('image/')) {
         cb(null, true);
       } else {
-        cb(new Error('Only image files are allowed'), false);
+        cb(new Error('Only image files are allowed') as any, false);
       }
     }
   });
@@ -5659,8 +5671,9 @@ Was interessiert Sie am meisten?`;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       
       if (DEBUG_OPENAI) {
-        openai.baseURL = "https://api.openai.com/v1";
-        openai.defaultHeaders = { ...openai.defaultHeaders, "x-openai-debug": "true" };
+        // Some OpenAI client implementations may not expose these properties in types
+        (openai as any).baseURL = "https://api.openai.com/v1";
+        (openai as any).defaultHeaders = { ...((openai as any).defaultHeaders || {}), "x-openai-debug": "true" };
       }
 
       // DIAGNOSTIC CHECK #1: Verify assistant ID
@@ -5858,7 +5871,7 @@ Was interessiert Sie am meisten?`;
           const excerpt = extractExcerpt(responseText);
           
           if (title && content) {
-            const baseSlug = customSlug || title.toLowerCase().replace(/[^a-z0-9äöüß]/g, '-').replace(/-+/g, '-').trim('-');
+            const baseSlug = customSlug || title.toLowerCase().replace(/[^a-z0-9äöüß]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
             const slug = `${baseSlug}-${Date.now()}`;
             
             const blogPostData = {

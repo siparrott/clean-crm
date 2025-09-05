@@ -94,7 +94,7 @@ export class SMSService {
         }),
       });
 
-      const result = await response.json();
+  const result: any = await response.json();
 
       if (response.ok) {
         return {
@@ -144,7 +144,7 @@ export class SMSService {
           }),
         });
 
-        const result = await response.json();
+  const result: any = await response.json();
 
         if (response.ok) {
           return {
@@ -171,7 +171,7 @@ export class SMSService {
           }),
         });
 
-        const result = await response.json();
+  const result: any = await response.json();
 
         if (result.messages && result.messages[0].status === '0') {
           return {
@@ -322,7 +322,7 @@ export class SMSService {
    */
   static async getTargetClients(options: BulkSMSOptions): Promise<any[]> {
     try {
-      let query = db.select().from(crmClients);
+  let query: any = db.select().from(crmClients);
 
       switch (options.targetType) {
         case 'all':
@@ -369,9 +369,10 @@ export class SMSService {
       }
 
       // Only include clients with phone numbers
-      query = query.where(and(
-        crmClients.phone !== null,
-        crmClients.phone !== ''
+      // loosen typing for the query so the compiler does not complain about Drizzle generics here
+      query = (query as any).where(and(
+        (crmClients.phone as any) != null,
+        (crmClients.phone as any) != ''
       ));
 
       return await query.execute();
