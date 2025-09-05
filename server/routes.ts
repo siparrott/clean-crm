@@ -2014,6 +2014,160 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
+  // ------------------ Embed / Public Booking endpoints ------------------
+
+  const AVAILABLE_SLOTS_FILE = process.env.AVAILABLE_SLOTS_FILE || path.join(process.cwd(), 'data', 'available_slots.json');
+
+  // Helper: read admin-defined available slots (array of ISO datetimes)
+  async function readAvailableSlots(): Promise<string[]> {
+    try {
+      const fs = await import('fs/promises');
+      const raw = await fs.readFile(AVAILABLE_SLOTS_FILE, 'utf8').catch(() => '[]');
+      const parsed = JSON.parse(raw || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+      console.error('Failed to read available slots file:', err);
+      return [];
+    }
+  }
+
+  // Helper: write admin-defined available slots
+  async function writeAvailableSlots(slots: string[]) {
+    const fs = await import('fs/promises');
+    const dir = path.dirname(AVAILABLE_SLOTS_FILE);
+    await fs.mkdir(dir, { recursive: true }).catch(() => {});
+    await fs.writeFile(AVAILABLE_SLOTS_FILE, JSON.stringify(slots, null, 2), 'utf8');
+  }
+
+  // Admin: set available slots (protected)
+  app.post('/api/admin/embed/slots', authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const { slots } = req.body;
+      if (!Array.isArray(slots)) return res.status(400).json({ error: 'slots must be an array of ISO datetimes' });
+      // Basic validation
+      const cleaned = slots.filter(s => typeof s === 'string');
+      await writeAvailableSlots(cleaned);
+      res.json({ success: true, slots: cleaned });
+    } catch (error) {
+      console.error('Failed to save available slots:', error);
+      res.status(500).json({ error: 'Failed to save available slots' });
+    }
+  });
+
+  // Public: get embed availability between start and end (ISO)
+  app.get('/api/embed/availability', async (req: Request, res: Response) => {
+    try {
+      const { start, end, calendarId } = req.query as any;
+      if (!start || !end) return res.status(400).json({ error: 'start and end query parameters are required (ISO date strings)' });
+
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+
+      // Load admin slots
+      const adminSlots = (await readAvailableSlots()).map(s => new Date(s));
+
+      // Filter to requested window
+      let candidateSlots = adminSlots.filter(d => d >= startDate && d <= endDate);
+
+      // Remove slots that conflict with existing confirmed/pending sessions
+      const existing = await runSql(
+        `SELECT session_date, duration_minutes FROM photography_sessions WHERE session_date >= $1 AND session_date <= $2 AND status IN ('CONFIRMED','PENDING')`,
+        [startDate.toISOString(), endDate.toISOString()]
+      );
+
+      const busyRanges = existing.map((s: any) => {
+        const sd = new Date(s.session_date);
+        return { start: sd.getTime(), end: sd.getTime() + (s.duration_minutes || 120) * 60000 };
+      });
+
+      const isBusy = (t: Date) => busyRanges.some(b => t.getTime() < b.end && (t.getTime() + 1) > b.start);
+
+      candidateSlots = candidateSlots.filter(d => !isBusy(d));
+
+      // If Google API key + calendarId provided (either query or env), try to fetch events and remove busy times
+      const googleKey = process.env.GOOGLE_API_KEY;
+      const googleCal = calendarId || process.env.GOOGLE_CALENDAR_ID;
+      if (googleKey && googleCal) {
+        try {
+          const timeMin = startDate.toISOString();
+          const timeMax = endDate.toISOString();
+          const eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(googleCal)}/events?singleEvents=true&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&key=${encodeURIComponent(googleKey)}`;
+          const resp = await fetch(eventsUrl);
+          if (resp.ok) {
+            const data = await resp.json();
+            const gBusy = (data.items || []).map((it: any) => ({
+              start: new Date(it.start?.dateTime || it.start?.date).getTime(),
+              end: new Date(it.end?.dateTime || it.end?.date).getTime()
+            }));
+            candidateSlots = candidateSlots.filter(d => !gBusy.some((b: any) => d.getTime() < b.end && (d.getTime() + 1) > b.start));
+          }
+        } catch (err) {
+          console.warn('Google Calendar fetch failed:', err);
+        }
+      }
+
+      res.json({ start, end, available: candidateSlots.map(d => d.toISOString()), total: candidateSlots.length });
+    } catch (error) {
+      console.error('Failed to return embed availability:', error);
+      res.status(500).json({ error: 'Failed to return availability' });
+    }
+  });
+
+  // Public: create a booking from embed widget
+  app.post('/api/embed/book', async (req: Request, res: Response) => {
+    try {
+      const { firstName, lastName, email, phone, startTime, duration_minutes = 120, session_type = 'session' } = req.body;
+      if (!firstName || !email || !startTime) return res.status(400).json({ error: 'firstName, email and startTime are required' });
+
+      const start = new Date(startTime);
+      if (isNaN(start.getTime())) return res.status(400).json({ error: 'Invalid startTime' });
+
+      // Check conflict with existing sessions
+      const conflict = await runSql(
+        `SELECT session_date, duration_minutes FROM photography_sessions WHERE session_date >= $1 - INTERVAL '1 hour' AND session_date <= $2 + INTERVAL '1 hour' AND status IN ('CONFIRMED','PENDING')`,
+        [new Date(start.getTime() - 60 * 60 * 1000).toISOString(), new Date(start.getTime() + (duration_minutes + 60) * 60000).toISOString()]
+      );
+      if (conflict && conflict.length > 0) return res.status(409).json({ error: 'Requested time conflicts with an existing session' });
+
+      // Find or create client by email
+      let client = null;
+      const found = await runSql(`SELECT * FROM crm_clients WHERE email = $1 LIMIT 1`, [email]);
+      if (found && found.length > 0) {
+        client = found[0];
+      } else {
+        const clientData = { firstName, lastName, email, phone };
+        client = await storage.createCrmClient(clientData as any);
+      }
+
+      // Create photography session
+      const sessionData: any = {
+        client_id: client.id ? String(client.id) : null,
+        clientId: client.id ? String(client.id) : null,
+        client_id_text: client.id ? String(client.id) : null,
+        session_type,
+        startTime: start,
+        start_time: start,
+        session_date: start.toISOString(),
+        duration_minutes: Number(duration_minutes),
+        status: 'PENDING',
+        created_by: 'embed',
+      };
+
+      // Use runSql to insert into photography_sessions to avoid type mismatches
+      const insertResult = await runSql(
+        `INSERT INTO photography_sessions (client_id, session_type, session_date, duration_minutes, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,NOW(),NOW()) RETURNING *`,
+        [String(client.id), session_type, start.toISOString(), Number(duration_minutes), 'PENDING']
+      );
+
+      const created = insertResult[0];
+
+      res.status(201).json({ success: true, booking: created });
+    } catch (error) {
+      console.error('Failed to create embed booking:', error);
+      res.status(500).json({ error: 'Failed to create booking' });
+    }
+  });
+
   // ==================== GALLERY ROUTES ====================
   app.get("/api/galleries", async (req: Request, res: Response) => {
     try {
