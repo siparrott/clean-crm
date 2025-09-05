@@ -1645,6 +1645,24 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
+  // Create a new CRM client
+  app.post("/api/crm/clients", authenticateUser, async (req: Request, res: Response) => {
+    console.log(`/api/crm/clients POST received - body:`, req.body);
+    try {
+      // Validate input against the shared insert schema
+      const clientData = insertCrmClientSchema.parse(req.body);
+      const client = await storage.createCrmClient(clientData);
+      res.status(201).json(client);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.log("Validation error creating CRM client:", JSON.stringify(error.errors, null, 2));
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error creating CRM client:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.put("/api/crm/clients/:id", authenticateUser, async (req: Request, res: Response) => {
     console.log(`/api/crm/clients/${req.params.id} PUT received - body:`, req.body);
     try {
