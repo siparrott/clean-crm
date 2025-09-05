@@ -2016,38 +2016,26 @@ Bitte versuchen Sie es später noch einmal.`;
 
   // ------------------ Embed / Public Booking endpoints ------------------
 
-  const AVAILABLE_SLOTS_FILE = process.env.AVAILABLE_SLOTS_FILE || path.join(process.cwd(), 'data', 'available_slots.json');
-
-  // Helper: read admin-defined available slots (array of ISO datetimes)
-  async function readAvailableSlots(): Promise<string[]> {
-    try {
-      const fs = await import('fs/promises');
-      const raw = await fs.readFile(AVAILABLE_SLOTS_FILE, 'utf8').catch(() => '[]');
-      const parsed = JSON.parse(raw || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (err) {
-      console.error('Failed to read available slots file:', err);
-      return [];
-    }
-  }
-
-  // Helper: write admin-defined available slots
-  async function writeAvailableSlots(slots: string[]) {
-    const fs = await import('fs/promises');
-    const dir = path.dirname(AVAILABLE_SLOTS_FILE);
-    await fs.mkdir(dir, { recursive: true }).catch(() => {});
-    await fs.writeFile(AVAILABLE_SLOTS_FILE, JSON.stringify(slots, null, 2), 'utf8');
-  }
-
-  // Admin: set available slots (protected)
+  // Admin: set available slots (protected) - persisted in DB
   app.post('/api/admin/embed/slots', authenticateUser, async (req: Request, res: Response) => {
     try {
-      const { slots } = req.body;
+      const { slots, studioId } = req.body;
       if (!Array.isArray(slots)) return res.status(400).json({ error: 'slots must be an array of ISO datetimes' });
-      // Basic validation
-      const cleaned = slots.filter(s => typeof s === 'string');
-      await writeAvailableSlots(cleaned);
-      res.json({ success: true, slots: cleaned });
+      if (!studioId) return res.status(400).json({ error: 'studioId is required' });
+
+      // Mark existing slots for studio inactive and insert new ones
+      await runSql(`UPDATE studio_available_slots SET is_active = false WHERE studio_id = $1`, [studioId]);
+
+      const inserted: any[] = [];
+      for (const s of slots) {
+        if (typeof s !== 'string') continue;
+        const start = new Date(s);
+        if (isNaN(start.getTime())) continue;
+        const r = await runSql(`INSERT INTO studio_available_slots (studio_id, start_time, duration_minutes, is_active, created_at, updated_at) VALUES ($1,$2,$3,true,NOW(),NOW()) RETURNING *`, [studioId, start.toISOString(), 120]);
+        if (r && r[0]) inserted.push(r[0]);
+      }
+
+      res.json({ success: true, slots: inserted });
     } catch (error) {
       console.error('Failed to save available slots:', error);
       res.status(500).json({ error: 'Failed to save available slots' });
@@ -2063,8 +2051,15 @@ Bitte versuchen Sie es später noch einmal.`;
       const startDate = new Date(start);
       const endDate = new Date(end);
 
-      // Load admin slots
-      const adminSlots = (await readAvailableSlots()).map(s => new Date(s));
+      // Load admin slots from DB
+      const studioId = req.query.studioId as string | undefined;
+      let adminRows: any[] = [];
+      if (studioId) {
+        adminRows = await runSql(`SELECT start_time FROM studio_available_slots WHERE studio_id = $1 AND is_active = true AND start_time >= $2 AND start_time <= $3`, [studioId, startDate.toISOString(), endDate.toISOString()]);
+      } else {
+        adminRows = await runSql(`SELECT start_time FROM studio_available_slots WHERE is_active = true AND start_time >= $1 AND start_time <= $2`, [startDate.toISOString(), endDate.toISOString()]);
+      }
+      const adminSlots = adminRows.map(r => new Date(r.start_time));
 
       // Filter to requested window
       let candidateSlots = adminSlots.filter(d => d >= startDate && d <= endDate);
@@ -2084,7 +2079,7 @@ Bitte versuchen Sie es später noch einmal.`;
 
       candidateSlots = candidateSlots.filter(d => !isBusy(d));
 
-      // If Google API key + calendarId provided (either query or env), try to fetch events and remove busy times
+  // If Google API key + calendarId provided (either query or env), try to fetch events and remove busy times
       const googleKey = process.env.GOOGLE_API_KEY;
       const googleCal = calendarId || process.env.GOOGLE_CALENDAR_ID;
       if (googleKey && googleCal) {
@@ -2106,7 +2101,7 @@ Bitte versuchen Sie es später noch einmal.`;
         }
       }
 
-      res.json({ start, end, available: candidateSlots.map(d => d.toISOString()), total: candidateSlots.length });
+  res.json({ start, end, available: candidateSlots.map(d => d.toISOString()), total: candidateSlots.length });
     } catch (error) {
       console.error('Failed to return embed availability:', error);
       res.status(500).json({ error: 'Failed to return availability' });
@@ -2139,27 +2134,31 @@ Bitte versuchen Sie es später noch einmal.`;
         client = await storage.createCrmClient(clientData as any);
       }
 
-      // Create photography session
-      const sessionData: any = {
-        client_id: client.id ? String(client.id) : null,
-        clientId: client.id ? String(client.id) : null,
-        client_id_text: client.id ? String(client.id) : null,
-        session_type,
-        startTime: start,
-        start_time: start,
-        session_date: start.toISOString(),
-        duration_minutes: Number(duration_minutes),
-        status: 'PENDING',
-        created_by: 'embed',
-      };
-
-      // Use runSql to insert into photography_sessions to avoid type mismatches
+      // Create photography session in DB
       const insertResult = await runSql(
-        `INSERT INTO photography_sessions (client_id, session_type, session_date, duration_minutes, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,NOW(),NOW()) RETURNING *`,
-        [String(client.id), session_type, start.toISOString(), Number(duration_minutes), 'PENDING']
+        `INSERT INTO photography_sessions (client_id, session_type, session_date, duration_minutes, status, created_by, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW()) RETURNING *`,
+        [String(client.id), session_type, start.toISOString(), Number(duration_minutes), 'CONFIRMED', 'embed']
       );
 
       const created = insertResult[0];
+
+      // Try to create Google Calendar event and save the google event id if available
+      try {
+        const studioCalendarService = await import('./services/calendarService').then(m => m.default);
+        const googleEvent = await studioCalendarService.createGoogleEventPublic({
+          summary: `${session_type} - ${client.first_name || client.firstName || ''} ${client.last_name || client.lastName || ''}`.trim(),
+          description: `Booked via embed widget by ${client.email || ''}`,
+          start: { dateTime: start.toISOString(), timeZone: 'Europe/Vienna' },
+          end: { dateTime: new Date(start.getTime() + Number(duration_minutes) * 60000).toISOString(), timeZone: 'Europe/Vienna' },
+          attendees: client.email ? [{ email: client.email }] : undefined,
+        });
+
+        if (googleEvent && googleEvent.id) {
+          await runSql(`UPDATE photography_sessions SET google_calendar_event_id = $1 WHERE id = $2`, [googleEvent.id, created.id]);
+        }
+      } catch (googleErr) {
+        console.warn('Google event creation failed, continuing:', googleErr);
+      }
 
       res.status(201).json({ success: true, booking: created });
     } catch (error) {
@@ -2422,6 +2421,46 @@ Bitte versuchen Sie es später noch einmal.`;
     } catch (error) {
       console.error("Error fetching gallery images:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Admin dashboard stats (authenticated)
+  app.get('/api/admin/dashboard-stats', authenticateUser, async (req: Request, res: Response) => {
+    try {
+      // Total sessions
+      const totalSessions = (await runSql(`SELECT COUNT(*)::int as cnt FROM photography_sessions`))[0].cnt || 0;
+
+      const thirtyDaysFromNow = new Date();
+      const thirtyDaysLater = new Date(thirtyDaysFromNow.getTime() + 30 * 24 * 3600 * 1000);
+
+      const upcomingSessions = (await runSql(`SELECT COUNT(*)::int as cnt FROM photography_sessions WHERE session_date >= $1 AND session_date <= $2 AND status IN ('CONFIRMED','PENDING')`, [new Date().toISOString(), thirtyDaysLater.toISOString()]))[0].cnt || 0;
+
+      const completedSessions = (await runSql(`SELECT COUNT(*)::int as cnt FROM photography_sessions WHERE status = 'COMPLETED' AND session_date >= date_trunc('month', CURRENT_DATE)`))[0].cnt || 0;
+
+      // Revenue from invoices (total paid) - naive aggregation
+      const revenueRow = await runSql(`SELECT COALESCE(SUM(total)::numeric,0) as total FROM crm_invoices WHERE status IN ('paid','completed')`);
+      const totalRevenue = Number(revenueRow[0]?.total || 0);
+
+      const pendingDeposits = (await runSql(`SELECT COUNT(*)::int as cnt FROM crm_invoices WHERE status = 'pending'`))[0].cnt || 0;
+
+      // Equipment conflicts: count sessions with equipment list length > 0 and overlapping
+      const equipmentConflicts = (await runSql(`SELECT COUNT(*)::int as cnt FROM photography_sessions WHERE (equipment_needed IS NOT NULL AND equipment_needed <> '[]')`))[0].cnt || 0;
+
+      // New leads
+      const newLeads = (await runSql(`SELECT COUNT(*)::int as cnt FROM crm_leads WHERE created_at >= NOW() - INTERVAL '7 days'`))[0].cnt || 0;
+
+      res.json({
+        totalSessions,
+        upcomingSessions,
+        completedSessions,
+        totalRevenue,
+        pendingDeposits,
+        equipmentConflicts,
+        newLeads
+      });
+    } catch (error) {
+      console.error('Failed to compute dashboard stats:', error);
+      res.status(500).json({ error: 'Failed to compute dashboard stats' });
     }
   });
 

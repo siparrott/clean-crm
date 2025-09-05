@@ -100,19 +100,19 @@ const PhotographyCalendarPage: React.FC = () => {
     portfolioWorthy: false
   });
 
-  // Mock stats - will be replaced with real data
-  const stats: DashboardStats = {
-    totalSessions: 45,
-    upcomingSessions: 12,
-    completedSessions: 33,
-    totalRevenue: 18750,
-    pendingDeposits: 3,
-    equipmentConflicts: 1
-  };
+  const [stats, setStats] = useState<DashboardStats>({
+    totalSessions: 0,
+    upcomingSessions: 0,
+    completedSessions: 0,
+    totalRevenue: 0,
+    pendingDeposits: 0,
+    equipmentConflicts: 0,
+  });
 
   useEffect(() => {
     fetchSessions();
     fetchLeadsCount();
+  fetchDashboardStats();
   }, []);
 
   const fetchLeadsCount = async () => {
@@ -124,6 +124,25 @@ const PhotographyCalendarPage: React.FC = () => {
       }
     } catch (error) {
       // console.log removed
+    }
+  };
+
+  const fetchDashboardStats = async () => {
+    try {
+      const resp = await fetch('/api/admin/dashboard-stats');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      setStats({
+        totalSessions: data.totalSessions || 0,
+        upcomingSessions: data.upcomingSessions || 0,
+        completedSessions: data.completedSessions || 0,
+        totalRevenue: data.totalRevenue || 0,
+        pendingDeposits: data.pendingDeposits || 0,
+        equipmentConflicts: data.equipmentConflicts || 0,
+      });
+      if (typeof data.newLeads === 'number') setNewLeadsCount(data.newLeads);
+    } catch (err) {
+      // ignore
     }
   };
 

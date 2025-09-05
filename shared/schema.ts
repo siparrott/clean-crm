@@ -210,6 +210,17 @@ export const crmInvoicePayments = pgTable("crm_invoice_payments", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Admin-defined available slots (for embed booking widget)
+export const studioAvailableSlots = pgTable("studio_available_slots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  studioId: uuid("studio_id").references(() => studioConfigs.id).notNull(),
+  startTime: timestamp("start_time").notNull(),
+  durationMinutes: integer("duration_minutes").default(120),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Voucher Products (what customers can buy)
 export const voucherProducts = pgTable("voucher_products", {
   id: uuid("id").primaryKey().defaultRandom(),

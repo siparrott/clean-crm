@@ -424,6 +424,17 @@ class StudioCalendarService {
   }
 
   /**
+   * Public wrapper to create a Google Calendar event. Ensures initialization.
+   */
+  static async createGoogleEventPublic(event: GoogleCalendarEvent): Promise<any> {
+    if (!this.calendar) {
+      const ok = await this.initializeGoogleCalendar();
+      if (!ok) throw new Error('Google Calendar not configured');
+    }
+    return await this.createGoogleCalendarEvent(event);
+  }
+
+  /**
    * Update Google Calendar event
    */
   private static async updateGoogleCalendarEvent(eventId: string, event: Partial<GoogleCalendarEvent>): Promise<any> {
