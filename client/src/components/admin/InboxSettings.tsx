@@ -30,8 +30,8 @@ const InboxSettings: React.FC<InboxSettingsProps> = ({
       provider: 'smtp',
       smtpHost: 'smtp.easyname.com',
       smtpPort: '465',
-      username: '30840mail10',
-      password: 'HoveBN41!',
+      username: '',
+      password: '',
       useTLS: true,
       syncEnabled: true,
       syncInterval: 5
@@ -329,7 +329,7 @@ const InboxSettings: React.FC<InboxSettingsProps> = ({
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <h4 className="font-medium text-blue-900 mb-2">Quick Setup Guide</h4>
               <div className="text-sm text-blue-800 space-y-1">
-                <p><strong>Business Email (EasyName):</strong> Username: 30840mail10, IMAP: imap.easyname.com:993</p>
+                <p><strong>Business Email (EasyName):</strong> IMAP: imap.easyname.com:993</p>
                 <p><strong>For Gmail:</strong> Use your email + App Password (not regular password)</p>
                 <p><strong>For Outlook:</strong> Use your Microsoft account email + password</p>
               </div>

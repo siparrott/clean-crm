@@ -3080,7 +3080,8 @@ Bitte versuchen Sie es später noch einmal.`;
         port: 465,
         secure: true,
         auth: {
-          user: '30840mail10', // Business email credentials
+          // Use mailbox username from environment when available; otherwise use request-provided username
+          user: process.env.BUSINESS_MAILBOX_USER || '30840mail10',
           pass: process.env.EMAIL_PASSWORD || 'your-email-password'
         }
       });
@@ -3144,13 +3145,17 @@ Bitte versuchen Sie es später noch einmal.`;
       console.log(`Attempting to import emails from ${username} via ${smtpHost}:${smtpPort}`);
 
       // Special handling for business email with EasyName IMAP settings
-      if (username === 'hallo@newagefotografie.com' || username === '30840mail10') {
+      // If this looks like the studio's business address, prefer environment-configured mailbox credentials
+      if (username === 'hallo@newagefotografie.com' || username === process.env.BUSINESS_MAILBOX_USER) {
         console.log('Using EasyName IMAP settings for business email');
+        const mailboxUser = process.env.BUSINESS_MAILBOX_USER || username;
+        const mailboxPass = process.env.EMAIL_PASSWORD || password;
+
         const importedEmails = await importEmailsFromIMAP({
           host: 'imap.easyname.com',
           port: 993,
-          username: '30840mail10', // Use mailbox name for authentication
-          password,
+          username: mailboxUser,
+          password: mailboxPass,
           useTLS: true
         });
 
