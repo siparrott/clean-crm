@@ -825,6 +825,7 @@ export const insertCrmInvoiceSchema = createInsertSchema(crmInvoices).pick({
   status: true,
   notes: true,
   termsAndConditions: true,
+  createdBy: true,
 }).partial({ invoiceNumber: true }); // Make invoiceNumber optional for automatic generation
 
 export const insertCrmInvoiceItemSchema = createInsertSchema(crmInvoiceItems).pick({
@@ -879,7 +880,7 @@ export type CrmClient = typeof crmClients.$inferSelect;
 export type InsertCrmLead = z.infer<typeof insertCrmLeadSchema>;
 export type CrmLead = typeof crmLeads.$inferSelect;
 export type InsertGallery = z.infer<typeof insertGallerySchema>;
-export type Gallery = typeof galleries.$inferSelect;
+// (Gallery type already exported above)
 export type InsertCrmInvoice = z.infer<typeof insertCrmInvoiceSchema>;
 export type CrmInvoice = typeof crmInvoices.$inferSelect;
 export type InsertCrmInvoiceItem = z.infer<typeof insertCrmInvoiceItemSchema>;
@@ -897,9 +898,7 @@ export type BusinessInsight = typeof businessInsights.$inferSelect;
 
 // New types for template and studio management
 export type StudioConfig = typeof studioConfigs.$inferSelect;
-export type InsertStudioConfig = z.infer<typeof insertStudioConfigSchema>;
 export type TemplateDefinition = typeof templateDefinitions.$inferSelect;
-export type InsertTemplateDefinition = z.infer<typeof insertTemplateDefinitionSchema>;
 
 // Voucher Product schemas
 export const insertVoucherProductSchema = createInsertSchema(voucherProducts, {

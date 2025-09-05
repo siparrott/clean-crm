@@ -2,7 +2,13 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { registerTestRoutes } from "./routes-test";
 import { storage } from "./storage";
-import { db } from "./db";
+import { db, pool } from "./db";
+// Helper to run raw SQL with parameterized values using the pg pool
+async function runSql(query: string, params?: any[]) {
+  const result = await pool.query(query, params || []);
+  return result.rows;
+}
+import { sql } from 'drizzle-orm';
 import { eq } from "drizzle-orm";
 import { 
   insertUserSchema,
@@ -912,7 +918,7 @@ async function importEmailsFromIMAP(config: {
       isRead: boolean;
     }> = [];
 
-    function openInbox(cb: Function) {
+    function openInbox(cb: (err: any, box: any) => void) {
       imap.openBox('INBOX', true, cb);
     }
 
@@ -1785,7 +1791,7 @@ Bitte versuchen Sie es später noch einmal.`;
       query += ` ORDER BY ps.session_date ASC LIMIT $${paramIndex}`;
       values.push(parseInt(limit as string));
 
-      const sessions = await sql(query, values);
+  const sessions = await runSql(query, values);
       res.json(sessions);
     } catch (error) {
       console.error('Failed to fetch calendar sessions:', error);
@@ -1817,22 +1823,17 @@ Bitte versuchen Sie es später noch einmal.`;
 
       const sessionId = crypto.randomUUID();
       
-      await sql`
-        INSERT INTO photography_sessions (
+      // Use parameterized query via pool
+      await runSql(
+        `INSERT INTO photography_sessions (
           id, client_id, session_type, session_date, duration_minutes,
           location, notes, price, deposit_required, equipment_needed,
           status, created_at, updated_at
-        ) VALUES (
-          ${sessionId}, ${client_id}, ${session_type}, ${session_date},
-          ${duration_minutes}, ${location}, ${notes}, ${price}, 
-          ${deposit_required}, ${JSON.stringify(equipment_needed)}, 
-          'CONFIRMED', NOW(), NOW()
-        )
-      `;
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'CONFIRMED', NOW(), NOW())`,
+        [sessionId, client_id, session_type, session_date, duration_minutes, location, notes, price, deposit_required, JSON.stringify(equipment_needed)]
+      );
 
-      const [newSession] = await sql`
-        SELECT * FROM photography_sessions WHERE id = ${sessionId}
-      `;
+      const [newSession] = (await runSql(`SELECT * FROM photography_sessions WHERE id = $1`, [sessionId]));
 
       res.status(201).json(newSession);
     } catch (error) {
@@ -1876,7 +1877,7 @@ Bitte versuchen Sie es später noch einmal.`;
         RETURNING *
       `;
 
-      const result = await sql(query, values);
+  const result = await runSql(query, values);
 
       if (result.length === 0) {
         return res.status(404).json({ error: 'Session not found' });
@@ -1895,15 +1896,16 @@ Bitte versuchen Sie es später noch einmal.`;
       const { id } = req.params;
       const { cancellation_reason, refund_amount = 0 } = req.body;
 
-      const result = await sql`
-        UPDATE photography_sessions
+      const result = await runSql(
+        `UPDATE photography_sessions
         SET status = 'CANCELLED', 
-            cancellation_reason = ${cancellation_reason}, 
-            refund_amount = ${refund_amount},
+            cancellation_reason = $1, 
+            refund_amount = $2,
             updated_at = NOW()
-        WHERE id = ${id}
-        RETURNING *
-      `;
+        WHERE id = $3
+        RETURNING *`,
+        [cancellation_reason, refund_amount, id]
+      );
 
       if (result.length === 0) {
         return res.status(404).json({ error: 'Session not found' });
@@ -1929,13 +1931,14 @@ Bitte versuchen Sie es später noch einmal.`;
       }
 
       // Get existing sessions for the date
-      const existingSessions = await sql`
-        SELECT session_date, duration_minutes
+      const existingSessions = await runSql(
+        `SELECT session_date, duration_minutes
         FROM photography_sessions
-        WHERE DATE(session_date) = ${date}
+        WHERE DATE(session_date) = $1
         AND status IN ('CONFIRMED', 'PENDING')
-        ORDER BY session_date
-      `;
+        ORDER BY session_date`,
+        [date]
+      );
 
       // Define working hours (9 AM to 6 PM)
       const workingHours = { start: 9, end: 18 };
@@ -2293,130 +2296,10 @@ Bitte versuchen Sie es später noch einmal.`;
         avgOrderValue: Number((avgOrderValue || 0).toFixed(2)),
         totalInvoices: invoices.length,
         paidInvoices: paidInvoices.length,
-            createdAt: new Date().toISOString(),
-            sizeBytes: 2300000,
-            contentType: 'image/jpeg',
-            capturedAt: null
-          },
-          {
-            id: 'sample-3',
-            galleryId: gallery.id,
-            filename: 'lake_reflection.jpg',
-            originalUrl: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-            displayUrl: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80',
-            thumbUrl: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=400&q=80',
-            title: 'Lake Reflection',
-            description: 'Perfect mirror reflection on a calm mountain lake',
-            orderIndex: 2,
-            createdAt: new Date().toISOString(),
-            sizeBytes: 2800000,
-            contentType: 'image/jpeg',
-            capturedAt: null
-          },
-          {
-            id: 'sample-4',
-            galleryId: gallery.id,
-            filename: 'city_skyline.jpg',
-            originalUrl: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-            displayUrl: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80',
-            thumbUrl: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=400&q=80',
-            title: 'Urban Evening',
-            description: 'City skyline illuminated at twilight',
-            orderIndex: 3,
-            createdAt: new Date().toISOString(),
-            sizeBytes: 2600000,
-            contentType: 'image/jpeg',
-            capturedAt: null
-          },
-          {
-            id: 'sample-5',
-            galleryId: gallery.id,
-            filename: 'coastal_sunset.jpg',
-            originalUrl: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2156&q=80',
-            displayUrl: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80',
-            thumbUrl: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=400&q=80',
-            title: 'Coastal Sunset',
-            description: 'Golden hour over the ocean coastline',
-            orderIndex: 4,
-            createdAt: new Date().toISOString(),
-            sizeBytes: 2400000,
-            contentType: 'image/jpeg',
-            capturedAt: null
-          }
-        ];
-        
-        res.json(sampleImages);
-        return;
-      }
-      
-      // Return gallery images from Neon database
-      res.json(galleryImages);
-    } catch (error) {
-      console.error("Error fetching gallery images:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  // ==================== DASHBOARD METRICS ROUTE ====================
-  app.get("/api/crm/dashboard/metrics", authenticateUser, async (req: Request, res: Response) => {
-    try {
-      // Get actual data from database
-      const [invoices, leads, sessions, clients] = await Promise.all([
-        storage.getCrmInvoices(),
-        storage.getCrmLeads(), 
-        storage.getPhotographySessions(),
-        storage.getCrmClients()
-      ]);
-
-      // Calculate revenue metrics from PAID invoices only
-      const paidInvoices = invoices.filter(inv => inv.status === 'paid');
-      const totalRevenue = paidInvoices.reduce((sum, invoice) => {
-        const total = parseFloat(invoice.total?.toString() || '0');
-        return sum + total;
-      }, 0);
-
-      const paidRevenue = totalRevenue; // Same as totalRevenue since we only count paid invoices
-
-      const avgOrderValue = paidInvoices.length > 0 ? totalRevenue / paidInvoices.length : 0;
-
-      // Calculate trend data from PAID invoices over last 7 days
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      const recentInvoices = paidInvoices.filter(invoice => {
-        const createdDate = new Date(invoice.createdAt || invoice.created_at);
-        return createdDate >= sevenDaysAgo;
-      });
-
-      const trendData = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
-        
-        const dayInvoices = recentInvoices.filter(invoice => {
-          const invoiceDate = new Date(invoice.createdAt || invoice.created_at).toISOString().split('T')[0];
-          return invoiceDate === dateStr;
-        });
-        
-        const dayRevenue = dayInvoices.reduce((sum, invoice) => {
-          const total = parseFloat(invoice.total?.toString() || '0');
-          return sum + total;
-        }, 0);
-        
-        trendData.push({ date: dateStr, value: dayRevenue });
-      }
-
-      const metrics = {
-        totalRevenue: Number((totalRevenue || 0).toFixed(2)),
-        paidRevenue: Number((paidRevenue || 0).toFixed(2)),
-        avgOrderValue: Number((avgOrderValue || 0).toFixed(2)),
-        totalInvoices: invoices.length,
-        paidInvoices: paidInvoices.length,
         activeLeads: leads.filter(lead => lead.status === 'new' || lead.status === 'contacted').length,
         totalClients: clients.length,
         upcomingSessions: sessions.filter(session => 
-          new Date(session.sessionDate) > new Date()
+    new Date(session.startTime) > new Date()
         ).length,
         trendData
       };
@@ -2480,7 +2363,7 @@ Bitte versuchen Sie es später noch einmal.`;
       
       query += ` LIMIT ${limit}`;
       
-      const topClients = await sql(query);
+  const topClients = await runSql(query);
       res.json(topClients);
     } catch (error) {
       console.error('Error fetching top clients:', error);
@@ -2567,7 +2450,7 @@ Bitte versuchen Sie es später noch einmal.`;
           break;
       }
       
-      const segments = await sql(segmentQuery);
+  const segments = await runSql(segmentQuery);
       res.json({ 
         segments,
         segmentBy,
@@ -2629,7 +2512,7 @@ Bitte versuchen Sie es später noch einmal.`;
       query += ` ORDER BY g.created_at DESC LIMIT $${paramIndex}`;
       values.push(parseInt(limit as string));
       
-      const galleries = await sql(query, values);
+  const galleries = await runSql(query, values);
       res.json(galleries);
     } catch (error) {
       console.error('Error fetching galleries:', error);
@@ -2650,7 +2533,7 @@ Bitte versuchen Sie es später noch einmal.`;
         RETURNING id, title, slug, description, is_public, created_at
       `;
       
-      const result = await sql(query, [
+  const result = await runSql(query, [
         title,
         description || null,
         clientId,
@@ -2702,7 +2585,7 @@ Bitte versuchen Sie es später noch einmal.`;
       `;
       values.push(galleryId);
       
-      const result = await sql(query, values);
+  const result = await runSql(query, values);
       
       if (result.length === 0) {
         return res.status(404).json({ error: "Gallery not found" });
@@ -2720,17 +2603,17 @@ Bitte versuchen Sie es später noch einmal.`;
       const galleryId = req.params.id;
       
       // Check if gallery exists
-      const galleryCheck = await sql(`SELECT title FROM galleries WHERE id = $1`, [galleryId]);
+  const galleryCheck = await runSql(`SELECT title FROM galleries WHERE id = $1`, [galleryId]);
       
       if (galleryCheck.length === 0) {
         return res.status(404).json({ error: "Gallery not found" });
       }
       
       // Delete images first (cascade should handle this, but being explicit)
-      await sql(`DELETE FROM gallery_images WHERE gallery_id = $1`, [galleryId]);
+  await runSql(`DELETE FROM gallery_images WHERE gallery_id = $1`, [galleryId]);
       
       // Delete gallery
-      await sql(`DELETE FROM galleries WHERE id = $1`, [galleryId]);
+  await runSql(`DELETE FROM galleries WHERE id = $1`, [galleryId]);
       
       res.json({ 
         success: true, 
@@ -2759,7 +2642,7 @@ Bitte versuchen Sie es später noch einmal.`;
         GROUP BY g.id, c.first_name, c.last_name, c.email
       `;
       
-      const result = await sql(query, [galleryId]);
+  const result = await runSql(query, [galleryId]);
       
       if (result.length === 0) {
         return res.status(404).json({ error: "Gallery not found" });
@@ -2914,7 +2797,7 @@ Bitte versuchen Sie es später noch einmal.`;
       }
 
       // Get client details using correct field name
-      const clientId = invoice.clientId || invoice.client_id;
+  const clientId = invoice.clientId;
       const client = await storage.getCrmClient(clientId);
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
@@ -2924,7 +2807,7 @@ Bitte versuchen Sie es später noch einmal.`;
       const pdfBuffer = await generateModernInvoicePDF(invoice, client);
       
       // Set proper PDF headers
-      const invoiceNumber = invoice.invoiceNumber || invoice.invoice_number || invoice.id;
+  const invoiceNumber = invoice.invoiceNumber || invoice.id;
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="Rechnung-${invoiceNumber}.pdf"`);
       res.send(pdfBuffer);
@@ -2958,7 +2841,7 @@ Bitte versuchen Sie es später noch einmal.`;
       let attachments = [];
       if (includeAttachment) {
         const pdfBuffer = await generateModernInvoicePDF(invoice, client);
-        const invoiceNumber = invoice.invoiceNumber || invoice.invoice_number || invoice.id;
+  const invoiceNumber = invoice.invoiceNumber || invoice.id;
 
         attachments.push({
           filename: `Rechnung-${invoiceNumber}.pdf`,
@@ -3815,8 +3698,8 @@ Bitte versuchen Sie es später noch einmal.`;
         // Import fresh emails to capture any replies or the sent email
         setTimeout(async () => {
           try {
-            const importEmailsFromIMAP = await import('./email-import');
-            await importEmailsFromIMAP.default({
+            const { importEmailsFromIMAP } = await import('./email-import');
+            await importEmailsFromIMAP({
               host: 'imap.easyname.com',
               port: 993,
               username: '30840mail10',
@@ -5039,10 +4922,13 @@ New Age Fotografie CRM System
         return res.status(400).json({ error: result.error.issues });
       }
 
-      const [entry] = await db.insert(knowledgeBase).values({
+      // Ensure tags is an array per schema
+      const kbData = {
         ...result.data,
-        createdBy: req.user.id,
-      }).returning();
+        tags: Array.isArray(result.data.tags) ? result.data.tags : (result.data.tags ? [result.data.tags] : []),
+      } as any;
+
+      const [entry] = await db.insert(knowledgeBase).values(kbData).returning();
 
       res.status(201).json(entry);
     } catch (error) {
@@ -5058,11 +4944,14 @@ New Age Fotografie CRM System
         return res.status(400).json({ error: result.error.issues });
       }
 
+      const updateData = {
+        ...result.data,
+        tags: Array.isArray(result.data.tags) ? result.data.tags : (result.data.tags ? [result.data.tags] : []),
+        updatedAt: new Date(),
+      } as any;
+
       const [entry] = await db.update(knowledgeBase)
-        .set({
-          ...result.data,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(knowledgeBase.id, req.params.id))
         .returning();
 
@@ -5142,11 +5031,19 @@ New Age Fotografie CRM System
         }
       }
 
-      const [assistant] = await db.insert(openaiAssistants).values({
-        ...result.data,
+      const assistantData = {
+        name: result.data.name,
+        instructions: result.data.instructions,
+        description: result.data.description || '',
+        model: result.data.model || 'gpt-4o',
+        isActive: typeof result.data.isActive === 'boolean' ? result.data.isActive : true,
+        knowledgeBaseIds: Array.isArray(result.data.knowledgeBaseIds) ? result.data.knowledgeBaseIds : (result.data.knowledgeBaseIds ? [result.data.knowledgeBaseIds] : []),
         openaiAssistantId,
         createdBy: req.user.id,
-      }).returning();
+      } as any;
++
++
++      const [assistant] = await db.insert(openaiAssistants).values(assistantData).returning();
 
       res.status(201).json(assistant);
     } catch (error) {
@@ -5162,11 +5059,14 @@ New Age Fotografie CRM System
         return res.status(400).json({ error: result.error.issues });
       }
 
-      const [assistant] = await db.update(openaiAssistants)
-        .set({
-          ...result.data,
-          updatedAt: new Date(),
-        })
+      const updateAssistant = {
+        ...result.data,
+        isActive: typeof result.data.isActive === 'boolean' ? result.data.isActive : undefined,
+        updatedAt: new Date(),
+      } as any;
++
++      const [assistant] = await db.update(openaiAssistants)
+        .set(updateAssistant)
         .where(eq(openaiAssistants.id, req.params.id))
         .returning();
 

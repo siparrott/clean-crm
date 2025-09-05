@@ -98,6 +98,7 @@ export interface IStorage {
   // Gallery management
   getGalleries(): Promise<Gallery[]>;
   getGallery(id: string): Promise<Gallery | undefined>;
+  getGalleryImages(galleryId: string): Promise<any[]>;
   getGalleryBySlug(slug: string): Promise<Gallery | undefined>;
   createGallery(gallery: InsertGallery): Promise<Gallery>;
   updateGallery(id: string, updates: Partial<Gallery>): Promise<Gallery>;
@@ -361,6 +362,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteGallery(id: string): Promise<void> {
     await db.delete(galleries).where(eq(galleries.id, id));
+  }
+
+  async getGalleryImages(galleryId: string): Promise<any[]> {
+    const result = await db.select().from(galleryImages).where(eq(galleryImages.galleryId, galleryId)).orderBy(desc(galleryImages.createdAt));
+    return result;
   }
 
   // Invoice management
