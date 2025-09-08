@@ -488,6 +488,23 @@ export const galleryImages = pgTable("gallery_images", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Digital Files storage (for uploaded assets/documents)
+export const digitalFiles = pgTable("digital_files", {
+  id: text("id").primaryKey(),
+  folderName: text("folder_name"),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").notNull(),
+  fileSize: integer("file_size").default(0),
+  clientId: text("client_id"),
+  sessionId: text("session_id"),
+  description: text("description"),
+  tags: text("tags"), // stored as JSON string for now for backward-compat
+  isPublic: boolean("is_public").default(false),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
 // Photography Session Management System  
 export const photographySessions = pgTable("photography_sessions", {
   id: text("id").primaryKey(),

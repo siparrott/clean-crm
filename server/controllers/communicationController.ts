@@ -142,7 +142,7 @@ export const getAllCommunications = async (req: Request, res: Response) => {
   try {
     const { limit = 50, messageType } = req.query;
 
-    let query = db
+    const baseQuery = db
       .select({
         id: crmMessages.id,
         subject: crmMessages.subject,
@@ -160,15 +160,15 @@ export const getAllCommunications = async (req: Request, res: Response) => {
         clientPhone: crmClients.phone,
       })
       .from(crmMessages)
-      .leftJoin(crmClients, eq(crmMessages.clientId, crmClients.id))
+      .leftJoin(crmClients, eq(crmMessages.clientId, crmClients.id));
+
+    const filtered = messageType
+      ? baseQuery.where(eq(crmMessages.messageType, messageType as string))
+      : baseQuery;
+
+    const communications = await filtered
       .orderBy(desc(crmMessages.createdAt))
       .limit(parseInt(limit as string));
-
-    if (messageType) {
-      query = query.where(eq(crmMessages.messageType, messageType as string));
-    }
-
-    const communications = await query.execute();
 
     res.json({ communications });
 

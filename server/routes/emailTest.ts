@@ -16,8 +16,8 @@ router.post('/test', async (req, res) => {
       });
     }
 
-    // Create a test transporter (this will test SMTP settings without sending)
-    const transporter = nodemailer.createTransporter({
+  // Create a test transporter (this will test SMTP settings without sending)
+  const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.mail.yahoo.com',
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',
@@ -58,7 +58,7 @@ router.post('/test', async (req, res) => {
         `
       };
 
-      const result = await transporter.sendMail(mailOptions);
+  const result = await transporter.sendMail(mailOptions as any);
       
       return res.json({
         success: true,

@@ -210,13 +210,11 @@ export class DatabaseStorage implements IStorage {
 
   // Blog management
   async getBlogPosts(published?: boolean): Promise<BlogPost[]> {
-    let query = db.select().from(blogPosts);
-    
-    if (published !== undefined) {
-      query = query.where(eq(blogPosts.published, published));
-    }
-    
-    return await query.orderBy(desc(blogPosts.createdAt));
+    const baseQuery = db.select().from(blogPosts);
+    const filtered = published !== undefined
+      ? baseQuery.where(eq(blogPosts.published, published))
+      : baseQuery;
+    return await filtered.orderBy(desc(blogPosts.createdAt));
   }
 
   async getBlogPost(id: string): Promise<BlogPost | undefined> {
@@ -274,13 +272,11 @@ export class DatabaseStorage implements IStorage {
 
   // CRM Lead management
   async getCrmLeads(status?: string): Promise<CrmLead[]> {
-    let query = db.select().from(crmLeads);
-    
-    if (status && status !== 'all') {
-      query = query.where(eq(crmLeads.status, status));
-    }
-    
-    return await query.orderBy(desc(crmLeads.createdAt));
+    const baseLeads = db.select().from(crmLeads);
+    const filteredLeads = (status && status !== 'all')
+      ? baseLeads.where(eq(crmLeads.status, status))
+      : baseLeads;
+    return await filteredLeads.orderBy(desc(crmLeads.createdAt));
   }
 
   async getCrmLead(id: string): Promise<CrmLead | undefined> {
@@ -309,13 +305,11 @@ export class DatabaseStorage implements IStorage {
 
   // Photography Session management
   async getPhotographySessions(photographerId?: string): Promise<PhotographySession[]> {
-    let query = db.select().from(photographySessions);
-    
-    if (photographerId) {
-      query = query.where(eq(photographySessions.photographerId, photographerId));
-    }
-    
-    return await query.orderBy(asc(photographySessions.startTime));
+    const baseSessions = db.select().from(photographySessions);
+    const filteredSessions = photographerId
+      ? baseSessions.where(eq(photographySessions.photographerId, photographerId))
+      : baseSessions;
+    return await filteredSessions.orderBy(asc(photographySessions.startTime));
   }
 
   async getPhotographySession(id: string): Promise<PhotographySession | undefined> {
