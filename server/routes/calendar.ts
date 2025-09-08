@@ -17,7 +17,7 @@ router.get('/sessions', async (req, res) => {
       limit = '20'
     } = req.query;
 
-    let query = db.select({
+  const baseQuery = db.select({
       id: photographySessions.id,
       clientId: photographySessions.clientId,
       sessionType: photographySessions.sessionType,
@@ -31,7 +31,7 @@ router.get('/sessions', async (req, res) => {
       status: photographySessions.status,
       createdAt: photographySessions.createdAt,
       updatedAt: photographySessions.updatedAt
-    }).from(photographySessions);
+  }).from(photographySessions);
 
     // Apply filters
     const conditions = [];
@@ -56,11 +56,11 @@ router.get('/sessions', async (req, res) => {
       conditions.push(eq(photographySessions.status, status as any));
     }
 
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
+    const finalQuery = conditions.length > 0
+      ? baseQuery.where(and(...conditions))
+      : baseQuery;
 
-    const sessions = await query
+  const sessions = await finalQuery
       .orderBy(asc(photographySessions.startTime))
       .limit(parseInt(limit as string));
 
