@@ -783,7 +783,8 @@ export const insertPhotographySessionSchema = z.object({
 
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
-  name: true,
+  firstName: true,
+  lastName: true,
   avatar: true,
 });
 
@@ -828,7 +829,7 @@ export const insertCrmLeadSchema = createInsertSchema(crmLeads).pick({
   status: true,
   priority: true,
   tags: true,
-  followUpDate: true,
+  follow_up_date: true,
   value: true,
 });
 
