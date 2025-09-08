@@ -131,7 +131,7 @@ export class EnhancedEmailService {
           clientId: clientId,
           emailMessageId: 'demo_' + Date.now(),
           sentAt: new Date(),
-  }).returning();
+  }).returning({ id: crmMessages.id });
 
         return {
           success: true,
@@ -167,7 +167,7 @@ export class EnhancedEmailService {
           contentType: att.contentType
         }))) : null,
         sentAt: new Date(),
-  }).returning();
+  }).returning({ id: crmMessages.id });
 
       console.log(`✅ Email sent successfully to ${options.to}`, {
         messageId: result.messageId,
@@ -207,7 +207,7 @@ export class EnhancedEmailService {
           clientId: clientId,
           emailMessageId: 'demo_fallback_' + Date.now(),
           sentAt: new Date(),
-        });
+  }).returning({ id: crmMessages.id });
 
         return {
           success: true,
