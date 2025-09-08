@@ -50,6 +50,7 @@ import { db } from "./db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import validator from "validator";
 import path from 'path';
+import os from 'os';
 
 export interface IStorage {
   // Admin User management (authentication)
@@ -321,7 +322,7 @@ export class DatabaseStorage implements IStorage {
     try {
       // Persist a compact debug snapshot to a local file to help identify bad types
       try {
-        const fs = await import('fs');
+  const fs = await import('fs');
         const inspectFields = ['startTime', 'endTime', 'deliveryDate', 'createdAt', 'updatedAt'];
         const parts: string[] = [];
         for (const f of inspectFields) {
@@ -330,8 +331,8 @@ export class DatabaseStorage implements IStorage {
           const val = v instanceof Date ? v.toISOString() : (v === undefined ? 'null' : String(v));
           parts.push(`${f}=${t}:${val}`);
         }
-        const line = `DEBUG_LOG | sessionId=${(session as any).id || ''} | ${parts.join(' | ')}\n`;
-  const tmpDir = process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp';
+    const line = `DEBUG_LOG | sessionId=${(session as any).id || ''} | ${parts.join(' | ')}\n`;
+  const tmpDir = os.tmpdir();
   const debugPath = path.join(tmpDir, 'clean-crm-debug_import.log');
   fs.appendFileSync(debugPath, line, { encoding: 'utf8' });
   // Also emit a console marker so it appears in server.err immediately

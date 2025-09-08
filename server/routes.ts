@@ -36,6 +36,7 @@ import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import multer from 'multer';
 import path from 'path';
+import os from 'os';
 // Note: sql function not available - using drizzle ORM instead
 import { crmLeads } from "@shared/schema"; // Add missing import
 
@@ -3416,7 +3417,7 @@ Bitte versuchen Sie es später noch einmal.`;
 
       // Persist raw iCal content snapshot synchronously for debugging (write to OS temp dir)
       try {
-        const tmpDir = process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp';
+        const tmpDir = os.tmpdir();
         const rawPath = path.join(tmpDir, 'clean-crm-debug_ics_content.log');
         const header = `==== ICS SNAPSHOT ${new Date().toISOString()} DIRECT: ${fileName || 'no-name'} LENGTH: ${icsContent.length} ====`;
         fs.appendFileSync(rawPath, header + '\n' + icsContent.substring(0, 2000) + '\n\n', { encoding: 'utf8' });
@@ -3514,7 +3515,7 @@ Bitte versuchen Sie es später noch einmal.`;
 
           // Synchronous debug snapshot to capture payload exactly before DB insert (write to OS temp dir)
           try {
-            const tmpDir = process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp';
+            const tmpDir = os.tmpdir();
             const debugPath = path.join(tmpDir, 'clean-crm-debug_import_snapshot.log');
             const snapshot = {
               timestamp: new Date().toISOString(),
@@ -3579,7 +3580,7 @@ Bitte versuchen Sie es später noch einmal.`;
 
       // Persist raw iCal content snapshot synchronously for debugging (write to OS temp dir)
       try {
-        const tmpDir = process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp';
+        const tmpDir = os.tmpdir();
         const rawPath = path.join(tmpDir, 'clean-crm-debug_ics_content.log');
         const header = `==== ICS SNAPSHOT ${new Date().toISOString()} URL: ${icsUrl} LENGTH: ${icsContent.length} ====`;
         fs.appendFileSync(rawPath, header + '\n' + icsContent.substring(0, 2000) + '\n\n', { encoding: 'utf8' });
@@ -3636,7 +3637,7 @@ Bitte versuchen Sie es später noch einmal.`;
 
           // Synchronous debug snapshot to capture payload exactly before DB insert (write to OS temp dir)
           try {
-            const tmpDir = process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp';
+            const tmpDir = os.tmpdir();
             const debugPath = path.join(tmpDir, 'clean-crm-debug_import_snapshot.log');
             const snapshot = {
               timestamp: new Date().toISOString(),
