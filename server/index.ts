@@ -22,8 +22,9 @@ process.env.DEMO_MODE = 'false';
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Increase body size limits to accommodate large ICS payloads
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: false, limit: '5mb' }));
 
 // Add CORS headers for API requests
 app.use((req, res, next) => {
@@ -187,8 +188,9 @@ app.use((req, res, next) => {
 
     // Heroku provides the PORT, use it exactly as provided
   const port = parseInt(process.env.PORT || '10000', 10);
-  // Prefer explicit localhost for local dev to avoid IPv6/0.0.0.0 reachability issues
-  const host = process.env.HOST || '127.0.0.1';
+  // Use 0.0.0.0 when a platform PORT is provided (e.g., Heroku/Render) so the app is reachable externally
+  // Default to 127.0.0.1 for local development if no PORT is provided
+  const host = process.env.HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
 
     server.listen(port, host, () => {
       console.log(`✅ New Age Fotografie CRM successfully started on ${host}:${port}`);
