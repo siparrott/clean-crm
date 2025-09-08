@@ -3754,7 +3754,7 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
-  app.post("/api/calendar/import/ics-url", authenticateUser, async (req: Request, res: Response) => {
+  app.post("/api/calendar/import/ics-url", async (req: Request, res: Response) => {
     try {
       const { icsUrl } = req.body;
       
