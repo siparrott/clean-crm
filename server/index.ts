@@ -187,7 +187,8 @@ app.use((req, res, next) => {
     }
 
     // Heroku provides the PORT, use it exactly as provided
-  const port = parseInt(process.env.PORT || '10000', 10);
+  // Prefer 3000 for local development to match client expectations; platforms set PORT explicitly
+  const port = parseInt(process.env.PORT || '3000', 10);
   // Use 0.0.0.0 when a platform PORT is provided (e.g., Heroku/Render) so the app is reachable externally
   // Default to 127.0.0.1 for local development if no PORT is provided
   const host = process.env.HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1');

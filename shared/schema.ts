@@ -872,7 +872,9 @@ export const insertCrmMessageSchema = createInsertSchema(crmMessages).pick({
   content: true,
   messageType: true,
   status: true,
-  direction: true,
+  // Note: Some deployments may not have 'direction' column.
+  // Keep validation flexible by not requiring it at runtime.
+  // direction: true,
   clientId: true,
   phoneNumber: true,
   campaignId: true,

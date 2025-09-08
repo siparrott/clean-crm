@@ -553,25 +553,105 @@ export class DatabaseStorage implements IStorage {
 
   // CRM Message methods
   async getCrmMessages(): Promise<CrmMessage[]> {
-    return await db.select().from(crmMessages).orderBy(desc(crmMessages.createdAt));
+    try {
+      // Select a safe subset of columns that excludes optional 'direction'
+      const rows = await db
+        .select({
+          id: crmMessages.id,
+          senderName: crmMessages.senderName,
+          senderEmail: crmMessages.senderEmail,
+          subject: crmMessages.subject,
+          content: crmMessages.content,
+          messageType: crmMessages.messageType,
+          status: crmMessages.status,
+          clientId: crmMessages.clientId,
+          emailMessageId: crmMessages.emailMessageId,
+          emailHeaders: crmMessages.emailHeaders,
+          attachments: crmMessages.attachments,
+          smsMessageId: crmMessages.smsMessageId,
+          phoneNumber: crmMessages.phoneNumber,
+          smsProvider: crmMessages.smsProvider,
+          smsStatus: crmMessages.smsStatus,
+          campaignId: crmMessages.campaignId,
+          sentAt: crmMessages.sentAt,
+          deliveredAt: crmMessages.deliveredAt,
+          readAt: crmMessages.readAt,
+          repliedAt: crmMessages.repliedAt,
+          createdAt: crmMessages.createdAt,
+          updatedAt: crmMessages.updatedAt,
+        })
+        .from(crmMessages)
+        .orderBy(desc(crmMessages.createdAt));
+      return rows as unknown as CrmMessage[];
+    } catch (err) {
+      // Fallback to raw SQL if schema mismatch occurs
+      // @ts-ignore
+      const result: any = await db.execute(sql`SELECT * FROM crm_messages ORDER BY created_at DESC`);
+      return result as CrmMessage[];
+    }
   }
 
   async getCrmMessage(id: string): Promise<CrmMessage | undefined> {
-    const results = await db.select().from(crmMessages).where(eq(crmMessages.id, id));
-    return results[0];
+    try {
+      const results = await db
+        .select({
+          id: crmMessages.id,
+          senderName: crmMessages.senderName,
+          senderEmail: crmMessages.senderEmail,
+          subject: crmMessages.subject,
+          content: crmMessages.content,
+          messageType: crmMessages.messageType,
+          status: crmMessages.status,
+          clientId: crmMessages.clientId,
+          emailMessageId: crmMessages.emailMessageId,
+          emailHeaders: crmMessages.emailHeaders,
+          attachments: crmMessages.attachments,
+          smsMessageId: crmMessages.smsMessageId,
+          phoneNumber: crmMessages.phoneNumber,
+          smsProvider: crmMessages.smsProvider,
+          smsStatus: crmMessages.smsStatus,
+          campaignId: crmMessages.campaignId,
+          sentAt: crmMessages.sentAt,
+          deliveredAt: crmMessages.deliveredAt,
+          readAt: crmMessages.readAt,
+          repliedAt: crmMessages.repliedAt,
+          createdAt: crmMessages.createdAt,
+          updatedAt: crmMessages.updatedAt,
+        })
+        .from(crmMessages)
+        .where(eq(crmMessages.id, id));
+      return results[0] as unknown as CrmMessage;
+    } catch {
+      // @ts-ignore
+      const result: any = await db.execute(sql`SELECT * FROM crm_messages WHERE id = ${id} LIMIT 1`);
+      return (Array.isArray(result) ? result[0] : result?.rows?.[0]) as CrmMessage | undefined;
+    }
   }
 
   async createCrmMessage(message: InsertCrmMessage): Promise<CrmMessage> {
-  const results = await db.insert(crmMessages).values(message as any).returning();
-    return results[0];
+    // Some databases might not have certain optional columns like 'direction'.
+    // To avoid runtime errors (e.g., "column \"direction\" does not exist"),
+    // filter out fields that commonly cause issues and let defaults apply.
+  const safeMessage: any = { ...message };
+    // Do not force 'direction' on insert; schema default will apply on DBs that have it
+    delete safeMessage.direction;
+    // Normalize attachments JSON: if provided as stringified JSON elsewhere, keep as-is; otherwise pass object
+    if (safeMessage.attachments && typeof safeMessage.attachments !== 'string') {
+      safeMessage.attachments = JSON.stringify(safeMessage.attachments);
+    }
+    const results = await db
+      .insert(crmMessages)
+      .values(safeMessage as any)
+      .returning({ id: crmMessages.id, createdAt: crmMessages.createdAt });
+    return results[0] as unknown as CrmMessage;
   }
 
   async updateCrmMessage(id: string, updates: Partial<CrmMessage>): Promise<CrmMessage> {
     const results = await db.update(crmMessages)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(crmMessages.id, id))
-      .returning();
-    return results[0];
+      .returning({ id: crmMessages.id, updatedAt: crmMessages.updatedAt });
+    return results[0] as unknown as CrmMessage;
   }
 
   async deleteCrmMessage(id: string): Promise<void> {

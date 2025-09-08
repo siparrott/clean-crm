@@ -120,7 +120,8 @@ export class EnhancedEmailService {
         console.log('📧 Demo mode: Content preview:', options.content.substring(0, 100) + '...');
         
         // Save demo email to database (don't write `direction` — some DBs may not have this column)
-        const messageRecord = await db.insert(crmMessages).values({
+  // Avoid writing optional columns like 'direction' to maximize compatibility
+  await db.insert(crmMessages).values({
           senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
           senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || 'demo@example.com',
           subject: options.subject,
@@ -130,7 +131,7 @@ export class EnhancedEmailService {
           clientId: clientId,
           emailMessageId: 'demo_' + Date.now(),
           sentAt: new Date(),
-        }).returning();
+  }).returning();
 
         return {
           success: true,
@@ -152,7 +153,7 @@ export class EnhancedEmailService {
       const result = await this.transporter.sendMail(mailOptions);
 
       // Save to database (avoid writing `direction` to be compatible with DBs missing that column)
-      const messageRecord = await db.insert(crmMessages).values({
+  await db.insert(crmMessages).values({
         senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
         senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || '',
         subject: options.subject,
@@ -166,7 +167,7 @@ export class EnhancedEmailService {
           contentType: att.contentType
         }))) : null,
         sentAt: new Date(),
-      }).returning();
+  }).returning();
 
       console.log(`✅ Email sent successfully to ${options.to}`, {
         messageId: result.messageId,
@@ -196,7 +197,7 @@ export class EnhancedEmailService {
         }
 
         // Save demo email to database (avoid writing `direction`)
-        await db.insert(crmMessages).values({
+  await db.insert(crmMessages).values({
           senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
           senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || 'demo@example.com',
           subject: options.subject,
