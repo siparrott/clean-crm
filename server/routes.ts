@@ -150,6 +150,7 @@ import OpenAI from 'openai';
 import websiteWizardRoutes from './routes/website-wizard';
 import galleryShopRouter from './routes/gallery-shop';
 import authRoutes from './routes/auth';
+import filesRouter from './routes/files';
 import { sessionConfig, requireAuth, requireAdmin } from './auth';
 
 // Modern PDF invoice generator with actual logo and all required sections
@@ -1032,6 +1033,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register authentication routes
   app.use('/api/auth', authRoutes);
+
+  // Digital files API
+  app.use('/api/files', filesRouter);
 
   // Health check endpoint for deployment
   app.get("/api/health", (req, res) => {
@@ -3410,9 +3414,20 @@ Bitte versuchen Sie es später noch einmal.`;
         return res.status(400).json({ error: 'No iCal content provided' });
       }
 
-  // Parse iCal content and convert to photography sessions
-  const importedEvents = parseICalContent(icsContent);
-  console.log('Imported events parsed from URL:', importedEvents.length, 'sample:', importedEvents[0] ? { summary: importedEvents[0].summary, dtstart: importedEvents[0].dtstart, dtend: importedEvents[0].dtend } : null);
+      // Persist raw iCal content snapshot synchronously for debugging (write to OS temp dir)
+      try {
+        const tmpDir = process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp';
+        const rawPath = path.join(tmpDir, 'clean-crm-debug_ics_content.log');
+        const header = `==== ICS SNAPSHOT ${new Date().toISOString()} DIRECT: ${fileName || 'no-name'} LENGTH: ${icsContent.length} ====`;
+        fs.appendFileSync(rawPath, header + '\n' + icsContent.substring(0, 2000) + '\n\n', { encoding: 'utf8' });
+        console.error(`WROTE_ICS_SNAPSHOT | path=${rawPath} | len=${icsContent.length}`);
+      } catch (e) {
+        console.error('Failed to write ICS content snapshot:', e);
+      }
+
+      // Parse iCal content and convert to photography sessions
+      const importedEvents = parseICalContent(icsContent);
+      console.log('Imported events parsed from content:', importedEvents.length, 'sample:', importedEvents[0] ? { summary: importedEvents[0].summary, dtstart: importedEvents[0].dtstart, dtend: importedEvents[0].dtend } : null);
       let importedCount = 0;
 
       for (const event of importedEvents) {
@@ -3496,6 +3511,35 @@ Bitte versuchen Sie es später noch einmal.`;
             });
             console.error(`IMPORT_BEFORE_INSERT | summary=${event.summary || ''} | uid=${event.uid || ''} | ${previewParts.join(' | ')}`);
           } catch (e) { console.error('Failed logging pre-insert session preview', e); }
+
+          // Synchronous debug snapshot to capture payload exactly before DB insert (write to OS temp dir)
+          try {
+            const tmpDir = process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp';
+            const debugPath = path.join(tmpDir, 'clean-crm-debug_import_snapshot.log');
+            const snapshot = {
+              timestamp: new Date().toISOString(),
+              eventSummary: event.summary,
+              sessionPreview: {
+                startTimeType: typeof session.startTime,
+                startTimeConstructor: (session.startTime as any)?.constructor ? (session.startTime as any).constructor.name : null,
+                startTimeValue: session.startTime && (session.startTime as any).toString ? (session.startTime as any).toString() : String(session.startTime),
+                endTimeType: typeof session.endTime,
+                endTimeConstructor: (session.endTime as any)?.constructor ? (session.endTime as any).constructor.name : null,
+                endTimeValue: session.endTime && (session.endTime as any).toString ? (session.endTime as any).toString() : String(session.endTime),
+                createdAtType: typeof session.createdAt,
+                createdAtConstructor: (session.createdAt as any)?.constructor ? (session.createdAt as any).constructor.name : null,
+                createdAtValue: session.createdAt && (session.createdAt as any).toString ? (session.createdAt as any).toString() : String(session.createdAt),
+                updatedAtType: typeof session.updatedAt,
+                updatedAtConstructor: (session.updatedAt as any)?.constructor ? (session.updatedAt as any).constructor.name : null,
+                updatedAtValue: session.updatedAt && (session.updatedAt as any).toString ? (session.updatedAt as any).toString() : String(session.updatedAt),
+              }
+            };
+            fs.appendFileSync(debugPath, JSON.stringify(snapshot) + '\n', { encoding: 'utf8' });
+            console.error(`WROTE_IMPORT_SNAPSHOT | path=${debugPath} | summary=${String(event.summary).slice(0,80)}`);
+          } catch (dbgErr) {
+            // Ensure debug failure doesn't stop import
+            console.error('Failed to write debug snapshot:', dbgErr);
+          }
           await storage.createPhotographySession(session);
           importedCount++;
         } catch (error) {
