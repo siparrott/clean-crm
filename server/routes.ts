@@ -3510,6 +3510,11 @@ Bitte versuchen Sie es später noch einmal.`;
 
       // Parse iCal content and convert to photography sessions
       const importedEvents = parseICalContent(icsContent);
+      const dryRun = String(req.query.dryRun || req.query.dryrun || '').toLowerCase() === 'true';
+      if (dryRun) {
+        console.error(`ICS_DRY_RUN | events=${importedEvents.length} | fileName=${fileName || ''}`);
+        return res.json({ success: true, dryRun: true, parsed: importedEvents.length });
+      }
       console.log('Imported events parsed from content:', importedEvents.length, 'sample:', importedEvents[0] ? { summary: importedEvents[0].summary, dtstart: importedEvents[0].dtstart, dtend: importedEvents[0].dtend } : null);
       let importedCount = 0;
 
@@ -3517,7 +3522,8 @@ Bitte versuchen Sie es später noch einmal.`;
         try {
           // Create photography session from calendar event
           const session = {
-            id: event.uid || `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `imported-${(event.uid || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`,
+            icalUid: event.uid || undefined,
             title: event.summary || 'Imported Event',
             description: event.description || '',
             sessionType: 'imported',
@@ -3530,11 +3536,7 @@ Bitte versuchen Sie es später noch einmal.`;
             clientName: extractClientFromDescription(event.description || event.summary || ''),
             clientEmail: '',
             clientPhone: '',
-            basePrice: 0,
-            depositAmount: 0,
-            depositPaid: false,
-            finalPayment: 0,
-            finalPaymentPaid: false,
+            // omit optional pricing fields to avoid decimal coercion issues
             paymentStatus: 'pending',
             conflictDetected: false,
             weatherDependent: false,
@@ -3673,13 +3675,19 @@ Bitte versuchen Sie es später noch einmal.`;
 
       // Parse iCal content and convert to photography sessions
       const importedEvents = parseICalContent(icsContent);
+      const dryRun = String(req.query.dryRun || req.query.dryrun || '').toLowerCase() === 'true';
+      if (dryRun) {
+        console.error(`ICS_URL_DRY_RUN | events=${importedEvents.length} | url=${icsUrl}`);
+        return res.json({ success: true, dryRun: true, parsed: importedEvents.length });
+      }
       let importedCount = 0;
 
       for (const event of importedEvents) {
         try {
           // Create photography session from calendar event
           const session = {
-            id: event.uid || `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `imported-${(event.uid || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`,
+            icalUid: event.uid || undefined,
             title: event.summary || 'Imported Event',
             description: event.description || '',
             sessionType: 'imported',
@@ -3692,11 +3700,7 @@ Bitte versuchen Sie es später noch einmal.`;
             clientName: extractClientFromDescription(event.description || event.summary || ''),
             clientEmail: '',
             clientPhone: '',
-            basePrice: 0,
-            depositAmount: 0,
-            depositPaid: false,
-            finalPayment: 0,
-            finalPaymentPaid: false,
+            // omit optional pricing fields to avoid decimal coercion issues
             paymentStatus: 'pending',
             conflictDetected: false,
             weatherDependent: false,
