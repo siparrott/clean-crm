@@ -1181,3 +1181,7 @@ export type MessageCampaign = typeof messageCampaigns.$inferSelect;
 export type InsertMessageCampaign = z.infer<typeof insertMessageCampaignSchema>;
 export type SMSConfig = typeof smsConfig.$inferSelect;
 export type InsertSMSConfig = z.infer<typeof insertSMSConfigSchema>;
+
+// Backwards-compatible snake_case aliases for legacy imports
+export const photography_sessions = photographySessions as typeof photographySessions;
+export const gallery_images = galleryImages as typeof galleryImages;

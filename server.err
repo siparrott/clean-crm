@@ -1,0 +1,3 @@
+❌ Email service initialization failed: Invalid login: 535 5.7.0 (#AUTH005) Too many bad auth attempts.
+📧 Email service will work in demo mode
+CRM agent router not available: emailCampaignTools.forEach is not a function

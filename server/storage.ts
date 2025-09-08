@@ -9,6 +9,7 @@ import {
   crmInvoicePayments,
   crmMessages,
   galleries,
+  galleryImages,
   photographySessions,
   voucherProducts,
   discountCoupons,
@@ -48,6 +49,7 @@ import {
 import { db } from "./db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import validator from "validator";
+import path from 'path';
 
 export interface IStorage {
   // Admin User management (authentication)
@@ -168,7 +170,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAdminUser(user: InsertAdminUser): Promise<AdminUser> {
-    const result = await db.insert(adminUsers).values(user).returning();
+  const result = await db.insert(adminUsers).values(user as any).returning();
     return result[0];
   }
 
@@ -193,7 +195,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const result = await db.insert(users).values(user).returning();
+  const result = await db.insert(users).values(user as any).returning();
     return result[0];
   }
 
@@ -228,7 +230,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createBlogPost(post: InsertBlogPost): Promise<BlogPost> {
-    const result = await db.insert(blogPosts).values(post).returning();
+  const result = await db.insert(blogPosts).values(post as any).returning();
     return result[0];
   }
 
@@ -257,7 +259,7 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Invalid email address: ${client.email}. Please provide a valid email format.`);
     }
     
-    const result = await db.insert(crmClients).values(client).returning();
+  const result = await db.insert(crmClients).values(client as any).returning();
     return result[0];
   }
 
@@ -292,7 +294,7 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Invalid email address: ${lead.email}. Please provide a valid email format.`);
     }
     
-    const result = await db.insert(crmLeads).values(lead).returning();
+  const result = await db.insert(crmLeads).values(lead as any).returning();
     return result[0];
   }
 
@@ -322,8 +324,116 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPhotographySession(session: InsertPhotographySession): Promise<PhotographySession> {
-    const result = await db.insert(photographySessions).values(session).returning();
-    return result[0];
+    try {
+      // Persist a compact debug snapshot to a local file to help identify bad types
+      try {
+        const fs = await import('fs');
+        const inspectFields = ['startTime', 'endTime', 'deliveryDate', 'createdAt', 'updatedAt'];
+        const parts: string[] = [];
+        for (const f of inspectFields) {
+          const v = (session as any)[f];
+          const t = v === undefined ? 'undefined' : (v && v.constructor ? v.constructor.name : typeof v);
+          const val = v instanceof Date ? v.toISOString() : (v === undefined ? 'null' : String(v));
+          parts.push(`${f}=${t}:${val}`);
+        }
+        const line = `DEBUG_LOG | sessionId=${(session as any).id || ''} | ${parts.join(' | ')}\n`;
+  const tmpDir = process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp';
+  const debugPath = path.join(tmpDir, 'clean-crm-debug_import.log');
+  fs.appendFileSync(debugPath, line, { encoding: 'utf8' });
+  // Also emit a console marker so it appears in server.err immediately
+  console.error(`WROTE_DEBUG_IMPORT | path=${debugPath} | ${parts.join(' | ')}`);
+      } catch (fileErr) {
+        console.error('Failed to write debug_import.log:', fileErr);
+      }
+      // Robust normalization: coerce a variety of timestamp-like inputs into native JS Date
+      // to prevent the Drizzle/pg driver from receiving non-Date values (which calls toUTCString).
+      try {
+        const coerceToDate = (v: any): Date | null => {
+          if (v === undefined || v === null) return null;
+          if (v instanceof Date) return v;
+          if (typeof v === 'number') {
+            const d = new Date(v);
+            return isNaN(d.getTime()) ? null : d;
+          }
+          if (typeof v === 'string') {
+            const d = new Date(v);
+            return isNaN(d.getTime()) ? null : d;
+          }
+          // Firestore timestamp-like: { seconds, nanoseconds }
+          if (typeof v === 'object') {
+            // objects that implement toDate() (e.g., Firestore Timestamp)
+            try {
+              if (typeof (v as any).toDate === 'function') {
+                const d = (v as any).toDate();
+                if (d instanceof Date && !isNaN(d.getTime())) return d;
+              }
+            } catch (e) {
+              // ignore
+            }
+
+            // objects that implement toISOString()
+            try {
+              if (typeof (v as any).toISOString === 'function') {
+                const d = new Date((v as any).toISOString());
+                if (!isNaN(d.getTime())) return d;
+              }
+            } catch (e) {
+              // ignore
+            }
+
+            if (typeof (v as any).seconds === 'number') {
+              // seconds since epoch
+              const d = new Date((v as any).seconds * 1000);
+              if (!isNaN(d.getTime())) return d;
+            }
+
+            // last resort: try Date constructor with the object coerced to string
+            const d = new Date(String(v));
+            return isNaN(d.getTime()) ? null : d;
+          }
+          return null;
+        };
+
+        const normalizeFields = ['startTime', 'endTime', 'deliveryDate', 'createdAt', 'updatedAt'];
+        for (const f of normalizeFields) {
+          const v = (session as any)[f];
+          const coerced = coerceToDate(v);
+          if (coerced) {
+            (session as any)[f] = coerced;
+          } else {
+            // fallback behavior: required timestamps -> now, optional -> null
+            if (v === undefined) continue; // leave undefined if not provided
+            if (f === 'startTime' || f === 'endTime') {
+              (session as any)[f] = new Date();
+            } else {
+              (session as any)[f] = null as any;
+            }
+          }
+        }
+      } catch (normErr) {
+        console.error('Timestamp normalization failed:', normErr);
+      }
+      // Debug: single-line marker with normalized types/values for easier log parsing
+      try {
+        const inspectFields = ['startTime', 'endTime', 'deliveryDate', 'createdAt', 'updatedAt'];
+        const parts: string[] = [];
+        for (const f of inspectFields) {
+          const v = (session as any)[f];
+          const t = v === undefined ? 'undefined' : (v && v.constructor ? v.constructor.name : typeof v);
+          const val = v instanceof Date ? v.toISOString() : (v === undefined ? 'null' : String(v));
+          parts.push(`${f}=${t}:${val}`);
+        }
+        console.error(`STORAGE_DIAG_SINGLELINE | sessionId=${(session as any).id || ''} | ${parts.join(' | ')}`);
+      } catch (e) {
+        console.error('STORAGE DIAG failed:', e);
+      }
+
+  const result = await db.insert(photographySessions).values(session as any).returning();
+      return result[0];
+    } catch (err) {
+      console.error('createPhotographySession insert error:', err);
+      throw err;
+    }
   }
 
   async updatePhotographySession(id: string, updates: Partial<PhotographySession>): Promise<PhotographySession> {
@@ -351,7 +461,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createGallery(gallery: InsertGallery): Promise<Gallery> {
-    const result = await db.insert(galleries).values(gallery).returning();
+  const result = await db.insert(galleries).values(gallery as any).returning();
     return result[0];
   }
 
@@ -406,7 +516,7 @@ export class DatabaseStorage implements IStorage {
       invoice.invoiceNumber = `${currentYear}-${String(nextNumber).padStart(4, '0')}`;
     }
     
-    const result = await db.insert(crmInvoices).values(invoice).returning();
+  const result = await db.insert(crmInvoices).values(invoice as any).returning();
     return result[0];
   }
 
@@ -426,7 +536,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCrmInvoiceItems(items: InsertCrmInvoiceItem[]): Promise<CrmInvoiceItem[]> {
-    const result = await db.insert(crmInvoiceItems).values(items).returning();
+  const result = await db.insert(crmInvoiceItems).values(items as any).returning();
     return result;
   }
 
@@ -438,7 +548,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCrmInvoicePayment(payment: InsertCrmInvoicePayment): Promise<CrmInvoicePayment> {
-    const result = await db.insert(crmInvoicePayments).values(payment).returning();
+  const result = await db.insert(crmInvoicePayments).values(payment as any).returning();
     return result[0];
   }
 
@@ -457,7 +567,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCrmMessage(message: InsertCrmMessage): Promise<CrmMessage> {
-    const results = await db.insert(crmMessages).values(message).returning();
+  const results = await db.insert(crmMessages).values(message as any).returning();
     return results[0];
   }
 
@@ -484,7 +594,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createVoucherProduct(product: InsertVoucherProduct): Promise<VoucherProduct> {
-    const results = await db.insert(voucherProducts).values(product).returning();
+  const results = await db.insert(voucherProducts).values(product as any).returning();
     return results[0];
   }
 
@@ -516,7 +626,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDiscountCoupon(coupon: InsertDiscountCoupon): Promise<DiscountCoupon> {
-    const results = await db.insert(discountCoupons).values(coupon).returning();
+  const results = await db.insert(discountCoupons).values(coupon as any).returning();
     return results[0];
   }
 
@@ -548,7 +658,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createVoucherSale(sale: InsertVoucherSale): Promise<VoucherSale> {
-    const results = await db.insert(voucherSales).values(sale).returning();
+  const results = await db.insert(voucherSales).values(sale as any).returning();
     return results[0];
   }
 
@@ -570,7 +680,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCouponUsage(usage: InsertCouponUsage): Promise<CouponUsage> {
-    const results = await db.insert(couponUsage).values(usage).returning();
+  const results = await db.insert(couponUsage).values(usage as any).returning();
     return results[0];
   }
 

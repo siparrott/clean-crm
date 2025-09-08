@@ -1,0 +1,19 @@
+📊 Database: Neon connection (Supabase-free architecture)
+✅ Stripe initialized in routes
+� Starting New Age Fotografie CRM server...
+✅ Email service initialized
+✅ SMS service initialized with vonage from database
+✅ SMS service initialized
+✅ Database connection verified
+✅ New Age Fotografie CRM successfully started on 127.0.0.1:10000
+Environment: development
+Working directory: D:\TogNina NewAge v.2. Github 007\clean-crm
+Demo mode: false
+Database URL configured: true
+Email queue check - direct sending active
+Email queue check - direct sending active
+Email queue check - direct sending active
+Email queue check - direct sending active
+Email queue check - direct sending active
+Email queue check - direct sending active
+Email queue check - direct sending active

@@ -3410,8 +3410,9 @@ Bitte versuchen Sie es später noch einmal.`;
         return res.status(400).json({ error: 'No iCal content provided' });
       }
 
-      // Parse iCal content and convert to photography sessions
-      const importedEvents = parseICalContent(icsContent);
+  // Parse iCal content and convert to photography sessions
+  const importedEvents = parseICalContent(icsContent);
+  console.log('Imported events parsed from URL:', importedEvents.length, 'sample:', importedEvents[0] ? { summary: importedEvents[0].summary, dtstart: importedEvents[0].dtstart, dtend: importedEvents[0].dtend } : null);
       let importedCount = 0;
 
       for (const event of importedEvents) {
@@ -3423,8 +3424,9 @@ Bitte versuchen Sie es später noch einmal.`;
             description: event.description || '',
             sessionType: 'imported',
             status: 'confirmed',
-            startTime: event.dtstart,
-            endTime: event.dtend,
+            // Ensure timestamps are Date objects for Drizzle/pg driver
+            startTime: event.dtstart ? new Date(event.dtstart) : new Date(),
+            endTime: event.dtend ? new Date(event.dtend) : new Date(),
             locationName: event.location || '',
             locationAddress: event.location || '',
             clientName: extractClientFromDescription(event.description || event.summary || ''),
@@ -3451,10 +3453,49 @@ Bitte versuchen Sie es später noch einmal.`;
             priority: 'medium',
             isPublic: false,
             photographerId: 'imported',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            createdAt: new Date(),
+            updatedAt: new Date()
           };
 
+          // Debug: log runtime types for timestamp-like fields before insert
+          try {
+            const timestampFields = ['startTime', 'endTime', 'createdAt', 'updatedAt'];
+            const types: any = {};
+            for (const f of timestampFields) {
+              const v = (session as any)[f];
+              types[f] = v === undefined ? 'undefined' : (v && v.constructor ? v.constructor.name : typeof v);
+            }
+            console.log('DEBUG import session types:', { summary: event.summary, uid: event.uid, types });
+          } catch (logErr) {
+            console.error('Failed to log session types for import event:', logErr);
+          }
+
+          // Diagnostic: print types and small snapshot to stderr so we can capture offending values in server.err
+            try {
+            // Single-line marker for log search
+            const diagFields = ['startTime', 'endTime', 'createdAt', 'updatedAt', 'deliveryDate'];
+            const diagParts: string[] = [];
+            for (const f of diagFields) {
+              const v = (session as any)[f];
+              const t = v === undefined ? 'undefined' : (v && v.constructor ? v.constructor.name : typeof v);
+              const val = v instanceof Date ? v.toISOString() : (v === undefined ? 'null' : String(v));
+              diagParts.push(`${f}=${t}:${val}`);
+            }
+            console.error(`IMPORT_DIAG_SINGLELINE | summary=${event.summary || ''} | uid=${event.uid || ''} | ${diagParts.join(' | ')}`);
+          } catch (diagErr) {
+            console.error('IMPORT DIAG failed:', diagErr);
+          }
+
+          // Log a compact session preview before attempting insert
+          try {
+            const previewParts: string[] = [];
+            ['startTime','endTime','createdAt','updatedAt','deliveryDate'].forEach((k) => {
+              const v = (session as any)[k];
+              const t = v === undefined ? 'undefined' : (v && v.constructor ? v.constructor.name : typeof v);
+              previewParts.push(`${k}=${t}`);
+            });
+            console.error(`IMPORT_BEFORE_INSERT | summary=${event.summary || ''} | uid=${event.uid || ''} | ${previewParts.join(' | ')}`);
+          } catch (e) { console.error('Failed logging pre-insert session preview', e); }
           await storage.createPhotographySession(session);
           importedCount++;
         } catch (error) {
@@ -3492,6 +3533,17 @@ Bitte versuchen Sie es später noch einmal.`;
 
       const icsContent = await response.text();
 
+      // Persist raw iCal content snapshot synchronously for debugging (write to OS temp dir)
+      try {
+        const tmpDir = process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp';
+        const rawPath = path.join(tmpDir, 'clean-crm-debug_ics_content.log');
+        const header = `==== ICS SNAPSHOT ${new Date().toISOString()} URL: ${icsUrl} LENGTH: ${icsContent.length} ====`;
+        fs.appendFileSync(rawPath, header + '\n' + icsContent.substring(0, 2000) + '\n\n', { encoding: 'utf8' });
+        console.error(`WROTE_ICS_SNAPSHOT | path=${rawPath} | len=${icsContent.length}`);
+      } catch (e) {
+        console.error('Failed to write ICS content snapshot:', e);
+      }
+
       // Parse iCal content and convert to photography sessions
       const importedEvents = parseICalContent(icsContent);
       let importedCount = 0;
@@ -3505,8 +3557,9 @@ Bitte versuchen Sie es später noch einmal.`;
             description: event.description || '',
             sessionType: 'imported',
             status: 'confirmed',
-            startTime: event.dtstart,
-            endTime: event.dtend,
+            // Ensure timestamps are Date objects for Drizzle/pg driver
+            startTime: event.dtstart ? new Date(event.dtstart) : new Date(),
+            endTime: event.dtend ? new Date(event.dtend) : new Date(),
             locationName: event.location || '',
             locationAddress: event.location || '',
             clientName: extractClientFromDescription(event.description || event.summary || ''),
@@ -3533,9 +3586,38 @@ Bitte versuchen Sie es später noch einmal.`;
             priority: 'medium',
             isPublic: false,
             photographerId: 'imported',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            createdAt: new Date(),
+            updatedAt: new Date()
           };
+
+          // Synchronous debug snapshot to capture payload exactly before DB insert (write to OS temp dir)
+          try {
+            const tmpDir = process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp';
+            const debugPath = path.join(tmpDir, 'clean-crm-debug_import_snapshot.log');
+            const snapshot = {
+              timestamp: new Date().toISOString(),
+              eventSummary: event.summary,
+              sessionPreview: {
+                startTimeType: typeof session.startTime,
+                startTimeConstructor: session.startTime && session.startTime.constructor ? session.startTime.constructor.name : null,
+                startTimeValue: session.startTime && session.startTime.toString ? session.startTime.toString() : String(session.startTime),
+                endTimeType: typeof session.endTime,
+                endTimeConstructor: session.endTime && session.endTime.constructor ? session.endTime.constructor.name : null,
+                endTimeValue: session.endTime && session.endTime.toString ? session.endTime.toString() : String(session.endTime),
+                createdAtType: typeof session.createdAt,
+                createdAtConstructor: session.createdAt && session.createdAt.constructor ? session.createdAt.constructor.name : null,
+                createdAtValue: session.createdAt && session.createdAt.toString ? session.createdAt.toString() : String(session.createdAt),
+                updatedAtType: typeof session.updatedAt,
+                updatedAtConstructor: session.updatedAt && session.updatedAt.constructor ? session.updatedAt.constructor.name : null,
+                updatedAtValue: session.updatedAt && session.updatedAt.toString ? session.updatedAt.toString() : String(session.updatedAt),
+              }
+            };
+            fs.appendFileSync(debugPath, JSON.stringify(snapshot) + '\n', { encoding: 'utf8' });
+            console.error(`WROTE_IMPORT_SNAPSHOT | path=${debugPath} | summary=${String(event.summary).slice(0,80)}`);
+          } catch (dbgErr) {
+            // Ensure debug failure doesn't stop import
+            console.error('Failed to write debug snapshot:', dbgErr);
+          }
 
           await storage.createPhotographySession(session);
           importedCount++;

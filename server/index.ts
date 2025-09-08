@@ -186,8 +186,9 @@ app.use((req, res, next) => {
     }
 
     // Heroku provides the PORT, use it exactly as provided
-    const port = parseInt(process.env.PORT || '10000', 10);
-    const host = "0.0.0.0";
+  const port = parseInt(process.env.PORT || '10000', 10);
+  // Prefer explicit localhost for local dev to avoid IPv6/0.0.0.0 reachability issues
+  const host = process.env.HOST || '127.0.0.1';
 
     server.listen(port, host, () => {
       console.log(`✅ New Age Fotografie CRM successfully started on ${host}:${port}`);

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db';
-import { photography_sessions } from '../../shared/schema';
+import { photographySessions } from '../../shared/schema';
 import { eq, desc, asc, and, gte, lte, like } from 'drizzle-orm';
 
 const router = Router();
@@ -18,42 +18,42 @@ router.get('/sessions', async (req, res) => {
     } = req.query;
 
     let query = db.select({
-      id: photography_sessions.id,
-      client_id: photography_sessions.client_id,
-      session_type: photography_sessions.session_type,
-      session_date: photography_sessions.session_date,
-      duration_minutes: photography_sessions.duration_minutes,
-      location: photography_sessions.location,
-      notes: photography_sessions.notes,
-      price: photography_sessions.price,
-      deposit_required: photography_sessions.deposit_required,
-      equipment_needed: photography_sessions.equipment_needed,
-      status: photography_sessions.status,
-      created_at: photography_sessions.created_at,
-      updated_at: photography_sessions.updated_at
-    }).from(photography_sessions);
+      id: photographySessions.id,
+      clientId: photographySessions.clientId,
+      sessionType: photographySessions.sessionType,
+      startTime: photographySessions.startTime,
+      endTime: photographySessions.endTime,
+      locationName: photographySessions.locationName,
+      notes: photographySessions.notes,
+      basePrice: photographySessions.basePrice,
+      depositAmount: photographySessions.depositAmount,
+      equipmentList: photographySessions.equipmentList,
+      status: photographySessions.status,
+      createdAt: photographySessions.createdAt,
+      updatedAt: photographySessions.updatedAt
+    }).from(photographySessions);
 
     // Apply filters
     const conditions = [];
     
     if (start_date) {
-      conditions.push(gte(photography_sessions.session_date, new Date(start_date as string)));
+      conditions.push(gte(photographySessions.startTime, new Date(start_date as string)));
     }
     
     if (end_date) {
-      conditions.push(lte(photography_sessions.session_date, new Date(end_date as string)));
+      conditions.push(lte(photographySessions.startTime, new Date(end_date as string)));
     }
     
     if (client_id) {
-      conditions.push(eq(photography_sessions.client_id, client_id as string));
+      conditions.push(eq(photographySessions.clientId, client_id as string));
     }
     
     if (session_type) {
-      conditions.push(eq(photography_sessions.session_type, session_type as any));
+      conditions.push(eq(photographySessions.sessionType, session_type as any));
     }
     
     if (status) {
-      conditions.push(eq(photography_sessions.status, status as any));
+      conditions.push(eq(photographySessions.status, status as any));
     }
 
     if (conditions.length > 0) {
@@ -61,7 +61,7 @@ router.get('/sessions', async (req, res) => {
     }
 
     const sessions = await query
-      .orderBy(asc(photography_sessions.session_date))
+      .orderBy(asc(photographySessions.startTime))
       .limit(parseInt(limit as string));
 
     res.json(sessions);
@@ -94,22 +94,22 @@ router.post('/sessions', async (req, res) => {
     }
 
     const sessionId = crypto.randomUUID();
-    
-    const [newSession] = await db.insert(photography_sessions).values({
+
+    const [newSession] = await db.insert(photographySessions).values({
       id: sessionId,
-      client_id,
-      session_type,
-      session_date: new Date(session_date),
-      duration_minutes,
-      location,
+      clientId: client_id,
+      sessionType: session_type,
+      startTime: new Date(session_date),
+      endTime: new Date(new Date(session_date).getTime() + (duration_minutes || 120) * 60000),
+      locationName: location,
       notes,
-      price,
-      deposit_required,
-      equipment_needed: JSON.stringify(equipment_needed),
+      basePrice: price,
+      depositAmount: deposit_required,
+      equipmentList: equipment_needed,
       status: 'CONFIRMED',
-      created_at: new Date(),
-      updated_at: new Date()
-    }).returning();
+      createdAt: new Date(),
+      updatedAt: new Date()
+    } as any).returning();
 
     res.status(201).json(newSession);
   } catch (error) {
@@ -129,21 +129,23 @@ router.put('/sessions/:id', async (req, res) => {
     
     // Convert session_date if provided
     if (updateData.session_date) {
-      updateData.session_date = new Date(updateData.session_date);
+      updateData.startTime = new Date(updateData.session_date as string);
+      delete updateData.session_date;
     }
     
     // Convert equipment_needed to JSON string if provided
     if (updateData.equipment_needed && Array.isArray(updateData.equipment_needed)) {
-      updateData.equipment_needed = JSON.stringify(updateData.equipment_needed);
+      updateData.equipmentList = updateData.equipment_needed;
+      delete updateData.equipment_needed;
     }
     
     // Set updated timestamp
-    updateData.updated_at = new Date();
+  updateData.updatedAt = new Date();
 
     const [updatedSession] = await db
-      .update(photography_sessions)
-      .set(updateData)
-      .where(eq(photography_sessions.id, id))
+      .update(photographySessions)
+      .set(updateData as any)
+      .where(eq(photographySessions.id, id))
       .returning();
 
     if (!updatedSession) {
@@ -164,14 +166,14 @@ router.delete('/sessions/:id', async (req, res) => {
     const { cancellation_reason, refund_amount = 0 } = req.body;
 
     const [cancelledSession] = await db
-      .update(photography_sessions)
+      .update(photographySessions)
       .set({
         status: 'CANCELLED',
         cancellation_reason,
         refund_amount,
-        updated_at: new Date()
-      })
-      .where(eq(photography_sessions.id, id))
+        updatedAt: new Date()
+      } as any)
+      .where(eq(photographySessions.id, id))
       .returning();
 
     if (!cancelledSession) {
@@ -200,29 +202,30 @@ router.get('/availability', async (req, res) => {
     // Get existing sessions for the date
     const existingSessions = await db
       .select({
-        session_date: photography_sessions.session_date,
-        duration_minutes: photography_sessions.duration_minutes
+        startTime: photographySessions.startTime,
+        endTime: photographySessions.endTime
       })
-      .from(photography_sessions)
+      .from(photographySessions)
       .where(
         and(
-          gte(photography_sessions.session_date, new Date(date as string)),
-          lte(photography_sessions.session_date, new Date(`${date} 23:59:59`)),
-          eq(photography_sessions.status, 'CONFIRMED')
+          gte(photographySessions.startTime, new Date(date as string)),
+          lte(photographySessions.startTime, new Date(`${date} 23:59:59`)),
+          eq(photographySessions.status, 'CONFIRMED')
         )
       )
-      .orderBy(asc(photography_sessions.session_date));
+      .orderBy(asc(photographySessions.startTime));
 
     // Define working hours (9 AM to 6 PM)
     const workingHours = { start: 9, end: 18 };
     const requestedDuration = parseInt(duration_minutes as string);
 
     const availableSlots = [];
-    const bookedSlots = existingSessions.map(session => {
-      const sessionDate = new Date(session.session_date);
+    const bookedSlots = existingSessions.map((session: any) => {
+      const start = new Date(session.startTime as string);
+      const end = new Date(session.endTime as string);
       return {
-        start: sessionDate.getHours() + (sessionDate.getMinutes() / 60),
-        end: sessionDate.getHours() + (sessionDate.getMinutes() / 60) + (session.duration_minutes / 60)
+        start: start.getHours() + (start.getMinutes() / 60),
+        end: end.getHours() + (end.getMinutes() / 60)
       };
     });
 

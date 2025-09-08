@@ -30,8 +30,9 @@ const InboxSettings: React.FC<InboxSettingsProps> = ({
       provider: 'smtp',
       smtpHost: 'smtp.easyname.com',
       smtpPort: '465',
-      username: '',
-      password: '',
+      // Restoring hard-coded business mailbox credentials as requested
+      username: '30840mail10',
+      password: 'HoveBN41!',
       useTLS: true,
       syncEnabled: true,
       syncInterval: 5

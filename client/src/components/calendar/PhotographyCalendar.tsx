@@ -35,6 +35,28 @@ interface CalendarViewProps {
   onCreateSession: () => void;
 }
 
+export const getSessionTypeColor = (sessionType: string) => {
+  const colors = {
+    'wedding': 'bg-pink-100 border-pink-300 text-pink-800',
+    'portrait': 'bg-blue-100 border-blue-300 text-blue-800',
+    'commercial': 'bg-green-100 border-green-300 text-green-800',
+    'event': 'bg-purple-100 border-purple-300 text-purple-800',
+    'family': 'bg-orange-100 border-orange-300 text-orange-800',
+    'fashion': 'bg-indigo-100 border-indigo-300 text-indigo-800',
+  };
+  return colors[sessionType as keyof typeof colors] || 'bg-gray-100 border-gray-300 text-gray-800';
+};
+
+export const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'completed': return <CheckCircle className="w-3 h-3 text-green-600" />;
+    case 'in-progress': return <Camera className="w-3 h-3 text-blue-600" />;
+    case 'scheduled': return <Clock className="w-3 h-3 text-orange-600" />;
+    case 'cancelled': return <AlertTriangle className="w-3 h-3 text-red-600" />;
+    default: return <Clock className="w-3 h-3 text-gray-600" />;
+  }
+};
+
 const CalendarView: React.FC<CalendarViewProps> = ({ sessions, onSessionClick, onCreateSession }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -47,28 +69,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({ sessions, onSessionClick, o
     return sessions.filter(session => 
       isSameDay(parseISO(session.startTime), date)
     );
-  };
-
-  const getSessionTypeColor = (sessionType: string) => {
-    const colors = {
-      'wedding': 'bg-pink-100 border-pink-300 text-pink-800',
-      'portrait': 'bg-blue-100 border-blue-300 text-blue-800',
-      'commercial': 'bg-green-100 border-green-300 text-green-800',
-      'event': 'bg-purple-100 border-purple-300 text-purple-800',
-      'family': 'bg-orange-100 border-orange-300 text-orange-800',
-      'fashion': 'bg-indigo-100 border-indigo-300 text-indigo-800',
-    };
-    return colors[sessionType as keyof typeof colors] || 'bg-gray-100 border-gray-300 text-gray-800';
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle className="w-3 h-3 text-green-600" />;
-      case 'in-progress': return <Camera className="w-3 h-3 text-blue-600" />;
-      case 'scheduled': return <Clock className="w-3 h-3 text-orange-600" />;
-      case 'cancelled': return <AlertTriangle className="w-3 h-3 text-red-600" />;
-      default: return <Clock className="w-3 h-3 text-gray-600" />;
-    }
   };
 
   return (
@@ -236,11 +236,10 @@ const TimelineView: React.FC<CalendarViewProps> = ({ sessions, onSessionClick, o
         {sortedSessions.map(session => (
           <Card
             key={session.id}
-            className="cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => onSessionClick(session)}
+            className="hover:shadow-md transition-shadow"
           >
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between cursor-pointer" onClick={() => onSessionClick(session)}>
                 <div className="flex-1">
                   <div className="flex items-center space-x-3">
                     <Badge variant="outline" className={getSessionTypeColor(session.sessionType)}>
