@@ -3539,6 +3539,13 @@ Bitte versuchen Sie es später noch einmal.`;
           let importedCount = 0;
           for (const event of importedEvents) {
             try {
+              // Helper function to safely create date
+              const safeCreateDate = (dateString: string | undefined): Date => {
+                if (!dateString) return new Date();
+                const date = new Date(dateString);
+                return isNaN(date.getTime()) ? new Date() : date;
+              };
+
               const session = {
                 id: `imported-${(event.uid || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`,
                 icalUid: event.uid || undefined,
@@ -3546,8 +3553,8 @@ Bitte versuchen Sie es später noch einmal.`;
                 description: event.description || '',
                 sessionType: 'imported',
                 status: 'confirmed',
-                startTime: event.dtstart ? new Date(event.dtstart) : new Date(),
-                endTime: event.dtend ? new Date(event.dtend) : new Date(),
+                startTime: safeCreateDate(event.dtstart),
+                endTime: safeCreateDate(event.dtend),
                 locationName: event.location || '',
                 locationAddress: event.location || '',
                 clientName: extractClientFromDescription(event.description || event.summary || ''),
@@ -3630,6 +3637,13 @@ Bitte versuchen Sie es später noch einmal.`;
 
       for (const event of importedEvents) {
         try {
+          // Helper function to safely create date
+          const safeCreateDate = (dateString: string | undefined): Date => {
+            if (!dateString) return new Date();
+            const date = new Date(dateString);
+            return isNaN(date.getTime()) ? new Date() : date;
+          };
+
           // Create photography session from calendar event
           const session = {
             id: `imported-${(event.uid || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`,
@@ -3638,9 +3652,9 @@ Bitte versuchen Sie es später noch einmal.`;
             description: event.description || '',
             sessionType: 'imported',
             status: 'confirmed',
-            // Ensure timestamps are Date objects for Drizzle/pg driver
-            startTime: event.dtstart ? new Date(event.dtstart) : new Date(),
-            endTime: event.dtend ? new Date(event.dtend) : new Date(),
+            // Ensure timestamps are valid Date objects for Drizzle/pg driver
+            startTime: safeCreateDate(event.dtstart),
+            endTime: safeCreateDate(event.dtend),
             locationName: event.location || '',
             locationAddress: event.location || '',
             clientName: extractClientFromDescription(event.description || event.summary || ''),
@@ -3827,6 +3841,13 @@ Bitte versuchen Sie es später noch einmal.`;
 
       for (const event of importedEvents) {
         try {
+          // Helper function to safely create date
+          const safeCreateDate = (dateString: string | undefined): Date => {
+            if (!dateString) return new Date();
+            const date = new Date(dateString);
+            return isNaN(date.getTime()) ? new Date() : date;
+          };
+
           // Create photography session from calendar event
           const session = {
             id: `imported-${(event.uid || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`,
@@ -3835,9 +3856,9 @@ Bitte versuchen Sie es später noch einmal.`;
             description: event.description || '',
             sessionType: 'imported',
             status: 'confirmed',
-            // Ensure timestamps are Date objects for Drizzle/pg driver
-            startTime: event.dtstart ? new Date(event.dtstart) : new Date(),
-            endTime: event.dtend ? new Date(event.dtend) : new Date(),
+            // Ensure timestamps are valid Date objects for Drizzle/pg driver
+            startTime: safeCreateDate(event.dtstart),
+            endTime: safeCreateDate(event.dtend),
             locationName: event.location || '',
             locationAddress: event.location || '',
             clientName: extractClientFromDescription(event.description || event.summary || ''),

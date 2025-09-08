@@ -328,7 +328,14 @@ export class DatabaseStorage implements IStorage {
         for (const f of inspectFields) {
           const v = (session as any)[f];
           const t = v === undefined ? 'undefined' : (v && v.constructor ? v.constructor.name : typeof v);
-          const val = v instanceof Date ? v.toISOString() : (v === undefined ? 'null' : String(v));
+          let val: string;
+          if (v instanceof Date) {
+            val = isNaN(v.getTime()) ? 'InvalidDate' : v.toISOString();
+          } else if (v === undefined) {
+            val = 'null';
+          } else {
+            val = String(v);
+          }
           parts.push(`${f}=${t}:${val}`);
         }
     const line = `DEBUG_LOG | sessionId=${(session as any).id || ''} | ${parts.join(' | ')}\n`;
@@ -345,7 +352,9 @@ export class DatabaseStorage implements IStorage {
       try {
         const coerceToDate = (v: any): Date | null => {
           if (v === undefined || v === null) return null;
-          if (v instanceof Date) return v;
+          if (v instanceof Date) {
+            return isNaN(v.getTime()) ? null : v;
+          }
           if (typeof v === 'number') {
             const d = new Date(v);
             return isNaN(d.getTime()) ? null : d;
@@ -383,8 +392,12 @@ export class DatabaseStorage implements IStorage {
             }
 
             // last resort: try Date constructor with the object coerced to string
-            const d = new Date(String(v));
-            return isNaN(d.getTime()) ? null : d;
+            try {
+              const d = new Date(String(v));
+              return isNaN(d.getTime()) ? null : d;
+            } catch (e) {
+              return null;
+            }
           }
           return null;
         };
@@ -415,7 +428,14 @@ export class DatabaseStorage implements IStorage {
         for (const f of inspectFields) {
           const v = (session as any)[f];
           const t = v === undefined ? 'undefined' : (v && v.constructor ? v.constructor.name : typeof v);
-          const val = v instanceof Date ? v.toISOString() : (v === undefined ? 'null' : String(v));
+          let val: string;
+          if (v instanceof Date) {
+            val = isNaN(v.getTime()) ? 'InvalidDate' : v.toISOString();
+          } else if (v === undefined) {
+            val = 'null';
+          } else {
+            val = String(v);
+          }
           parts.push(`${f}=${t}:${val}`);
         }
         console.error(`STORAGE_DIAG_SINGLELINE | sessionId=${(session as any).id || ''} | ${parts.join(' | ')}`);

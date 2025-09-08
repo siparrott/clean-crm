@@ -302,6 +302,7 @@ class StudioCalendarService {
    */
   static async getAppointments(startDate: Date, endDate: Date): Promise<any[]> {
     try {
+      // Get studio appointments
       const appointments = await db
         .select({
           id: studioAppointments.id,
@@ -334,7 +335,45 @@ class StudioCalendarService {
         )
         .orderBy(studioAppointments.startDateTime);
 
-      return appointments;
+      // Also get imported photography sessions and format them as appointments
+      const { photographySessions } = await import('@shared/schema');
+      const sessions = await db
+        .select({
+          id: photographySessions.id,
+          clientId: photographySessions.clientId,
+          title: photographySessions.title,
+          description: photographySessions.description,
+          appointmentType: photographySessions.sessionType,
+          status: photographySessions.status,
+          startDateTime: photographySessions.startTime,
+          endDateTime: photographySessions.endTime,
+          location: photographySessions.locationName,
+          notes: photographySessions.notes,
+          reminderSent: photographySessions.reminderSent,
+          reminderDateTime: photographySessions.startTime, // Use start time as reminder placeholder
+          googleCalendarEventId: photographySessions.icalUid,
+          createdAt: photographySessions.createdAt,
+          // Client information from session data
+          clientName: photographySessions.clientName,
+          clientLastName: photographySessions.clientEmail, // Use email as last name placeholder
+          clientEmail: photographySessions.clientEmail,
+          clientPhone: photographySessions.clientPhone,
+        })
+        .from(photographySessions)
+        .where(
+          and(
+            gte(photographySessions.startTime, startDate),
+            lte(photographySessions.startTime, endDate)
+          )
+        )
+        .orderBy(photographySessions.startTime);
+
+      // Combine and sort all appointments/sessions
+      const allAppointments = [...appointments, ...sessions].sort((a, b) => 
+        new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime()
+      );
+
+      return allAppointments;
 
     } catch (error) {
       console.error('❌ Failed to get appointments:', error);
