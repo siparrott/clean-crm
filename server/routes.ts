@@ -1636,6 +1636,59 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
+  // ==================== CRM LEADS ====================
+  app.get("/api/crm/leads", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const status = (req.query.status as string) || undefined;
+      const leads = await storage.getCrmLeads(status);
+      res.json(leads);
+    } catch (error) {
+      console.error('Error fetching leads:', error);
+      res.status(404).json({ error: 'Leads not found' });
+    }
+  });
+
+  app.get("/api/crm/leads/:id", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const lead = await storage.getCrmLead(req.params.id);
+      if (!lead) return res.status(404).json({ error: 'Lead not found' });
+      res.json(lead);
+    } catch (error) {
+      console.error('Error fetching lead:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.post("/api/crm/leads", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const created = await storage.createCrmLead(req.body);
+      res.status(201).json(created);
+    } catch (error) {
+      console.error('Error creating lead:', error);
+      res.status(500).json({ error: (error as Error).message || 'Failed to create lead' });
+    }
+  });
+
+  app.put("/api/crm/leads/:id", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const updated = await storage.updateCrmLead(req.params.id, req.body);
+      res.json(updated);
+    } catch (error) {
+      console.error('Error updating lead:', error);
+      res.status(500).json({ error: (error as Error).message || 'Failed to update lead' });
+    }
+  });
+
+  app.delete("/api/crm/leads/:id", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      await storage.deleteCrmLead(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting lead:', error);
+      res.status(500).json({ error: 'Failed to delete lead' });
+    }
+  });
+
   app.get("/api/crm/clients/:id", authenticateUser, async (req: Request, res: Response) => {
     console.log(`/api/crm/clients/${req.params.id} GET received`);
     try {
@@ -3305,7 +3358,36 @@ Bitte versuchen Sie es später noch einmal.`;
       }
     } catch (error) {
       console.error("Error fetching inbox emails:", error);
-      res.status(500).json({ error: "Internal server error" });
+      // Fail-open to avoid blocking dashboard if storage fails
+      res.json([]);
+    }
+  });
+
+  // ==================== ADMIN DASHBOARD ====================
+  app.get("/api/admin/dashboard-stats", authenticateUser, async (_req: Request, res: Response) => {
+    const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+      try { return await fn(); } catch { return fallback; }
+    };
+    const countOf = async (arrPromise: Promise<any[]>) => (await safe(() => arrPromise, [])).length;
+
+    try {
+      const [sessionsCount, clientsCount, leadsCount] = await Promise.all([
+        countOf(storage.getPhotographySessions()),
+        countOf(storage.getCrmClients()),
+        countOf(storage.getCrmLeads('new'))
+      ]);
+
+      res.json({
+        success: true,
+        metrics: {
+          sessions: sessionsCount,
+          clients: clientsCount,
+          newLeads: leadsCount,
+        }
+      });
+    } catch (error) {
+      console.error('Dashboard stats error:', error);
+      res.json({ success: false, metrics: { sessions: 0, clients: 0, newLeads: 0 } });
     }
   });
 
@@ -3555,8 +3637,8 @@ Bitte versuchen Sie es später noch einmal.`;
       });
 
     } catch (error) {
-      console.error("Error importing iCal file:", error);
-      res.status(500).json({ error: "Failed to parse iCal file" });
+  console.error("Error importing iCal file:", error);
+  res.status(500).json({ error: "Failed to parse iCal file", details: (error as Error)?.message });
     }
   });
 
@@ -3678,8 +3760,8 @@ Bitte versuchen Sie es später noch einmal.`;
       });
 
     } catch (error) {
-      console.error("Error importing from iCal URL:", error);
-      res.status(500).json({ error: "Failed to fetch or parse iCal URL" });
+  console.error("Error importing from iCal URL:", error);
+  res.status(500).json({ error: "Failed to fetch or parse iCal URL", details: (error as Error)?.message });
     }
   });
 
