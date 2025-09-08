@@ -3762,15 +3762,48 @@ Bitte versuchen Sie es später noch einmal.`;
         return res.status(400).json({ error: 'No iCal URL provided' });
       }
 
-      // Fetch iCal content from URL
+      // Fetch iCal content from URL with robust headers and retries
       const fetch = (await import('node-fetch')).default;
-      const response = await fetch(icsUrl);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch calendar: ${response.status}`);
+      const maxAttempts = 3;
+      let attempt = 0;
+      let icsContent = '';
+      let lastStatus = 0;
+      let lastError: any = null;
+      while (attempt < maxAttempts && !icsContent) {
+        attempt++;
+        try {
+          const resp = await fetch(icsUrl, {
+            method: 'GET',
+            redirect: 'follow',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36',
+              'Accept': 'text/calendar, text/plain;q=0.9, */*;q=0.8',
+            },
+          } as any);
+          lastStatus = resp.status;
+          if (!resp.ok) {
+            throw new Error(`Fetch failed with status ${resp.status}`);
+          }
+          const text = await resp.text();
+          // Detect HTML (e.g., Google login page) which indicates the URL is not directly accessible
+          if (/<!DOCTYPE html>|<html[\s>]/i.test(text)) {
+            throw new Error('Received HTML instead of ICS (URL likely not accessible without authentication)');
+          }
+          icsContent = text;
+        } catch (e) {
+          lastError = e;
+          await new Promise(r => setTimeout(r, 300 * attempt));
+        }
       }
 
-      const icsContent = await response.text();
+      if (!icsContent) {
+        const msg = lastError?.message || `Failed to fetch calendar: HTTP ${lastStatus}`;
+        return res.status(502).json({
+          error: 'Failed to fetch iCal content',
+          details: msg,
+          hint: 'If using Google, copy the Secret address in iCal format (private-.../basic.ics). Ensure the link is correct and try again.'
+        });
+      }
 
       // Persist raw iCal content snapshot synchronously for debugging (write to OS temp dir)
       try {
