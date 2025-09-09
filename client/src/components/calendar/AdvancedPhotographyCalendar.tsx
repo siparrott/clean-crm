@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isAfter, isBefore, startOfWeek, endOfWeek, eachHourOfInterval, startOfDay, addDays, startOfYear, endOfYear } from 'date-fns';
 import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Camera, Clock, DollarSign, AlertTriangle, CheckCircle, Star, Sun, Cloud, Users, Filter, Search, Download, Upload, RefreshCw, Settings, Eye, Edit, Trash2, Copy, ExternalLink } from 'lucide-react';
 
@@ -134,6 +135,46 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
       if (found?.name) return found.name;
     }
     return '';
+  };
+
+  const getDisplayClientEmail = (session: PhotographySession) => {
+    if (session.clientEmail && session.clientEmail.trim()) return session.clientEmail;
+    if (session.clientId) {
+      const found = clientById.get(session.clientId);
+      if (found?.email) return found.email;
+    }
+    return '';
+  };
+
+  const initials = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    return (parts[0]?.[0] || '').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
+  };
+
+  const ClientChip: React.FC<{ session: PhotographySession }> = ({ session }) => {
+    const name = getDisplayClientName(session);
+    if (!name) return null;
+    const email = getDisplayClientEmail(session);
+    const id = session.clientId;
+    return (
+      <div className="flex items-center gap-1 truncate opacity-80">
+        <div className="w-4 h-4 rounded-full bg-gray-200 text-[9px] leading-none flex items-center justify-center text-gray-700">
+          {initials(name) || '👤'}
+        </div>
+        {id ? (
+          <Link
+            to={`/admin/clients/${id}`}
+            className="underline hover:text-blue-700 truncate"
+            title={email || name}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {name}
+          </Link>
+        ) : (
+          <span className="truncate" title={email || name}>{name}</span>
+        )}
+      </div>
+    );
   };
 
   // Filter and search sessions
@@ -314,9 +355,7 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                         {getStatusIcon(session.status)}
                       </div>
                     </div>
-                    {getDisplayClientName(session) && (
-                      <div className="text-[10px] opacity-80 truncate">👤 {getDisplayClientName(session)}</div>
-                    )}
+                    <ClientChip session={session} />
                   </div>
                 ))}
               </div>
@@ -397,9 +436,7 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                         onClick={() => onSessionClick(session)}
                       >
                         <div className="font-medium truncate">{session.title}</div>
-                        {getDisplayClientName(session) && (
-                          <div className="opacity-75 truncate">👤 {getDisplayClientName(session)}</div>
-                        )}
+                        <ClientChip session={session} />
                         <div className="flex items-center space-x-1 mt-1">
                           {getPriorityIndicator(session.priority)}
                           {getStatusIcon(session.status)}
@@ -468,9 +505,7 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                     onClick={() => onSessionClick(session)}
                   >
                     <div className="font-medium">{session.title}</div>
-                    {getDisplayClientName(session) && (
-                      <div className="text-sm opacity-75">👤 {getDisplayClientName(session)}</div>
-                    )}
+                    <ClientChip session={session} />
                     <div className="text-sm">{format(startTime, 'HH:mm')} - {format(endTime, 'HH:mm')}</div>
                     <div className="flex items-center space-x-2 mt-1">
                       {getPriorityIndicator(session.priority)}
@@ -600,7 +635,7 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                   {getDisplayClientName(session) && (
                     <div className="flex items-center space-x-2 mb-1">
                       <Users className="w-4 h-4" />
-                      <span>{getDisplayClientName(session)}</span>
+                      <ClientChip session={session} />
                     </div>
                   )}
                   {session.locationName && (
@@ -715,7 +750,9 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                       <div>
                         <div className="font-medium">{session.title}</div>
                         {getDisplayClientName(session) && (
-                          <div className="text-sm text-gray-600">{getDisplayClientName(session)}</div>
+                          <div className="text-sm text-gray-600">
+                            <ClientChip session={session} />
+                          </div>
                         )}
                       </div>
                       <div className="text-sm text-gray-500">
