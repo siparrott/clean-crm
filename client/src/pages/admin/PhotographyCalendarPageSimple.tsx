@@ -117,6 +117,14 @@ const PhotographyCalendarPage: React.FC = () => {
     equipmentConflicts: 0,
   });
 
+  // Map loaded clients to the shape expected by AdvancedPhotographyCalendar (id, name, email)
+  const clientsForCalendar = clients.map(c => ({
+    id: c.id,
+    name: `${c.firstName} ${c.lastName}`.trim(),
+    email: c.email || '',
+    phone: c.phone,
+  }));
+
   useEffect(() => {
     fetchSessions();
     fetchLeadsCount();
@@ -537,7 +545,7 @@ const PhotographyCalendarPage: React.FC = () => {
         {/* Advanced Photography Calendar */}
         <AdvancedPhotographyCalendar 
           sessions={sessions}
-          clients={clients}
+          clients={clientsForCalendar}
           onSessionClick={handleSessionClick}
           onCreateSession={handleCreateSession}
           onUpdateSession={() => {}} // Will be implemented
