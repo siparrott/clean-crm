@@ -4269,55 +4269,64 @@ Bitte versuchen Sie es später noch einmal.`;
         logger: true,
         // Add delivery status tracking
         pool: true,
-        maxConnections: 5,
-        rateDelta: 20000,
-        rateLimit: 10
-      };
-
-      const transporter = nodemailer.createTransport(emailConfig);
-
-      // Verify connection
-      await transporter.verify();
-      console.log('SMTP connection verified successfully');
-
-      // Process attachments for nodemailer
-      const processedAttachments = (attachments || []).map((attachment: any) => ({
-        filename: attachment.filename,
-        content: attachment.content,
-        contentType: attachment.contentType,
-        encoding: attachment.encoding || 'base64'
-      }));
-
-      const mailOptions = {
-        from: 'hallo@newagefotografie.com',
-        to: to,
-        subject: subject,
-        text: body,
-        html: body.replace(/\n/g, '<br>'),
-        attachments: processedAttachments,
-        // Enhanced headers for better deliverability
-        headers: {
-          'X-Mailer': 'New Age Fotografie CRM',
-          'X-Priority': '3',
-          'Reply-To': 'hallo@newagefotografie.com',
-          'Return-Path': 'hallo@newagefotografie.com',
-          'X-Auto-Response-Suppress': 'All',
-          'Precedence': 'bulk'
-        },
-        // Add message tracking
-        messageId: undefined, // Let server generate
-        date: new Date()
-      };
-
-      const info = await transporter.sendMail(mailOptions);
-      
-      console.log('Email sent successfully:', info.messageId);
-      console.log('SMTP Response:', info.response);
-      console.log('Envelope:', info.envelope);
-      console.log('Message sent from:', info.envelope?.from, 'to:', info.envelope?.to);
-      
-      // Save sent email to database for tracking
-      try {
+        try {
+          // Use Europe/Amsterdam as the local time zone
+          const tz = 'Europe/Amsterdam';
+          let cleanDate = dateString.trim();
+          // Google Calendar format: 20131013T100000Z
+          if (cleanDate.includes('T') && cleanDate.endsWith('Z')) {
+            // Remove Z suffix
+            cleanDate = cleanDate.replace('Z', '');
+            const datePart = cleanDate.split('T')[0];
+            const timePart = cleanDate.split('T')[1];
+            if (datePart.length === 8 && timePart.length === 6) {
+              const year = datePart.substring(0, 4);
+              const month = datePart.substring(4, 6);
+              const day = datePart.substring(6, 8);
+              const hour = timePart.substring(0, 2);
+              const minute = timePart.substring(2, 4);
+              const second = timePart.substring(4, 6);
+              // Use luxon for time zone conversion
+              const { DateTime } = require('luxon');
+              const dt = DateTime.fromObject({
+                year: Number(year),
+                month: Number(month),
+                day: Number(day),
+                hour: Number(hour),
+                minute: Number(minute),
+                second: Number(second)
+              }, { zone: 'utc' }).setZone(tz);
+              return dt.toISO();
+            }
+          }
+          // Handle YYYYMMDD format (all-day events)
+          if (cleanDate.length === 8 && !cleanDate.includes('T')) {
+            const year = cleanDate.substring(0, 4);
+            const month = cleanDate.substring(4, 6);
+            const day = cleanDate.substring(6, 8);
+            // All-day events: treat as local date, not UTC
+            const { DateTime } = require('luxon');
+            const dt = DateTime.fromObject({
+              year: Number(year),
+              month: Number(month),
+              day: Number(day),
+              hour: 0,
+              minute: 0,
+              second: 0
+            }, { zone: tz });
+            return dt.toISODate(); // Return YYYY-MM-DD for all-day events
+          }
+          // Fallback: try parsing as local time
+          const { DateTime } = require('luxon');
+          const fallbackDate = DateTime.fromISO(dateString, { zone: tz });
+          if (fallbackDate.isValid) {
+            return fallbackDate.toISO();
+          }
+          // If all else fails, return current local time
+          return DateTime.now().setZone(tz).toISO();
+        } catch (error) {
+          return new Date().toISOString();
+        }
         await storage.createCrmMessage({
           senderName: 'New Age Fotografie (Sent)',
           senderEmail: 'hallo@newagefotografie.com',
