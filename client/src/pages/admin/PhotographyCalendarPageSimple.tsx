@@ -82,6 +82,11 @@ const PhotographyCalendarPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [activeView, setActiveView] = useState('calendar');
   const [showSessionForm, setShowSessionForm] = useState(false);
+  // Lightweight CRM client type for selector
+  type ClientLight = { id: string; firstName: string; lastName: string; email?: string; phone?: string };
+  const [clients, setClients] = useState<ClientLight[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientSearch, setClientSearch] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -89,6 +94,7 @@ const PhotographyCalendarPage: React.FC = () => {
     status: 'scheduled',
     startTime: '',
     endTime: '',
+    clientId: '',
     clientName: '',
     clientEmail: '',
     locationName: '',
@@ -124,6 +130,27 @@ const PhotographyCalendarPage: React.FC = () => {
       }
     } catch (error) {
       // console.log removed
+    }
+  };
+
+  const fetchClients = async () => {
+    try {
+      setClientsLoading(true);
+      const resp = await fetch('/api/crm/clients');
+      if (!resp.ok) return setClients([]);
+      const data = await resp.json();
+      const mapped: ClientLight[] = (Array.isArray(data) ? data : []).map((c: any) => ({
+        id: c.id,
+        firstName: c.first_name ?? c.firstName ?? '',
+        lastName: c.last_name ?? c.lastName ?? '',
+        email: c.email,
+        phone: c.phone,
+      }));
+      setClients(mapped);
+    } catch {
+      setClients([]);
+    } finally {
+      setClientsLoading(false);
     }
   };
 
@@ -200,6 +227,8 @@ const PhotographyCalendarPage: React.FC = () => {
   };
 
   const handleCreateSession = () => {
+  // Load CRM clients when opening the form to enable linking
+  fetchClients();
     setShowSessionForm(true);
   };
 
@@ -233,6 +262,7 @@ const PhotographyCalendarPage: React.FC = () => {
           status: 'scheduled',
           startTime: '',
           endTime: '',
+          clientId: '',
           clientName: '',
           clientEmail: '',
           locationName: '',
@@ -620,12 +650,63 @@ const PhotographyCalendarPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Link to existing CRM client (optional) */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Link Client (optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Search clients by name or email"
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    className="w-full border rounded px-3 py-2 mb-2"
+                  />
+                  <select
+                    value={formData.clientId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      handleInputChange('clientId', val);
+                      const c = clients.find(cl => cl.id === val);
+                      if (c) {
+                        handleInputChange('clientName', `${c.firstName} ${c.lastName}`.trim());
+                        if (c.email) handleInputChange('clientEmail', c.email);
+                      }
+                    }}
+                    className="w-full border rounded px-3 py-2"
+                  >
+                    <option value="">— No linked client —</option>
+                    {(clientsLoading ? [] : clients)
+                      .filter(c => {
+                        const q = clientSearch.trim().toLowerCase();
+                        if (!q) return true;
+                        const full = `${c.firstName} ${c.lastName}`.toLowerCase();
+                        return full.includes(q) || (c.email?.toLowerCase().includes(q) ?? false);
+                      })
+                      .slice(0, 100)
+                      .map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.firstName} {c.lastName}{c.email ? ` — ${c.email}` : ''}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">Selecting a client will auto-fill name and email.</p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Client Name</label>
                   <input
                     type="text"
                     value={formData.clientName}
                     onChange={(e) => handleInputChange('clientName', e.target.value)}
+                    className="w-full border rounded px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Client Email</label>
+                  <input
+                    type="email"
+                    value={formData.clientEmail}
+                    onChange={(e) => handleInputChange('clientEmail', e.target.value)}
                     className="w-full border rounded px-3 py-2"
                   />
                 </div>
