@@ -10,8 +10,24 @@ const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:3000';
 const ICS_URL = process.env.ICS_URL || 'https://calendar.google.com/calendar/ical/newagefotografen%40gmail.com/public/basic.ics';
 const DRY = process.argv.includes('--dry-run') || process.env.DRY_RUN === 'true';
 
+// Parse optional window flags: --from=YYYY-MM-DD, --to=YYYY-MM-DD, --includePast
+function getArg(name) {
+  const prefix = `--${name}=`;
+  const hit = process.argv.find(a => a.startsWith(prefix));
+  return hit ? hit.substring(prefix.length) : undefined;
+}
+const argFrom = getArg('from') || process.env.FROM;
+const argTo = getArg('to') || getArg('until') || process.env.TO || process.env.UNTIL;
+const includePast = process.argv.includes('--includePast') || process.argv.includes('--include-past') || (process.env.INCLUDE_PAST === 'true');
+
 async function main() {
-  const url = `${BASE_URL}/api/calendar/import/ics-url${DRY ? '?dryRun=true' : ''}`;
+  const qp = new URLSearchParams();
+  if (DRY) qp.set('dryRun', 'true');
+  if (includePast) qp.set('includePast', 'true');
+  if (argFrom) qp.set('from', argFrom);
+  if (argTo) qp.set('to', argTo);
+  const qs = qp.toString();
+  const url = `${BASE_URL}/api/calendar/import/ics-url${qs ? `?${qs}` : ''}`;
   const payload = { icsUrl: ICS_URL };
   console.log(`POST ${url}`);
   console.log(`Body:`, payload);

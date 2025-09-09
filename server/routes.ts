@@ -3606,6 +3606,22 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   }
 
+  // Helper: determine optional upper-bound cutoff (to=YYYY-MM-DD in Europe/Vienna)
+  function getImportUpperBoundUtc(req: Request): Date | undefined {
+    try {
+      const to = (req.query.to as string | undefined) || (req.query.until as string | undefined);
+      if (!to || !/\d{4}-\d{2}-\d{2}/.test(to)) return undefined;
+      const tz = process.env.DEFAULT_CAL_TZ || 'Europe/Vienna';
+      // Interpret as end-of-day local time then convert to UTC
+      const localIso = `${to}T23:59:59`;
+      const utcIso = convertLocalToUtcIso(localIso, tz);
+      const d = new Date(utcIso);
+      return isNaN(d.getTime()) ? undefined : d;
+    } catch {
+      return undefined;
+    }
+  }
+
   // ==================== CALENDAR IMPORT ====================
   // Fallback Google import route used by client UI. If an icsUrl is provided,
   // it proxies to the /api/calendar/import/ics-url logic; otherwise it returns
@@ -3636,12 +3652,13 @@ Bitte versuchen Sie es später noch einmal.`;
           const importedEvents = parseICalContent(icsContent);
           // Default to upcoming-only unless includePast=true or a from=YYYY-MM-DD cutoff is provided
           const cutoff = getImportCutoffUtc(req);
+          const upper = getImportUpperBoundUtc(req);
           const eventsToImport = importedEvents.filter(ev => {
             const ds = ev?.dtstart ? new Date(ev.dtstart) : null;
-            return !!(ds && !isNaN(ds.getTime()) && ds >= cutoff);
+            return !!(ds && !isNaN(ds.getTime()) && ds >= cutoff && (!upper || ds <= upper));
           });
           if (dryRun) {
-            return res.json({ success: true, dryRun: true, parsed: importedEvents.length, filtered: eventsToImport.length, cutoff: cutoff.toISOString() });
+            return res.json({ success: true, dryRun: true, parsed: importedEvents.length, filtered: eventsToImport.length, cutoff: cutoff.toISOString(), upper: upper ? upper.toISOString() : null });
           }
 
           let importedCount = 0;
@@ -3702,7 +3719,7 @@ Bitte versuchen Sie es später noch einmal.`;
             }
           }
 
-          return res.json({ success: true, imported: importedCount, via: 'icsUrl', cutoff: cutoff.toISOString() });
+          return res.json({ success: true, imported: importedCount, via: 'icsUrl', cutoff: cutoff.toISOString(), upper: upper ? upper.toISOString() : null });
         } catch (err) {
           return res.status(500).json({ error: 'Failed to import via icsUrl', details: (err as Error)?.message });
         }
@@ -3743,14 +3760,15 @@ Bitte versuchen Sie es später noch einmal.`;
       // Parse iCal content and convert to photography sessions
       const importedEvents = parseICalContent(icsContent);
       const cutoff = getImportCutoffUtc(req);
+      const upper = getImportUpperBoundUtc(req);
       const eventsToImport = importedEvents.filter(ev => {
         const ds = ev?.dtstart ? new Date(ev.dtstart) : null;
-        return !!(ds && !isNaN(ds.getTime()) && ds >= cutoff);
+        return !!(ds && !isNaN(ds.getTime()) && ds >= cutoff && (!upper || ds <= upper));
       });
       const dryRun = String(req.query.dryRun || req.query.dryrun || '').toLowerCase() === 'true';
       if (dryRun) {
-        console.error(`ICS_DRY_RUN | events=${importedEvents.length} | filtered=${eventsToImport.length} | cutoff=${cutoff.toISOString()} | fileName=${fileName || ''}`);
-        return res.json({ success: true, dryRun: true, parsed: importedEvents.length, filtered: eventsToImport.length, cutoff: cutoff.toISOString() });
+        console.error(`ICS_DRY_RUN | events=${importedEvents.length} | filtered=${eventsToImport.length} | cutoff=${cutoff.toISOString()} | upper=${upper ? upper.toISOString() : 'none'} | fileName=${fileName || ''}`);
+        return res.json({ success: true, dryRun: true, parsed: importedEvents.length, filtered: eventsToImport.length, cutoff: cutoff.toISOString(), upper: upper ? upper.toISOString() : null });
       }
       console.log('Imported events parsed from content:', importedEvents.length, 'filtered:', eventsToImport.length, 'cutoff:', cutoff.toISOString(), 'sample:', eventsToImport[0] ? { summary: eventsToImport[0].summary, dtstart: eventsToImport[0].dtstart, dtend: eventsToImport[0].dtend } : null);
       let importedCount = 0;
@@ -3886,7 +3904,8 @@ Bitte versuchen Sie es später noch einmal.`;
       res.json({ 
         success: true, 
         imported: importedCount,
-        cutoff: cutoff.toISOString(),
+  cutoff: cutoff.toISOString(),
+  upper: upper ? upper.toISOString() : null,
         message: `Successfully imported ${importedCount} events from ${fileName}`
       });
 
@@ -3961,14 +3980,15 @@ Bitte versuchen Sie es später noch einmal.`;
       // Parse iCal content and convert to photography sessions
       const importedEvents = parseICalContent(icsContent);
       const cutoff = getImportCutoffUtc(req);
+      const upper = getImportUpperBoundUtc(req);
       const eventsToImport = importedEvents.filter(ev => {
         const ds = ev?.dtstart ? new Date(ev.dtstart) : null;
-        return !!(ds && !isNaN(ds.getTime()) && ds >= cutoff);
+        return !!(ds && !isNaN(ds.getTime()) && ds >= cutoff && (!upper || ds <= upper));
       });
       const dryRun = String(req.query.dryRun || req.query.dryrun || '').toLowerCase() === 'true';
       if (dryRun) {
-        console.error(`ICS_URL_DRY_RUN | events=${importedEvents.length} | filtered=${eventsToImport.length} | cutoff=${cutoff.toISOString()} | url=${icsUrl}`);
-        return res.json({ success: true, dryRun: true, parsed: importedEvents.length, filtered: eventsToImport.length, cutoff: cutoff.toISOString() });
+        console.error(`ICS_URL_DRY_RUN | events=${importedEvents.length} | filtered=${eventsToImport.length} | cutoff=${cutoff.toISOString()} | upper=${upper ? upper.toISOString() : 'none'} | url=${icsUrl}`);
+        return res.json({ success: true, dryRun: true, parsed: importedEvents.length, filtered: eventsToImport.length, cutoff: cutoff.toISOString(), upper: upper ? upper.toISOString() : null });
       }
       let importedCount = 0;
 
@@ -4064,7 +4084,8 @@ Bitte versuchen Sie es später noch einmal.`;
       res.json({ 
         success: true, 
         imported: importedCount,
-        cutoff: cutoff.toISOString(),
+  cutoff: cutoff.toISOString(),
+  upper: upper ? upper.toISOString() : null,
         message: `Successfully imported ${importedCount} events from calendar URL`
       });
 
