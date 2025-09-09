@@ -9,6 +9,15 @@ const ImportCalendarEvents: React.FC<ImportCalendarEventsProps> = ({ onImportCom
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ success: boolean; count?: number; error?: string } | null>(null);
   const [icsUrl, setIcsUrl] = useState('');
+  // Admin cleanup state
+  const [clusters, setClusters] = useState<any[] | null>(null);
+  const [clustersSample, setClustersSample] = useState<any[] | null>(null);
+  const [clusterThreshold, setClusterThreshold] = useState<number>(20);
+  const [clusterLimit, setClusterLimit] = useState<number>(20);
+  const [targetIso, setTargetIso] = useState<string>('');
+  const [cleanupOnlyNullIcalUid, setCleanupOnlyNullIcalUid] = useState<boolean>(true);
+  const [cleanupDryRunResult, setCleanupDryRunResult] = useState<any | null>(null);
+  const [reimportAfterCleanup, setReimportAfterCleanup] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleGoogleCalendarImport = async () => {
@@ -114,6 +123,97 @@ const ImportCalendarEvents: React.FC<ImportCalendarEventsProps> = ({ onImportCom
     }
   };
 
+  // Admin: fetch stacked clusters
+  const fetchStackedClusters = async () => {
+    try {
+      setIsImporting(true);
+      setClusters(null);
+      setClustersSample(null);
+      const params = new URLSearchParams({ threshold: String(clusterThreshold), limit: String(clusterLimit) });
+      const res = await fetch(`/api/admin/calendar/stacked-clusters?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch clusters');
+      const data = await res.json();
+      setClusters(data.clusters || []);
+      setClustersSample(data.sample || []);
+      if ((data.clusters || []).length > 0) {
+        setTargetIso(data.clusters[0].start_time_iso);
+      }
+    } catch (e) {
+      setImportResult({ success: false, error: 'Failed to load stacked clusters.' });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Admin: dry-run cleanup
+  const runCleanupDryRun = async () => {
+    if (!targetIso) {
+      setImportResult({ success: false, error: 'Select a target ISO timestamp from clusters first.' });
+      return;
+    }
+    try {
+      setIsImporting(true);
+      setCleanupDryRunResult(null);
+      const res = await fetch('/api/admin/calendar/cleanup-stacked', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetStartTimeIso: targetIso, onlyNullIcalUid: cleanupOnlyNullIcalUid, dryRun: true }),
+      });
+      if (!res.ok) throw new Error('Dry-run failed');
+      const data = await res.json();
+      setCleanupDryRunResult(data);
+    } catch (e) {
+      setImportResult({ success: false, error: 'Cleanup dry-run failed.' });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Admin: execute cleanup
+  const runCleanup = async () => {
+    if (!targetIso) {
+      setImportResult({ success: false, error: 'Select a target ISO timestamp from clusters first.' });
+      return;
+    }
+    try {
+      setIsImporting(true);
+      const res = await fetch('/api/admin/calendar/cleanup-stacked', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetStartTimeIso: targetIso, onlyNullIcalUid: cleanupOnlyNullIcalUid, dryRun: false }),
+      });
+      if (!res.ok) throw new Error('Cleanup failed');
+      const data = await res.json();
+      // Optionally re-import immediately using provided ICS URL
+      if (reimportAfterCleanup && icsUrl.trim()) {
+        try {
+          const re = await fetch('/api/calendar/import/ics-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ icsUrl: icsUrl.trim() }),
+          });
+          if (re.ok) {
+            const rr = await re.json();
+            setImportResult({ success: true, count: rr.imported });
+            onImportComplete(rr.imported || 0);
+          } else {
+            setImportResult({ success: false, error: 'Cleanup done, but re-import failed.' });
+          }
+        } catch (e) {
+          setImportResult({ success: false, error: 'Cleanup done, but re-import failed.' });
+        }
+      } else {
+        setImportResult({ success: true, count: 0 });
+      }
+      // refresh clusters view
+      fetchStackedClusters();
+    } catch (e) {
+      setImportResult({ success: false, error: 'Cleanup failed.' });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleFileSelect = () => {
     fileInputRef.current?.click();
   };
@@ -210,6 +310,93 @@ const ImportCalendarEvents: React.FC<ImportCalendarEventsProps> = ({ onImportCom
           )}
         </div>
       )}
+
+      {/* Admin cleanup tools */}
+      <div className="bg-purple-50 p-4 rounded-lg">
+        <h4 className="font-medium text-purple-900 mb-2">Admin: Cleanup legacy stacked entries</h4>
+        <p className="text-sm text-purple-800 mb-3">Detect clusters of sessions sharing the exact same UTC start time and remove the broken ones (typically rows without iCal UID).</p>
+
+        <div className="bg-white p-4 rounded border space-y-3">
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-700">Threshold</label>
+            <input type="number" className="w-24 p-1 border rounded text-sm" value={clusterThreshold} onChange={(e)=>setClusterThreshold(parseInt(e.target.value||'0',10))} />
+            <label className="text-sm text-gray-700">Limit</label>
+            <input type="number" className="w-24 p-1 border rounded text-sm" value={clusterLimit} onChange={(e)=>setClusterLimit(parseInt(e.target.value||'0',10))} />
+            <button onClick={fetchStackedClusters} disabled={isImporting} className="ml-auto px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 text-sm">Scan</button>
+          </div>
+
+          {clusters && clusters.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-600">
+                    <th className="py-1 pr-3">Start Time (UTC ISO)</th>
+                    <th className="py-1 pr-3">Count</th>
+                    <th className="py-1 pr-3">with iCal UID</th>
+                    <th className="py-1 pr-3">without iCal UID</th>
+                    <th className="py-1">Select</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clusters.map((c:any)=> (
+                    <tr key={c.start_time_iso} className="border-t">
+                      <td className="py-1 pr-3 font-mono">{c.start_time_iso}</td>
+                      <td className="py-1 pr-3">{c.count}</td>
+                      <td className="py-1 pr-3">{c.with_ical_uid}</td>
+                      <td className="py-1 pr-3">{c.without_ical_uid}</td>
+                      <td className="py-1">
+                        <button onClick={()=>setTargetIso(c.start_time_iso)} className={`px-2 py-1 rounded text-xs ${targetIso===c.start_time_iso?'bg-purple-700 text-white':'bg-gray-100 hover:bg-gray-200'}`}>Target</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {clustersSample && clustersSample.length > 0 && (
+            <div className="text-xs text-gray-700">
+              <div className="font-medium mb-1">Sample of latest rows in top cluster:</div>
+              <ul className="list-disc list-inside">
+                {clustersSample.map((s:any)=> (
+                  <li key={s.id} className="truncate">{s.id} — {s.title || '(untitled)'} — {s.ical_uid || '(no iCal UID)'} — {s.created_at}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-700">Target ISO</label>
+            <input value={targetIso} onChange={(e)=>setTargetIso(e.target.value)} placeholder="2025-09-08T16:36:48Z" className="flex-1 p-2 border rounded text-sm font-mono" />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-700 flex items-center gap-1">
+              <input type="checkbox" checked={cleanupOnlyNullIcalUid} onChange={(e)=>setCleanupOnlyNullIcalUid(e.target.checked)} />
+              Delete only rows without iCal UID
+            </label>
+            <label className="text-sm text-gray-700 flex items-center gap-1 ml-auto">
+              <input type="checkbox" checked={reimportAfterCleanup} onChange={(e)=>setReimportAfterCleanup(e.target.checked)} />
+              Re-import from .ics URL after cleanup
+            </label>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button onClick={runCleanupDryRun} disabled={isImporting || !targetIso} className="px-3 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50 text-sm">Dry-run</button>
+            <button onClick={runCleanup} disabled={isImporting || !targetIso} className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 text-sm">Delete now</button>
+          </div>
+
+          {cleanupDryRunResult && (
+            <div className="text-sm text-gray-800 bg-yellow-50 border border-yellow-200 p-2 rounded">
+              <div className="font-medium">Dry-run summary</div>
+              <div>Target: <span className="font-mono">{cleanupDryRunResult.targetStartTimeIso}</span></div>
+              <div>Total at target: {cleanupDryRunResult.summary?.total ?? 0}</div>
+              <div>With iCal UID: {cleanupDryRunResult.summary?.with_ical_uid ?? 0}</div>
+              <div>Without iCal UID: {cleanupDryRunResult.summary?.without_ical_uid ?? 0}</div>
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="bg-amber-50 p-4 rounded-lg">
         <h4 className="font-medium text-amber-900 mb-2">Alternative: Manual Entry</h4>
