@@ -51,6 +51,7 @@ import { eq, and, desc, asc, sql } from "drizzle-orm";
 import validator from "validator";
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 
 export interface IStorage {
   // Admin User management (authentication)
@@ -320,154 +321,90 @@ export class DatabaseStorage implements IStorage {
 
   async createPhotographySession(session: InsertPhotographySession): Promise<PhotographySession> {
     try {
-      // Persist a compact debug snapshot to a local file to help identify bad types
-      try {
-  const fs = await import('fs');
-        const inspectFields = ['startTime', 'endTime', 'deliveryDate', 'createdAt', 'updatedAt'];
-        const parts: string[] = [];
-        for (const f of inspectFields) {
-          const v = (session as any)[f];
-          const t = v === undefined ? 'undefined' : (v && v.constructor ? v.constructor.name : typeof v);
-          let val: string;
-          if (v instanceof Date) {
-            val = isNaN(v.getTime()) ? 'InvalidDate' : v.toISOString();
-          } else if (v === undefined) {
-            val = 'null';
-          } else {
-            val = String(v);
-          }
-          parts.push(`${f}=${t}:${val}`);
-        }
-    const line = `DEBUG_LOG | sessionId=${(session as any).id || ''} | ${parts.join(' | ')}\n`;
-  const tmpDir = os.tmpdir();
-  const debugPath = path.join(tmpDir, 'clean-crm-debug_import.log');
-  fs.appendFileSync(debugPath, line, { encoding: 'utf8' });
-  // Also emit a console marker so it appears in server.err immediately
-  console.error(`WROTE_DEBUG_IMPORT | path=${debugPath} | ${parts.join(' | ')}`);
-      } catch (fileErr) {
-        console.error('Failed to write debug_import.log:', fileErr);
-      }
-      // Robust normalization: coerce a variety of timestamp-like inputs into native JS Date
-      // to prevent the Drizzle/pg driver from receiving non-Date values (which calls toUTCString).
-      try {
-        const coerceToDate = (v: any): Date | null => {
-          if (v === undefined || v === null) return null;
-          if (v instanceof Date) {
-            return isNaN(v.getTime()) ? null : v;
-          }
-          if (typeof v === 'number') {
-            const d = new Date(v);
-            return isNaN(d.getTime()) ? null : d;
-          }
-          if (typeof v === 'string') {
-            const d = new Date(v);
-            return isNaN(d.getTime()) ? null : d;
-          }
-          // Firestore timestamp-like: { seconds, nanoseconds }
-          if (typeof v === 'object') {
-            // objects that implement toDate() (e.g., Firestore Timestamp)
-            try {
-              if (typeof (v as any).toDate === 'function') {
-                const d = (v as any).toDate();
-                if (d instanceof Date && !isNaN(d.getTime())) return d;
-              }
-            } catch (e) {
-              // ignore
-            }
-
-            // objects that implement toISOString()
-            try {
-              if (typeof (v as any).toISOString === 'function') {
-                const d = new Date((v as any).toISOString());
-                if (!isNaN(d.getTime())) return d;
-              }
-            } catch (e) {
-              // ignore
-            }
-
-            if (typeof (v as any).seconds === 'number') {
-              // seconds since epoch
-              const d = new Date((v as any).seconds * 1000);
-              if (!isNaN(d.getTime())) return d;
-            }
-
-            // last resort: try Date constructor with the object coerced to string
-            try {
-              const d = new Date(String(v));
-              return isNaN(d.getTime()) ? null : d;
-            } catch (e) {
-              return null;
-            }
-          }
-          return null;
-        };
-
-        const normalizeFields = ['startTime', 'endTime', 'deliveryDate', 'createdAt', 'updatedAt'];
-        for (const f of normalizeFields) {
-          const v = (session as any)[f];
-          const coerced = coerceToDate(v);
-          if (coerced) {
-            (session as any)[f] = coerced;
-          } else {
-            // fallback behavior: required timestamps -> now, optional -> null
-            if (v === undefined) continue; // leave undefined if not provided
-            if (f === 'startTime' || f === 'endTime') {
-              (session as any)[f] = new Date();
-            } else {
-              (session as any)[f] = null as any;
-            }
-          }
-        }
-      } catch (normErr) {
-        console.error('Timestamp normalization failed:', normErr);
-      }
-      // Debug: single-line marker with normalized types/values for easier log parsing
+      // Debug snapshot (best-effort)
       try {
         const inspectFields = ['startTime', 'endTime', 'deliveryDate', 'createdAt', 'updatedAt'];
         const parts: string[] = [];
         for (const f of inspectFields) {
           const v = (session as any)[f];
-          const t = v === undefined ? 'undefined' : (v && v.constructor ? v.constructor.name : typeof v);
-          let val: string;
-          if (v instanceof Date) {
-            val = isNaN(v.getTime()) ? 'InvalidDate' : v.toISOString();
-          } else if (v === undefined) {
-            val = 'null';
-          } else {
-            val = String(v);
-          }
+          const t = v === undefined ? 'undefined' : (v && (v as any).constructor ? (v as any).constructor.name : typeof v);
+          const val = v instanceof Date ? (isNaN(v.getTime()) ? 'InvalidDate' : v.toISOString()) : (v === undefined ? 'null' : String(v));
           parts.push(`${f}=${t}:${val}`);
         }
-        console.error(`STORAGE_DIAG_SINGLELINE | sessionId=${(session as any).id || ''} | ${parts.join(' | ')}`);
-      } catch (e) {
-        console.error('STORAGE DIAG failed:', e);
+        const line = `DEBUG_LOG | sessionId=${(session as any).id || ''} | ${parts.join(' | ')}\n`;
+        const tmpDir = os.tmpdir();
+        const debugPath = path.join(tmpDir, 'clean-crm-debug_import.log');
+        fs.appendFileSync(debugPath, line, { encoding: 'utf8' });
+      } catch {}
+
+      // Normalize timestamp-like fields into Date objects
+      const coerceToDate = (v: any): Date | null => {
+        if (v === undefined || v === null) return null;
+        if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+        if (typeof v === 'number') { const d = new Date(v); return isNaN(d.getTime()) ? null : d; }
+        if (typeof v === 'string') { const d = new Date(v); return isNaN(d.getTime()) ? null : d; }
+        try {
+          if (typeof v?.toDate === 'function') { const d = v.toDate(); return d instanceof Date && !isNaN(d.getTime()) ? d : null; }
+          if (typeof v?.toISOString === 'function') { const d = new Date(v.toISOString()); return !isNaN(d.getTime()) ? d : null; }
+          if (typeof v?.seconds === 'number') { const d = new Date(v.seconds * 1000); return !isNaN(d.getTime()) ? d : null; }
+        } catch {}
+        try { const d = new Date(String(v)); return isNaN(d.getTime()) ? null : d; } catch { return null; }
+      };
+      for (const f of ['startTime','endTime','deliveryDate','createdAt','updatedAt']) {
+        const coerced = coerceToDate((session as any)[f]);
+        if (coerced) (session as any)[f] = coerced;
       }
 
-      // Upsert: if the row exists (same primary key), update core fields to correct previous bad imports
-      const updatable = {
-        title: (session as any).title,
-        description: (session as any).description,
-        startTime: (session as any).startTime,
-        endTime: (session as any).endTime,
-        locationName: (session as any).locationName,
-        locationAddress: (session as any).locationAddress,
-        clientName: (session as any).clientName,
-        paymentStatus: (session as any).paymentStatus,
-        status: (session as any).status,
-        updatedAt: new Date(),
-      } as any;
-
-      const result = await db
+      // Upsert by ID; update key fields (enables correcting times after parser fixes)
+      const upserted = await db
         .insert(photographySessions)
         .values(session as any)
         // @ts-ignore drizzle typing for onConflictDoUpdate target inference
         .onConflictDoUpdate({
           target: photographySessions.id,
-          set: updatable,
+          set: {
+            title: (session as any).title,
+            description: (session as any).description,
+            startTime: (session as any).startTime,
+            endTime: (session as any).endTime,
+            locationName: (session as any).locationName,
+            locationAddress: (session as any).locationAddress,
+            clientName: (session as any).clientName,
+            icalUid: (session as any).icalUid,
+            updatedAt: new Date(),
+          },
         })
         .returning();
 
-      return result[0];
+      let row = upserted[0] as unknown as PhotographySession | undefined;
+
+      // Secondary reconciliation: if a different ID exists for same icalUid, update it
+      if (!row && (session as any).icalUid) {
+        const existingByUid = await db
+          .select()
+          .from(photographySessions)
+          .where(eq(photographySessions.icalUid, (session as any).icalUid as any))
+          .limit(1);
+        if (existingByUid && existingByUid[0]) {
+          const updated = await db
+            .update(photographySessions)
+            .set({
+              title: (session as any).title,
+              description: (session as any).description,
+              startTime: (session as any).startTime,
+              endTime: (session as any).endTime,
+              locationName: (session as any).locationName,
+              locationAddress: (session as any).locationAddress,
+              clientName: (session as any).clientName,
+              updatedAt: new Date(),
+            })
+            .where(eq(photographySessions.id, (existingByUid[0] as any).id))
+            .returning();
+          return updated[0] as unknown as PhotographySession;
+        }
+      }
+
+      return row as PhotographySession;
     } catch (err) {
       console.error('createPhotographySession insert error:', err);
       throw err;
