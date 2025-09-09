@@ -117,6 +117,25 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
   const [filterMonth, setFilterMonth] = useState<string>('');
   const [filterYear, setFilterYear] = useState<string>('');
 
+  // Build a quick index of clients by id for display fallbacks
+  const clientById = React.useMemo(() => {
+    const map = new Map<string, { name: string; email?: string }>();
+    for (const c of clients || []) {
+      const name = (c as any).name || `${(c as any).firstName || ''} ${(c as any).lastName || ''}`.trim();
+      if ((c as any).id) map.set((c as any).id, { name, email: (c as any).email });
+    }
+    return map;
+  }, [clients]);
+
+  const getDisplayClientName = (session: PhotographySession) => {
+    if (session.clientName && session.clientName.trim()) return session.clientName;
+    if (session.clientId) {
+      const found = clientById.get(session.clientId);
+      if (found?.name) return found.name;
+    }
+    return '';
+  };
+
   // Filter and search sessions
   const filteredSessions = sessions.filter(session => {
     // Search filter
@@ -295,8 +314,8 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                         {getStatusIcon(session.status)}
                       </div>
                     </div>
-                    {session.clientName && (
-                      <div className="text-xs opacity-75 truncate">{session.clientName}</div>
+                    {getDisplayClientName(session) && (
+                      <div className="text-[10px] opacity-80 truncate">👤 {getDisplayClientName(session)}</div>
                     )}
                   </div>
                 ))}
@@ -378,7 +397,9 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                         onClick={() => onSessionClick(session)}
                       >
                         <div className="font-medium truncate">{session.title}</div>
-                        <div className="opacity-75 truncate">{session.clientName}</div>
+                        {getDisplayClientName(session) && (
+                          <div className="opacity-75 truncate">👤 {getDisplayClientName(session)}</div>
+                        )}
                         <div className="flex items-center space-x-1 mt-1">
                           {getPriorityIndicator(session.priority)}
                           {getStatusIcon(session.status)}
@@ -447,7 +468,9 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                     onClick={() => onSessionClick(session)}
                   >
                     <div className="font-medium">{session.title}</div>
-                    <div className="text-sm opacity-75">{session.clientName}</div>
+                    {getDisplayClientName(session) && (
+                      <div className="text-sm opacity-75">👤 {getDisplayClientName(session)}</div>
+                    )}
                     <div className="text-sm">{format(startTime, 'HH:mm')} - {format(endTime, 'HH:mm')}</div>
                     <div className="flex items-center space-x-2 mt-1">
                       {getPriorityIndicator(session.priority)}
@@ -575,10 +598,12 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
 
                 <div>
                   {session.clientName && (
-                    <div className="flex items-center space-x-2 mb-1">
-                      <Users className="w-4 h-4" />
-                      <span>{session.clientName}</span>
-                    </div>
+                    {getDisplayClientName(session) && (
+                      <div className="flex items-center space-x-2 mb-1">
+                        <Users className="w-4 h-4" />
+                        <span>{getDisplayClientName(session)}</span>
+                      </div>
+                    )}
                   )}
                   {session.locationName && (
                     <div className="flex items-center space-x-2">
@@ -691,7 +716,9 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                       </div>
                       <div>
                         <div className="font-medium">{session.title}</div>
-                        <div className="text-sm text-gray-600">{session.clientName}</div>
+                        {getDisplayClientName(session) && (
+                          <div className="text-sm text-gray-600">{getDisplayClientName(session)}</div>
+                        )}
                       </div>
                       <div className="text-sm text-gray-500">
                         {format(parseISO(session.startTime), 'HH:mm')} - {format(parseISO(session.endTime), 'HH:mm')}
