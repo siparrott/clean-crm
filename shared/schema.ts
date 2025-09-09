@@ -755,6 +755,8 @@ export const insertPhotographySessionSchema = z.object({
   status: z.string().optional(),
   startTime: z.date(),
   endTime: z.date(),
+  // Allow linking a CRM client record (optional)
+  clientId: z.string().optional(),
   clientName: z.string().optional(),
   clientEmail: z.string().optional(),
   clientPhone: z.string().optional(),
