@@ -597,13 +597,11 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                 </div>
 
                 <div>
-                  {session.clientName && (
-                    {getDisplayClientName(session) && (
-                      <div className="flex items-center space-x-2 mb-1">
-                        <Users className="w-4 h-4" />
-                        <span>{getDisplayClientName(session)}</span>
-                      </div>
-                    )}
+                  {getDisplayClientName(session) && (
+                    <div className="flex items-center space-x-2 mb-1">
+                      <Users className="w-4 h-4" />
+                      <span>{getDisplayClientName(session)}</span>
+                    </div>
                   )}
                   {session.locationName && (
                     <div className="flex items-center space-x-2">

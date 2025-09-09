@@ -105,6 +105,8 @@ const PhotographyCalendarPage: React.FC = () => {
     goldenHourOptimized: false,
     portfolioWorthy: false
   });
+  const [newClientDraft, setNewClientDraft] = useState({ firstName: '', lastName: '', email: '', phone: '' });
+  const [creatingClient, setCreatingClient] = useState(false);
 
   const [stats, setStats] = useState<DashboardStats>({
     totalSessions: 0,
@@ -689,6 +691,77 @@ const PhotographyCalendarPage: React.FC = () => {
                       ))}
                   </select>
                   <p className="text-xs text-gray-500 mt-1">Selecting a client will auto-fill name and email.</p>
+                  {/* Quick create client */}
+                  <div className="mt-3 p-2 border rounded bg-gray-50">
+                    <div className="text-xs font-medium mb-2">Quick create client</div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <input
+                        type="text"
+                        placeholder="First name"
+                        value={newClientDraft.firstName}
+                        onChange={(e) => setNewClientDraft({ ...newClientDraft, firstName: e.target.value })}
+                        className="border rounded px-2 py-1 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Last name"
+                        value={newClientDraft.lastName}
+                        onChange={(e) => setNewClientDraft({ ...newClientDraft, lastName: e.target.value })}
+                        className="border rounded px-2 py-1 text-sm"
+                      />
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={newClientDraft.email}
+                        onChange={(e) => setNewClientDraft({ ...newClientDraft, email: e.target.value })}
+                        className="border rounded px-2 py-1 text-sm col-span-2"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Phone (optional)"
+                        value={newClientDraft.phone}
+                        onChange={(e) => setNewClientDraft({ ...newClientDraft, phone: e.target.value })}
+                        className="border rounded px-2 py-1 text-sm col-span-2"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={creatingClient || !newClientDraft.firstName || !newClientDraft.lastName || !newClientDraft.email}
+                      onClick={async () => {
+                        try {
+                          setCreatingClient(true);
+                          const resp = await fetch('/api/crm/clients', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              firstName: newClientDraft.firstName,
+                              lastName: newClientDraft.lastName,
+                              email: newClientDraft.email,
+                              phone: newClientDraft.phone || undefined,
+                            }),
+                          });
+                          if (!resp.ok) {
+                            alert('Failed to create client');
+                            return;
+                          }
+                          const created = await resp.json();
+                          // refresh clients list and select
+                          await fetchClients();
+                          handleInputChange('clientId', created.id);
+                          handleInputChange('clientName', `${created.first_name || created.firstName} ${created.last_name || created.lastName}`.trim());
+                          if (created.email) handleInputChange('clientEmail', created.email);
+                          setNewClientDraft({ firstName: '', lastName: '', email: '', phone: '' });
+                        } catch (_) {
+                          alert('Error creating client');
+                        } finally {
+                          setCreatingClient(false);
+                        }
+                      }}
+                      className={`text-xs px-3 py-1 rounded ${creatingClient ? 'bg-gray-300 text-gray-600' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                    >
+                      {creatingClient ? 'Creating…' : 'Create & Link Client'}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
