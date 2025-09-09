@@ -82,6 +82,7 @@ const PhotographyCalendarPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [activeView, setActiveView] = useState('calendar');
   const [showSessionForm, setShowSessionForm] = useState(false);
+  const [dateFormat, setDateFormat] = useState(localStorage.getItem('preferredDateFormat') || 'MM/dd/yyyy');
   // Lightweight CRM client type for selector
   type ClientLight = { id: string; firstName: string; lastName: string; email?: string; phone?: string };
   const [clients, setClients] = useState<ClientLight[]>([]);
@@ -150,7 +151,11 @@ const PhotographyCalendarPage: React.FC = () => {
   const fetchClients = async () => {
     try {
       setClientsLoading(true);
-      const resp = await fetch('/api/crm/clients');
+      const resp = await fetch('/api/crm/clients', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
       if (!resp.ok) return setClients([]);
       const data = await resp.json();
       const mapped: ClientLight[] = (Array.isArray(data) ? data : []).map((c: any) => ({
@@ -773,7 +778,10 @@ const PhotographyCalendarPage: React.FC = () => {
                           setCreatingClient(true);
                           const resp = await fetch('/api/crm/clients', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 
+                              'Content-Type': 'application/json',
+                              'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
                             body: JSON.stringify({
                               firstName: newClientDraft.firstName,
                               lastName: newClientDraft.lastName,
@@ -826,13 +834,48 @@ const PhotographyCalendarPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Location</label>
-                  <input
-                    type="text"
-                    value={formData.locationName}
-                    onChange={(e) => handleInputChange('locationName', e.target.value)}
-                    className="w-full border rounded px-3 py-2"
-                  />
+                  <label className="block text-sm font-medium mb-1">Location (Optional)</label>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Enter venue name or address"
+                      value={formData.locationName}
+                      onChange={(e) => handleInputChange('locationName', e.target.value)}
+                      className="w-full border rounded px-3 py-2"
+                    />
+                    {formData.locationName && (
+                      <div className="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const query = encodeURIComponent(formData.locationName);
+                            window.open(`https://www.google.com/maps/search/${query}`, '_blank');
+                          }}
+                          className="flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          <MapPin className="w-3 h-3" />
+                          <span>View on Google Maps</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const query = encodeURIComponent(formData.locationName);
+                              // This would require Google Places API - for now we'll store the address
+                              handleInputChange('locationAddress', formData.locationName);
+                              // In a real implementation, you'd geocode here and get coordinates
+                              // handleInputChange('locationCoordinates', `${lat},${lng}`);
+                            } catch (error) {
+                              console.error('Failed to geocode location:', error);
+                            }
+                          }}
+                          className="flex items-center space-x-1 text-green-600 hover:text-green-800 text-sm"
+                        >
+                          <span>📍 Save Coordinates</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

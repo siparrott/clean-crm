@@ -128,6 +128,44 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
     return map;
   }, [clients]);
 
+  // Gallery covers state for avatars
+  const [galleryCovers, setGalleryCovers] = useState<Map<string, string>>(new Map());
+
+  // Fetch gallery covers for clients when they change
+  useEffect(() => {
+    const fetchGalleryCovers = async () => {
+      const coverMap = new Map<string, string>();
+      
+      // Get all unique client IDs from sessions
+      const clientIds = [...new Set(sessions.map(s => s.clientId).filter(Boolean))];
+      
+      // Fetch gallery covers for each client
+      await Promise.all(clientIds.map(async (clientId) => {
+        try {
+          const response = await fetch(`/api/crm/clients/${clientId}/gallery-cover`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.coverImage) {
+              coverMap.set(clientId, data.coverImage);
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch gallery cover for client ${clientId}:`, error);
+        }
+      }));
+      
+      setGalleryCovers(coverMap);
+    };
+
+    if (sessions.length > 0) {
+      fetchGalleryCovers();
+    }
+  }, [sessions]);
+
   const getDisplayClientName = (session: PhotographySession) => {
     if (session.clientName && session.clientName.trim()) return session.clientName;
     if (session.clientId) {
