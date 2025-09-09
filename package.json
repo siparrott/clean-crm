@@ -32,6 +32,10 @@
   "import:prod:full": "cross-env BASE_URL=https://www.newagefotografie.com ICS_URL=https://calendar.google.com/calendar/ical/newagefotografen%40gmail.com/public/basic.ics node scripts/reimport-ics.js",
   "cleanup:prod:dry": "cross-env BASE_URL=https://www.newagefotografie.com THRESHOLD=20 LIMIT=200 node scripts/cleanup-stacked.js",
   "cleanup:prod:exec": "cross-env BASE_URL=https://www.newagefotografie.com THRESHOLD=20 LIMIT=200 node scripts/cleanup-stacked.js --execute",
+  "prune:dry": "cross-env BASE_URL=http://127.0.0.1:3000 node scripts/prune-history.js --dry",
+  "prune:exec": "cross-env BASE_URL=http://127.0.0.1:3000 node scripts/prune-history.js --execute",
+  "prune:prod:dry": "cross-env BASE_URL=https://www.newagefotografie.com node scripts/prune-history.js --dry",
+  "prune:prod:exec": "cross-env BASE_URL=https://www.newagefotografie.com node scripts/prune-history.js --execute",
     "health:check": "echo 'Health check passed'",
     "deploy": "npm run build && npm start"
   },
