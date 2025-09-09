@@ -414,15 +414,16 @@ export const PhotographyCalendar: React.FC = () => {
   const fetchSessions = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/photography/sessions');
+      // In dev, optionally use the debug endpoint which is public and returns up to 50 sessions
+      const useDebug = import.meta.env.VITE_USE_DEBUG_SESSIONS === 'true';
+      const endpoint = useDebug ? '/api/debug/photography-sessions' : '/api/photography/sessions';
+      const response = await fetch(endpoint);
       if (response.ok) {
         const data = await response.json();
         setSessions(data);
-      } else {
-        // console.error removed
       }
     } catch (error) {
-      // console.error removed
+      // swallow in UI; kept intentionally quiet for dev
     } finally {
       setIsLoading(false);
     }

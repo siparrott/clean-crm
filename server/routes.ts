@@ -1745,6 +1745,38 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
+  // Alias route for frontend compatibility
+  app.get("/api/photography-sessions", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const photographerId = req.query.photographerId as string;
+      const sessions = await storage.getPhotographySessions(photographerId);
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching photography sessions:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Single, stable debug public endpoint (no auth) to return up to 50 sessions for frontend testing
+  // Keep this endpoint lightweight and predictable; remove or secure before production.
+  app.get("/api/debug/photography-sessions", async (req: Request, res: Response) => {
+    try {
+      const photographerId = req.query.photographerId as string | undefined;
+      console.error(`DEBUG_ENDPOINT_HIT | photographerId=${photographerId || '<none>'}`);
+      const sessions = await storage.getPhotographySessions(photographerId);
+      if (!Array.isArray(sessions)) {
+        console.error('DEBUG_ENDPOINT_RESULT | sessions not array');
+        return res.status(200).json([]);
+      }
+      console.error(`DEBUG_ENDPOINT_RESULT | found=${sessions.length} | returning=${Math.min(50, sessions.length)}`);
+      // Return a flat array of sessions (max 50) so the frontend can consume it directly
+      return res.status(200).json(sessions.slice(0, 50));
+    } catch (error) {
+      console.error('Error fetching debug photography sessions:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.get("/api/photography/sessions/:id", authenticateUser, async (req: Request, res: Response) => {
     try {
       const session = await storage.getPhotographySession(req.params.id);

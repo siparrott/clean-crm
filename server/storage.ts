@@ -443,7 +443,25 @@ export class DatabaseStorage implements IStorage {
         console.error('STORAGE DIAG failed:', e);
       }
 
-  const result = await db.insert(photographySessions).values(session as any).returning();
+      // Idempotent insert: ignore duplicate primary key conflicts and return existing row if present
+      let result = await db
+        .insert(photographySessions)
+        .values(session as any)
+        // Avoid duplicate-key crashes on repeated imports; rely on stable IDs (e.g., imported-<uid>)
+        // If row already exists, do nothing and fetch existing record below
+        // @ts-ignore drizzle typing for onConflictDoNothing target inference
+        .onConflictDoNothing({ target: photographySessions.id })
+        .returning();
+
+      if (!result || result.length === 0) {
+        // Fetch existing record by id to provide a consistent return value
+        const existing = await db
+          .select()
+          .from(photographySessions)
+          .where(eq(photographySessions.id, (session as any).id))
+          .limit(1);
+        if (existing && existing[0]) return existing[0] as unknown as PhotographySession;
+      }
       return result[0];
     } catch (err) {
       console.error('createPhotographySession insert error:', err);

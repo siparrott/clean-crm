@@ -149,7 +149,9 @@ const PhotographyCalendarPage: React.FC = () => {
   const fetchSessions = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/photography/sessions');
+  const useDebug = import.meta.env.VITE_USE_DEBUG_SESSIONS === 'true';
+  const endpoint = useDebug ? '/api/debug/photography-sessions' : '/api/photography/sessions';
+  const response = await fetch(endpoint);
       if (response.ok) {
         const data = await response.json();
         setSessions(data);
