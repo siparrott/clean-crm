@@ -2456,45 +2456,7 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
-  // Admin dashboard stats (authenticated)
-  app.get('/api/admin/dashboard-stats', authenticateUser, async (req: Request, res: Response) => {
-    try {
-      // Total sessions
-      const totalSessions = (await runSql(`SELECT COUNT(*)::int as cnt FROM photography_sessions`))[0].cnt || 0;
-
-      const thirtyDaysFromNow = new Date();
-      const thirtyDaysLater = new Date(thirtyDaysFromNow.getTime() + 30 * 24 * 3600 * 1000);
-
-      const upcomingSessions = (await runSql(`SELECT COUNT(*)::int as cnt FROM photography_sessions WHERE session_date >= $1 AND session_date <= $2 AND status IN ('CONFIRMED','PENDING')`, [new Date().toISOString(), thirtyDaysLater.toISOString()]))[0].cnt || 0;
-
-      const completedSessions = (await runSql(`SELECT COUNT(*)::int as cnt FROM photography_sessions WHERE status = 'COMPLETED' AND session_date >= date_trunc('month', CURRENT_DATE)`))[0].cnt || 0;
-
-      // Revenue from invoices (total paid) - naive aggregation
-      const revenueRow = await runSql(`SELECT COALESCE(SUM(total)::numeric,0) as total FROM crm_invoices WHERE status IN ('paid','completed')`);
-      const totalRevenue = Number(revenueRow[0]?.total || 0);
-
-      const pendingDeposits = (await runSql(`SELECT COUNT(*)::int as cnt FROM crm_invoices WHERE status = 'pending'`))[0].cnt || 0;
-
-      // Equipment conflicts: count sessions with equipment list length > 0 and overlapping
-      const equipmentConflicts = (await runSql(`SELECT COUNT(*)::int as cnt FROM photography_sessions WHERE (equipment_needed IS NOT NULL AND equipment_needed <> '[]')`))[0].cnt || 0;
-
-      // New leads
-      const newLeads = (await runSql(`SELECT COUNT(*)::int as cnt FROM crm_leads WHERE created_at >= NOW() - INTERVAL '7 days'`))[0].cnt || 0;
-
-      res.json({
-        totalSessions,
-        upcomingSessions,
-        completedSessions,
-        totalRevenue,
-        pendingDeposits,
-        equipmentConflicts,
-        newLeads
-      });
-    } catch (error) {
-      console.error('Failed to compute dashboard stats:', error);
-      res.status(500).json({ error: 'Failed to compute dashboard stats' });
-    }
-  });
+  // Admin dashboard stats route handled below with a safer implementation.
 
   // ==================== DASHBOARD METRICS ROUTE ====================
   app.get("/api/crm/dashboard/metrics", authenticateUser, async (req: Request, res: Response) => {
@@ -3446,21 +3408,7 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
-  // Lightweight handler for the client ImportCalendarEvents Google button
-  // This avoids 404 on POST /api/calendar/import/google and guides users to use ICS URL/File for now
-  app.post("/api/calendar/import/google", authenticateUser, async (req: Request, res: Response) => {
-    try {
-      // Placeholder implementation: real OAuth-based import will be wired later
-      // For now, respond with success and imported=0 so the UI flow doesn't fail
-      res.json({
-        success: true,
-        imported: 0,
-        message: "Use .ics URL or upload a .ics file to import events. OAuth-based Google import is coming soon."
-      });
-    } catch (error) {
-      res.status(200).json({ success: true, imported: 0 });
-    }
-  });
+  // (placeholder handler for /api/calendar/import/google removed to avoid conflicting routes)
 
   app.put("/api/calendar/google/settings", authenticateUser, async (req: Request, res: Response) => {
     try {
@@ -3514,10 +3462,10 @@ Bitte versuchen Sie es später noch einmal.`;
           for (const event of importedEvents) {
             try {
               // Helper function to safely create date
-              const safeCreateDate = (dateString: string | undefined): Date => {
-                if (!dateString) return new Date();
+              const safeCreateDate = (dateString: string | undefined): Date | null => {
+                if (!dateString) return null;
                 const date = new Date(dateString);
-                return isNaN(date.getTime()) ? new Date() : date;
+                return isNaN(date.getTime()) ? null : date;
               };
 
               const session = {
@@ -3527,8 +3475,9 @@ Bitte versuchen Sie es später noch einmal.`;
                 description: event.description || '',
                 sessionType: 'imported',
                 status: 'confirmed',
-                startTime: safeCreateDate(event.dtstart),
-                endTime: safeCreateDate(event.dtend),
+                // Skip when dates invalid to avoid clustering
+                startTime: safeCreateDate(event.dtstart)!,
+                endTime: safeCreateDate(event.dtend)!,
                 locationName: event.location || '',
                 locationAddress: event.location || '',
                 clientName: extractClientFromDescription(event.description || event.summary || ''),
@@ -3554,6 +3503,12 @@ Bitte versuchen Sie es später noch einmal.`;
                 updatedAt: new Date()
               };
 
+              // Validate parsed dates
+              if (!(session.startTime instanceof Date) || isNaN(session.startTime.getTime()) ||
+                  !(session.endTime instanceof Date) || isNaN(session.endTime.getTime())) {
+                console.error('GOOGLE_IMPORT skip invalid dates:', { summary: event.summary, dtstart: event.dtstart, dtend: event.dtend });
+                continue;
+              }
               await storage.createPhotographySession(session);
               importedCount++;
             } catch (e) {
@@ -3977,10 +3932,11 @@ Bitte versuchen Sie es später noch einmal.`;
     if (propName === 'dtstart' || propName === 'dtend') {
           try {
       const defaultTz = process.env.DEFAULT_CAL_TZ || 'Europe/Vienna';
-      currentEvent[propName] = parseICalDate(value, params['tzid'] || defaultTz);
+      const parsed = parseICalDate(value, params['tzid'] || defaultTz);
+      currentEvent[propName] = parsed; // may be undefined on failure
           } catch (error) {
             console.error(`Error parsing ${propName}: ${value}`, error);
-            currentEvent[propName] = new Date().toISOString();
+            currentEvent[propName] = undefined; // don't default to now
           }
         } else {
           currentEvent[propName] = decodeICalValue(value);
@@ -3992,9 +3948,9 @@ Bitte versuchen Sie es später noch einmal.`;
   }
 
   // Helper function to parse iCal dates (supports TZID and all-day values)
-  function parseICalDate(dateString: string, tzid?: string): string {
+  function parseICalDate(dateString: string, tzid?: string): string | undefined {
     try {
-      console.log(`Parsing date: ${dateString}${tzid ? ` TZID=${tzid}` : ''}`);
+      // Quiet parser; callers decide how to handle undefined
       
       // Handle various iCal date formats
       let cleanDate = dateString.trim();
@@ -4066,13 +4022,12 @@ Bitte versuchen Sie es später noch einmal.`;
         return fallbackDate.toISOString();
       }
       
-      // If all else fails, return current time
-      console.warn(`Could not parse date: ${dateString}, using current time`);
-      return new Date().toISOString();
+  // If all else fails, let caller skip
+  return undefined;
       
     } catch (error) {
-      console.error(`Error parsing date: ${dateString}`, error);
-      return new Date().toISOString();
+  console.error(`Error parsing date: ${dateString}`, error);
+  return undefined;
     }
   }
 
