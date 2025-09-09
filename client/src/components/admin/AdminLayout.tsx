@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import {
   LayoutDashboard,
   UserPlus,
@@ -40,7 +41,7 @@ interface AdminLayoutProps {
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [language, setLanguage] = useState('en');
+  const { language, setLanguage } = useLanguage();
   const [newLeadsCount, setNewLeadsCount] = useState(0);
   const [unreadEmailsCount, setUnreadEmailsCount] = useState(0);
   const location = useLocation();
