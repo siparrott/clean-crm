@@ -1744,6 +1744,25 @@ Bitte versuchen Sie es später noch einmal.`;
       res.status(500).json({ error: "Internal server error" });
     }
   });
+
+  // Get gallery cover image for a client (for avatar display)
+  app.get("/api/crm/clients/:id/gallery-cover", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const clientId = req.params.id;
+      
+      // Find galleries for this client with a cover image
+      const gallery = await storage.getClientGalleryWithCover(clientId);
+      
+      if (!gallery || !gallery.coverImage) {
+        return res.json({ coverImage: null });
+      }
+      
+      res.json({ coverImage: gallery.coverImage });
+    } catch (error) {
+      console.error("Error fetching client gallery cover:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
   
   // ==================== PHOTOGRAPHY SESSION ROUTES ====================
   app.get("/api/photography/sessions", authenticateUser, async (req: Request, res: Response) => {

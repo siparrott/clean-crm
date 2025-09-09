@@ -47,7 +47,7 @@ import {
   type InsertCouponUsage
 } from "../shared/schema.js";
 import { db } from "./db";
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql, isNotNull } from "drizzle-orm";
 import validator from "validator";
 import path from 'path';
 import os from 'os';
@@ -104,6 +104,7 @@ export interface IStorage {
   getGallery(id: string): Promise<Gallery | undefined>;
   getGalleryImages(galleryId: string): Promise<any[]>;
   getGalleryBySlug(slug: string): Promise<Gallery | undefined>;
+  getClientGalleryWithCover(clientId: string): Promise<Gallery | undefined>;
   createGallery(gallery: InsertGallery): Promise<Gallery>;
   updateGallery(id: string, updates: Partial<Gallery>): Promise<Gallery>;
   deleteGallery(id: string): Promise<void>;
@@ -459,6 +460,18 @@ export class DatabaseStorage implements IStorage {
 
   async getGalleryBySlug(slug: string): Promise<Gallery | undefined> {
     const result = await db.select().from(galleries).where(eq(galleries.slug, slug)).limit(1);
+    return result[0];
+  }
+
+  async getClientGalleryWithCover(clientId: string): Promise<Gallery | undefined> {
+    const result = await db.select()
+      .from(galleries)
+      .where(and(
+        eq(galleries.clientId, clientId),
+        isNotNull(galleries.coverImage)
+      ))
+      .orderBy(desc(galleries.createdAt))
+      .limit(1);
     return result[0];
   }
 
