@@ -98,6 +98,8 @@ const PhotographyCalendarPage: React.FC = () => {
     clientName: '',
     clientEmail: '',
     locationName: '',
+    locationAddress: '',
+    locationCoordinates: '',
     basePrice: '',
     depositAmount: '',
     equipmentList: [] as string[],
@@ -278,6 +280,8 @@ const PhotographyCalendarPage: React.FC = () => {
           clientName: '',
           clientEmail: '',
           locationName: '',
+          locationAddress: '',
+          locationCoordinates: '',
           basePrice: '',
           depositAmount: '',
           equipmentList: [],
@@ -639,27 +643,54 @@ const PhotographyCalendarPage: React.FC = () => {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Start Time</label>
-                    <input
-                      type="datetime-local"
-                      value={formData.startTime}
-                      onChange={(e) => handleInputChange('startTime', e.target.value)}
-                      className="w-full border rounded px-3 py-2"
-                      required
-                    />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-lg font-medium mb-2 text-gray-800">Start Time</label>
+                      <input
+                        type="datetime-local"
+                        value={formData.startTime}
+                        onChange={(e) => {
+                          handleInputChange('startTime', e.target.value);
+                          // Auto-calculate end time based on session type
+                          if (e.target.value) {
+                            const startDate = new Date(e.target.value);
+                            const durationMinutes = formData.sessionType === 'family' ? 60 : 
+                                                   formData.sessionType === 'wedding' ? 480 :
+                                                   formData.sessionType === 'portrait' ? 90 : 60;
+                            const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+                            const endTimeString = endDate.toISOString().slice(0, 16);
+                            handleInputChange('endTime', endTimeString);
+                          }
+                        }}
+                        className="w-full border rounded px-4 py-3 text-lg font-medium"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-lg font-medium mb-2 text-gray-800">End Time</label>
+                      <input
+                        type="datetime-local"
+                        value={formData.endTime}
+                        onChange={(e) => handleInputChange('endTime', e.target.value)}
+                        className="w-full border rounded px-4 py-3 text-lg font-medium"
+                        required
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">End Time</label>
-                    <input
-                      type="datetime-local"
-                      value={formData.endTime}
-                      onChange={(e) => handleInputChange('endTime', e.target.value)}
-                      className="w-full border rounded px-3 py-2"
-                      required
-                    />
-                  </div>
+                  
+                  {formData.goldenHourOptimized && formData.startTime && (
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Sun className="w-4 h-4 text-yellow-600" />
+                        <span className="text-sm font-medium text-yellow-800">Golden Hour Optimization</span>
+                      </div>
+                      <p className="text-xs text-yellow-700">
+                        Based on your timezone, Golden Hour today is approximately 6:30 AM - 7:30 AM and 7:00 PM - 8:00 PM.
+                        Consider weather conditions for optimal lighting.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Link to existing CRM client (optional) */}

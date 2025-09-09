@@ -402,11 +402,7 @@ function App() {
                 />
                 <Route
                   path="/admin/studio-calendar"
-                  element={
-                    <NeonProtectedRoute>
-                      <StudioCalendarPage />
-                    </NeonProtectedRoute>
-                  }
+                  element={<Navigate to="/admin/calendar" replace />}
                 />
                 <Route
                   path="/admin/blog"
