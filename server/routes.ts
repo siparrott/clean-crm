@@ -4301,8 +4301,7 @@ Bitte versuchen Sie es später noch einmal.`;
       
       console.log('Email send request:', { to, subject, body: body?.substring(0, 100) + '...' });
       
-      // Import nodemailer - ES module compatible
-      const nodemailer = await import('nodemailer');
+  // Use nodemailer (imported at top of file)
       
       // Get email settings - using EasyName business email configuration with STARTTLS
       const emailConfig = {
@@ -4322,70 +4321,38 @@ Bitte versuchen Sie es später noch einmal.`;
         logger: true,
         // Add delivery status tracking
         pool: true,
-        try {
-          // Use Europe/Amsterdam as the local time zone
-          const tz = 'Europe/Amsterdam';
-          let cleanDate = dateString.trim();
-          // Google Calendar format: 20131013T100000Z
-          if (cleanDate.includes('T') && cleanDate.endsWith('Z')) {
-            // Remove Z suffix
-            cleanDate = cleanDate.replace('Z', '');
-            const datePart = cleanDate.split('T')[0];
-            const timePart = cleanDate.split('T')[1];
-            if (datePart.length === 8 && timePart.length === 6) {
-              const year = datePart.substring(0, 4);
-              const month = datePart.substring(4, 6);
-              const day = datePart.substring(6, 8);
-              const hour = timePart.substring(0, 2);
-              const minute = timePart.substring(2, 4);
-              const second = timePart.substring(4, 6);
-              // Use luxon for time zone conversion
-              const { DateTime } = require('luxon');
-              const dt = DateTime.fromObject({
-                year: Number(year),
-                month: Number(month),
-                day: Number(day),
-                hour: Number(hour),
-                minute: Number(minute),
-                second: Number(second)
-              }, { zone: 'utc' }).setZone(tz);
-              return dt.toISO();
-            }
-          }
-          // Handle YYYYMMDD format (all-day events)
-          if (cleanDate.length === 8 && !cleanDate.includes('T')) {
-            const year = cleanDate.substring(0, 4);
-            const month = cleanDate.substring(4, 6);
-            const day = cleanDate.substring(6, 8);
-            // All-day events: treat as local date, not UTC
-            const { DateTime } = require('luxon');
-            const dt = DateTime.fromObject({
-              year: Number(year),
-              month: Number(month),
-              day: Number(day),
-              hour: 0,
-              minute: 0,
-              second: 0
-            }, { zone: tz });
-            return dt.toISODate(); // Return YYYY-MM-DD for all-day events
-          }
-          // Fallback: try parsing as local time
-          const { DateTime } = require('luxon');
-          const fallbackDate = DateTime.fromISO(dateString, { zone: tz });
-          if (fallbackDate.isValid) {
-            return fallbackDate.toISO();
-          }
-          // If all else fails, return current local time
-          return DateTime.now().setZone(tz).toISO();
-        } catch (error) {
-          return new Date().toISOString();
-        }
+      };
+
+      // Create transporter and send the email
+      const transporter = nodemailer.createTransport(emailConfig as any);
+      const attachmentsArray = Array.isArray(attachments)
+        ? attachments.map((a: any) => ({
+            filename: a?.filename || a?.name,
+            content: a?.content,
+            path: a?.path,
+            contentType: a?.contentType || a?.mimetype
+          }))
+        : undefined;
+
+      const mailOptions = {
+        from: 'hallo@newagefotografie.com',
+        to,
+        subject,
+        html: body,
+        text: typeof body === 'string' ? body.replace(/<[^>]+>/g, '') : undefined,
+        attachments: attachmentsArray
+      } as any;
+
+      const info = await transporter.sendMail(mailOptions);
+
+      // Save a copy to CRM messages (best-effort)
+      try {
         await storage.createCrmMessage({
           senderName: 'New Age Fotografie (Sent)',
           senderEmail: 'hallo@newagefotografie.com',
           subject: `[SENT] ${subject}`,
-          content: `SENT TO: ${to}\n\n${body}`,
-          status: 'archived' // Use valid status value
+          content: `SENT TO: ${to}\n\n${typeof body === 'string' ? body : ''}`,
+          status: 'archived'
         });
         console.log('Sent email saved to database successfully');
       } catch (dbError) {
