@@ -2529,6 +2529,100 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
+  // ==================== CALENDAR CLEANUP TOOLS (ADMIN) ====================
+  // Detect suspicious "stacked" sessions sharing an identical start_time with high counts
+  app.get("/api/admin/calendar/stacked-clusters", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const threshold = parseInt((req.query.threshold as string) || '20', 10);
+      const limit = parseInt((req.query.limit as string) || '20', 10);
+
+      const clusters = await runSql(
+        `
+        SELECT 
+          to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as start_time_iso,
+          COUNT(*)::int as count,
+          SUM(CASE WHEN ical_uid IS NULL OR ical_uid = '' THEN 1 ELSE 0 END)::int as without_ical_uid,
+          SUM(CASE WHEN ical_uid IS NOT NULL AND ical_uid <> '' THEN 1 ELSE 0 END)::int as with_ical_uid
+        FROM photography_sessions
+        GROUP BY start_time
+        HAVING COUNT(*) >= $1
+        ORDER BY count DESC
+        LIMIT $2
+        `,
+        [threshold, limit]
+      );
+
+      // For the top cluster, provide a tiny sample for visibility
+      let sample: any[] = [];
+      if (clusters.length > 0) {
+        const targetIso = clusters[0].start_time_iso;
+        sample = await runSql(
+          `
+          SELECT id, title, ical_uid, created_at 
+          FROM photography_sessions 
+          WHERE to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') = $1
+          ORDER BY created_at DESC
+          LIMIT 5
+          `,
+          [targetIso]
+        );
+      }
+
+      res.json({ success: true, threshold, clusters, sample });
+    } catch (error) {
+      console.error('Error detecting stacked clusters:', error);
+      res.status(500).json({ success: false, error: 'Failed to detect clusters' });
+    }
+  });
+
+  // Cleanup stacked sessions for a specific exact start_time ISO (UTC) stamp
+  app.post("/api/admin/calendar/cleanup-stacked", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const { targetStartTimeIso, onlyNullIcalUid = true, dryRun = true } = req.body || {};
+      if (!targetStartTimeIso || typeof targetStartTimeIso !== 'string') {
+        return res.status(400).json({ success: false, error: 'targetStartTimeIso (UTC ISO, e.g. 2025-09-08T16:36:48Z) is required' });
+      }
+
+      // Count matches first
+      const counts = await runSql(
+        `
+        SELECT 
+          COUNT(*)::int as total,
+          SUM(CASE WHEN ical_uid IS NULL OR ical_uid = '' THEN 1 ELSE 0 END)::int as without_ical_uid,
+          SUM(CASE WHEN ical_uid IS NOT NULL AND ical_uid <> '' THEN 1 ELSE 0 END)::int as with_ical_uid
+        FROM photography_sessions
+        WHERE to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') = $1
+        `,
+        [targetStartTimeIso]
+      );
+
+      const summary = counts?.[0] || { total: 0, without_ical_uid: 0, with_ical_uid: 0 };
+
+      if (dryRun) {
+        return res.json({ success: true, dryRun: true, targetStartTimeIso, summary });
+      }
+
+      // Perform deletion
+      let deleteQuery = `
+        DELETE FROM photography_sessions
+        WHERE to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') = $1
+      `;
+      const params: any[] = [targetStartTimeIso];
+
+      if (onlyNullIcalUid) {
+        deleteQuery += ` AND (ical_uid IS NULL OR ical_uid = '')`;
+      }
+
+      const before = summary;
+      await runSql(deleteQuery, params);
+
+      res.json({ success: true, targetStartTimeIso, deleted: before, onlyNullIcalUid });
+    } catch (error) {
+      console.error('Error cleaning up stacked sessions:', error);
+      res.status(500).json({ success: false, error: 'Failed to cleanup stacked sessions' });
+    }
+  });
+
   // ==================== TOP CLIENTS ROUTES ====================
   app.get("/api/crm/top-clients", authenticateUser, async (req: Request, res: Response) => {
     try {
