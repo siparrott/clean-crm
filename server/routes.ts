@@ -3611,12 +3611,19 @@ Bitte versuchen Sie es später noch einmal.`;
 
       for (const event of importedEvents) {
         try {
-          // Helper function to safely create date
-          const safeCreateDate = (dateString: string | undefined): Date => {
-            if (!dateString) return new Date();
+          // Helper: coerce to Date or return null
+          const safeCreateDate = (dateString: string | undefined): Date | null => {
+            if (!dateString) return null;
             const date = new Date(dateString);
-            return isNaN(date.getTime()) ? new Date() : date;
+            return isNaN(date.getTime()) ? null : date;
           };
+
+          const start = safeCreateDate(event.dtstart);
+          const end = safeCreateDate(event.dtend);
+          if (!start || !end) {
+            console.error('SKIP_IMPORT_INVALID_DATES', { summary: event.summary, dtstart: event.dtstart, dtend: event.dtend });
+            continue; // skip invalid entries instead of assigning "now"
+          }
 
           // Create photography session from calendar event
           const session = {
@@ -3627,8 +3634,8 @@ Bitte versuchen Sie es später noch einmal.`;
             sessionType: 'imported',
             status: 'confirmed',
             // Ensure timestamps are valid Date objects for Drizzle/pg driver
-            startTime: safeCreateDate(event.dtstart),
-            endTime: safeCreateDate(event.dtend),
+            startTime: start,
+            endTime: end,
             locationName: event.location || '',
             locationAddress: event.location || '',
             clientName: extractClientFromDescription(event.description || event.summary || ''),
@@ -3815,12 +3822,19 @@ Bitte versuchen Sie es später noch einmal.`;
 
       for (const event of importedEvents) {
         try {
-          // Helper function to safely create date
-          const safeCreateDate = (dateString: string | undefined): Date => {
-            if (!dateString) return new Date();
+          // Helper: coerce to Date or return null
+          const safeCreateDate = (dateString: string | undefined): Date | null => {
+            if (!dateString) return null;
             const date = new Date(dateString);
-            return isNaN(date.getTime()) ? new Date() : date;
+            return isNaN(date.getTime()) ? null : date;
           };
+
+          const start = safeCreateDate(event.dtstart);
+          const end = safeCreateDate(event.dtend);
+          if (!start || !end) {
+            console.error('SKIP_IMPORT_INVALID_DATES', { summary: event.summary, dtstart: event.dtstart, dtend: event.dtend });
+            continue; // skip invalid entries instead of assigning "now"
+          }
 
           // Create photography session from calendar event
           const session = {
@@ -3831,8 +3845,8 @@ Bitte versuchen Sie es später noch einmal.`;
             sessionType: 'imported',
             status: 'confirmed',
             // Ensure timestamps are valid Date objects for Drizzle/pg driver
-            startTime: safeCreateDate(event.dtstart),
-            endTime: safeCreateDate(event.dtend),
+            startTime: start,
+            endTime: end,
             locationName: event.location || '',
             locationAddress: event.location || '',
             clientName: extractClientFromDescription(event.description || event.summary || ''),

@@ -355,6 +355,33 @@ export class DatabaseStorage implements IStorage {
         if (coerced) (session as any)[f] = coerced;
       }
 
+      // If we have an iCal UID, reconcile by that first to prevent duplicates across imports
+      if ((session as any).icalUid) {
+        const byUid = await db
+          .select()
+          .from(photographySessions)
+          .where(eq(photographySessions.icalUid, (session as any).icalUid as any))
+          .limit(1);
+        if (byUid && byUid[0]) {
+          const [updated] = await db
+            .update(photographySessions)
+            .set({
+              title: (session as any).title,
+              description: (session as any).description,
+              startTime: (session as any).startTime,
+              endTime: (session as any).endTime,
+              locationName: (session as any).locationName,
+              locationAddress: (session as any).locationAddress,
+              clientName: (session as any).clientName,
+              icalUid: (session as any).icalUid,
+              updatedAt: new Date(),
+            })
+            .where(eq(photographySessions.id, (byUid[0] as any).id))
+            .returning();
+          return updated as unknown as PhotographySession;
+        }
+      }
+
       // Upsert by ID; update key fields (enables correcting times after parser fixes)
       const upserted = await db
         .insert(photographySessions)
@@ -378,7 +405,7 @@ export class DatabaseStorage implements IStorage {
 
       let row = upserted[0] as unknown as PhotographySession | undefined;
 
-      // Secondary reconciliation: if a different ID exists for same icalUid, update it
+  // Secondary reconciliation: if we somehow didn't get a row back, try by icalUid
       if (!row && (session as any).icalUid) {
         const existingByUid = await db
           .select()
