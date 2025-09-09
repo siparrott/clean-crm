@@ -1043,9 +1043,13 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>(() => {
-    // Try to get language from localStorage, default to 'de'
-    const savedLang = localStorage.getItem('language');
-    return (savedLang === 'en' || savedLang === 'de') ? savedLang : 'de';
+  // Try to get language from localStorage, default to 'en'
+  const savedLang = localStorage.getItem('language');
+  if (savedLang === 'en' || savedLang === 'de') return savedLang as Language;
+  // Optional: detect browser language, prefer 'en' otherwise
+  const browserLang = (navigator.language || navigator.languages?.[0] || '').toLowerCase();
+  if (browserLang.startsWith('de')) return 'de';
+  return 'en';
   });
 
   useEffect(() => {
@@ -1056,7 +1060,11 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [language]);
 
   const t = (key: string): string => {
-    return (translations[language] as any)[key] || key;
+    // Prefer current language, then fallback to English, then the key
+    const current = (translations[language] as any)[key];
+    if (current) return current;
+    const fallbackEn = (translations.en as any)[key];
+    return fallbackEn || key;
   };
 
   return (
