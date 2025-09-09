@@ -121,6 +121,8 @@ const PhotographyCalendarPage: React.FC = () => {
     fetchSessions();
     fetchLeadsCount();
   fetchDashboardStats();
+  // Preload clients so calendar can resolve names from clientId
+  fetchClients();
   }, []);
 
   const fetchLeadsCount = async () => {
@@ -535,7 +537,7 @@ const PhotographyCalendarPage: React.FC = () => {
         {/* Advanced Photography Calendar */}
         <AdvancedPhotographyCalendar 
           sessions={sessions}
-          clients={[]} // CRM clients will be loaded from API
+          clients={clients}
           onSessionClick={handleSessionClick}
           onCreateSession={handleCreateSession}
           onUpdateSession={() => {}} // Will be implemented
