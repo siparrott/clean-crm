@@ -1538,6 +1538,116 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
+  // Find duplicate clients (by email or phone)
+  app.get("/api/crm/clients/duplicates", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const by = (String(req.query.by || 'email').toLowerCase() === 'phone') ? 'phone' : 'email';
+      const limit = Math.max(1, Math.min(500, Number(req.query.limit ?? 100)));
+      const keyExpr = by === 'phone' ? `NULLIF(TRIM(phone),'')` : `LOWER(NULLIF(TRIM(email),'') )`;
+      const rows = await runSql(
+        `SELECT ${keyExpr} AS dup_key, ARRAY_AGG(id) AS ids, COUNT(*)::int AS count
+         FROM crm_clients
+         WHERE ${keyExpr} IS NOT NULL
+         GROUP BY 1
+         HAVING COUNT(*) > 1
+         ORDER BY COUNT(*) DESC
+         LIMIT $1`,
+        [limit]
+      );
+      res.json({ by, groups: rows });
+    } catch (error) {
+      console.error('Error listing duplicate clients:', error);
+      res.status(500).json({ error: 'Failed to list duplicates' });
+    }
+  });
+
+  // Merge duplicate clients into a single record per duplicate key
+  app.post("/api/crm/clients/merge-duplicates", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const { by = 'email', dryRun = true, limit = 200, strategy = 'keep-oldest' } = req.body || {};
+      const mode = String(by).toLowerCase() === 'phone' ? 'phone' : 'email';
+      const keepOldest = String(strategy).toLowerCase() !== 'keep-newest';
+      const lim = Math.max(1, Math.min(1000, Number(limit)));
+
+      const keyExpr = mode === 'phone' ? `NULLIF(TRIM(phone),'')` : `LOWER(NULLIF(TRIM(email),'') )`;
+      const groups = await runSql(
+        `SELECT ${keyExpr} AS dup_key, ARRAY_AGG(id) AS ids, COUNT(*)::int AS count
+         FROM crm_clients
+         WHERE ${keyExpr} IS NOT NULL
+         GROUP BY 1
+         HAVING COUNT(*) > 1
+         ORDER BY COUNT(*) DESC
+         LIMIT $1`,
+        [lim]
+      );
+
+      let totalMerged = 0;
+      const previews: any[] = [];
+
+      for (const g of groups) {
+        const ids: string[] = g.ids || [];
+        if (!ids || ids.length < 2) continue;
+        // Load candidate rows to pick a primary
+        const rows = await runSql(
+          `SELECT id, created_at, updated_at, first_name, last_name, email, phone, address, city, state, zip, country, company, notes
+           FROM crm_clients WHERE id = ANY($1)`,
+          [ids]
+        );
+        if (!rows || rows.length < 2) continue;
+
+        rows.sort((a: any, b: any) => {
+          const ta = new Date(a.created_at || a.updated_at || 0).getTime();
+          const tb = new Date(b.created_at || b.updated_at || 0).getTime();
+          return keepOldest ? (ta - tb) : (tb - ta);
+        });
+        const primary = rows[0];
+        const duplicates = rows.slice(1);
+        const dupIds = duplicates.map((r: any) => r.id);
+
+        previews.push({ key: g.dup_key, keep: primary.id, remove: dupIds });
+        totalMerged += dupIds.length;
+
+        if (dryRun) continue;
+
+        // For each duplicate, re-link references then delete dup
+        for (const d of duplicates) {
+          const dupId = d.id;
+          // Re-link references to primary client
+          await runSql(`UPDATE crm_invoices SET client_id = $1 WHERE client_id = $2`, [primary.id, dupId]);
+          await runSql(`UPDATE crm_messages SET client_id = $1 WHERE client_id = $2`, [primary.id, dupId]);
+          await runSql(`UPDATE voucher_sales SET redeemed_by = $1 WHERE redeemed_by = $2`, [primary.id, dupId]);
+          await runSql(`UPDATE galleries SET client_id = $1 WHERE client_id = $2`, [primary.id, dupId]).catch(() => {});
+          // photography_sessions stores client_id as text
+          await runSql(`UPDATE photography_sessions SET client_id = $1::text WHERE client_id = $2::text`, [primary.id, dupId]).catch(() => {});
+
+          // Best-effort: fill missing fields on primary with data from duplicate
+          await runSql(
+            `UPDATE crm_clients AS c SET
+               phone = COALESCE(NULLIF(c.phone,''), NULLIF($2,'')),
+               address = COALESCE(NULLIF(c.address,''), NULLIF($3,'')),
+               city = COALESCE(NULLIF(c.city,''), NULLIF($4,'')),
+               state = COALESCE(NULLIF(c.state,''), NULLIF($5,'')),
+               zip = COALESCE(NULLIF(c.zip,''), NULLIF($6,'')),
+               country = COALESCE(NULLIF(c.country,''), NULLIF($7,'')),
+               company = COALESCE(NULLIF(c.company,''), NULLIF($8,'')),
+               notes = COALESCE(NULLIF(c.notes,''), NULLIF($9,'')),
+               updated_at = NOW()
+             WHERE c.id = $1`,
+            [primary.id, d.phone, d.address, d.city, d.state, d.zip, d.country, d.company, d.notes]
+          ).catch(() => {});
+
+          // Delete duplicate row
+          await runSql(`DELETE FROM crm_clients WHERE id = $1`, [dupId]);
+        }
+      }
+
+      return res.json({ success: true, dryRun, by: mode, groups: groups.length, totalMerged, preview: previews.slice(0, 20) });
+    } catch (error) {
+      console.error('Error merging duplicate clients:', error);
+      res.status(500).json({ error: 'Failed to merge duplicates' });
+    }
+  });
+
   // ==================== CRM LEADS ====================
   app.get("/api/crm/leads", authenticateUser, async (req: Request, res: Response) => {
     try {
