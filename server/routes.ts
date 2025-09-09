@@ -4000,16 +4000,28 @@ Bitte versuchen Sie es später noch einmal.`;
         const colonIndex = line.indexOf(':');
         const property = line.substring(0, colonIndex);
         const value = line.substring(colonIndex + 1);
-        
+
         // Handle multi-line values
         multiLineProperty = property;
         multiLineValue = value;
-        
-        // Process common properties
-        const propName = property.split(';')[0].toLowerCase();
-        if (propName === 'dtstart' || propName === 'dtend') {
+
+        // Extract base property and any parameters (e.g., TZID)
+        const [baseProp, ...paramParts] = property.split(';');
+        const propName = baseProp.toLowerCase();
+        const params: Record<string, string> = {};
+        for (const p of paramParts) {
+          const eqIdx = p.indexOf('=');
+          if (eqIdx > -1) {
+            const k = p.substring(0, eqIdx).trim().toLowerCase();
+            const v = p.substring(eqIdx + 1).trim();
+            params[k] = v;
+          }
+        }
+
+    if (propName === 'dtstart' || propName === 'dtend') {
           try {
-            currentEvent[propName] = parseICalDate(value);
+      const defaultTz = process.env.DEFAULT_CAL_TZ || 'Europe/Vienna';
+      currentEvent[propName] = parseICalDate(value, params['tzid'] || defaultTz);
           } catch (error) {
             console.error(`Error parsing ${propName}: ${value}`, error);
             currentEvent[propName] = new Date().toISOString();
@@ -4023,10 +4035,10 @@ Bitte versuchen Sie es später noch einmal.`;
     return events;
   }
 
-  // Helper function to parse iCal dates
-  function parseICalDate(dateString: string): string {
+  // Helper function to parse iCal dates (supports TZID and all-day values)
+  function parseICalDate(dateString: string, tzid?: string): string {
     try {
-      console.log(`Parsing date: ${dateString}`);
+      console.log(`Parsing date: ${dateString}${tzid ? ` TZID=${tzid}` : ''}`);
       
       // Handle various iCal date formats
       let cleanDate = dateString.trim();
@@ -4064,8 +4076,29 @@ Bitte versuchen Sie es später noch einmal.`;
         const month = cleanDate.substring(4, 6);
         const day = cleanDate.substring(6, 8);
         
-        const isoString = `${year}-${month}-${day}T00:00:00.000Z`;
+        // Treat all-day as midnight in specified TZ (or UTC) then convert to UTC
+        const localIso = `${year}-${month}-${day}T00:00:00`;
+        const isoString = tzid ? convertLocalToUtcIso(localIso, tzid) : `${year}-${month}-${day}T00:00:00.000Z`;
         const dateObj = new Date(isoString);
+        if (!isNaN(dateObj.getTime())) {
+          return dateObj.toISOString();
+        }
+      }
+
+      // Handle local time like YYYYMMDDTHHMMSS (possibly with TZID)
+      if (cleanDate.length === 15 && cleanDate.includes('T')) {
+        const datePart = cleanDate.substring(0, 8);
+        const timePart = cleanDate.substring(9, 15);
+        const year = parseInt(datePart.substring(0, 4), 10);
+        const month = parseInt(datePart.substring(4, 6), 10);
+        const day = parseInt(datePart.substring(6, 8), 10);
+        const hour = parseInt(timePart.substring(0, 2), 10);
+        const minute = parseInt(timePart.substring(2, 4), 10);
+        const second = parseInt(timePart.substring(4, 6), 10);
+
+        const localIso = `${year.toString().padStart(4,'0')}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:${String(second).padStart(2,'0')}`;
+        const utcIso = tzid ? convertLocalToUtcIso(localIso, tzid) : new Date(localIso).toISOString();
+        const dateObj = new Date(utcIso);
         if (!isNaN(dateObj.getTime())) {
           return dateObj.toISOString();
         }
@@ -4085,6 +4118,26 @@ Bitte versuchen Sie es später noch einmal.`;
       console.error(`Error parsing date: ${dateString}`, error);
       return new Date().toISOString();
     }
+  }
+
+  // Convert a local ISO (no timezone) in a given IANA TZ to a UTC ISO string
+  function convertLocalToUtcIso(localIso: string, tzid: string): string {
+    try {
+      // Load date-fns-tz synchronously in ESM using createRequire
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { createRequire } = require('module');
+      const requireFn = createRequire(import.meta.url);
+      const tzLib = requireFn('date-fns-tz');
+      if (tzLib && typeof tzLib.zonedTimeToUtc === 'function') {
+        const d = tzLib.zonedTimeToUtc(localIso, tzid);
+        return new Date(d).toISOString();
+      }
+    } catch (e) {
+      console.error('convertLocalToUtcIso failed to load date-fns-tz:', e);
+    }
+    // Fallback: interpret as local server time and return
+    const d = new Date(localIso);
+    return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
   }
 
   // Helper function to decode iCal values

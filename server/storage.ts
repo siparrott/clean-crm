@@ -443,25 +443,30 @@ export class DatabaseStorage implements IStorage {
         console.error('STORAGE DIAG failed:', e);
       }
 
-      // Idempotent insert: ignore duplicate primary key conflicts and return existing row if present
-      let result = await db
+      // Upsert: if the row exists (same primary key), update core fields to correct previous bad imports
+      const updatable = {
+        title: (session as any).title,
+        description: (session as any).description,
+        startTime: (session as any).startTime,
+        endTime: (session as any).endTime,
+        locationName: (session as any).locationName,
+        locationAddress: (session as any).locationAddress,
+        clientName: (session as any).clientName,
+        paymentStatus: (session as any).paymentStatus,
+        status: (session as any).status,
+        updatedAt: new Date(),
+      } as any;
+
+      const result = await db
         .insert(photographySessions)
         .values(session as any)
-        // Avoid duplicate-key crashes on repeated imports; rely on stable IDs (e.g., imported-<uid>)
-        // If row already exists, do nothing and fetch existing record below
-        // @ts-ignore drizzle typing for onConflictDoNothing target inference
-        .onConflictDoNothing({ target: photographySessions.id })
+        // @ts-ignore drizzle typing for onConflictDoUpdate target inference
+        .onConflictDoUpdate({
+          target: photographySessions.id,
+          set: updatable,
+        })
         .returning();
 
-      if (!result || result.length === 0) {
-        // Fetch existing record by id to provide a consistent return value
-        const existing = await db
-          .select()
-          .from(photographySessions)
-          .where(eq(photographySessions.id, (session as any).id))
-          .limit(1);
-        if (existing && existing[0]) return existing[0] as unknown as PhotographySession;
-      }
       return result[0];
     } catch (err) {
       console.error('createPhotographySession insert error:', err);

@@ -113,6 +113,9 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
   const [selectedSessions, setSelectedSessions] = useState<string[]>([]);
   const [draggedSession, setDraggedSession] = useState<PhotographySession | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [listSortOrder, setListSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [filterMonth, setFilterMonth] = useState<string>('');
+  const [filterYear, setFilterYear] = useState<string>('');
 
   // Filter and search sessions
   const filteredSessions = sessions.filter(session => {
@@ -124,6 +127,15 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                            session.locationName?.toLowerCase().includes(query) ||
                            session.sessionType.toLowerCase().includes(query);
       if (!matchesSearch) return false;
+    }
+
+    // Month/Year filter
+    if (filterMonth || filterYear) {
+      const start = session.startTime ? parseISO(session.startTime) : (session.endTime ? parseISO(session.endTime) : null);
+      if (!start) return false;
+      const monthOk = filterMonth ? (format(start, 'MM') === filterMonth.padStart(2, '0')) : true;
+      const yearOk = filterYear ? (format(start, 'yyyy') === filterYear) : true;
+      if (!(monthOk && yearOk)) return false;
     }
 
     // Type filter
@@ -235,9 +247,11 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
         
         {/* Calendar Days */}
         {calendarDays.map(day => {
-          const daysSessions = filteredSessions.filter(session => 
-            isSameDay(parseISO(session.startTime), day)
-          );
+          const daysSessions = filteredSessions.filter(session => {
+            const st = session.startTime ? parseISO(session.startTime) : null;
+            const et = !st && session.endTime ? parseISO(session.endTime) : null;
+            return (st && isSameDay(st, day)) || (et && isSameDay(et, day));
+          });
           const isCurrentMonth = isSameMonth(day, currentDate);
           const isToday = isSameDay(day, new Date());
           const isSelected = selectedDate && isSameDay(day, selectedDate);
@@ -315,9 +329,11 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
 
           {/* Day columns */}
           {weekDays.map(day => {
-            const daysSessions = filteredSessions.filter(session => 
-              isSameDay(parseISO(session.startTime), day)
-            );
+            const daysSessions = filteredSessions.filter(session => {
+              const st = session.startTime ? parseISO(session.startTime) : null;
+              const et = !st && session.endTime ? parseISO(session.endTime) : null;
+              return (st && isSameDay(st, day)) || (et && isSameDay(et, day));
+            });
             const isToday = isSameDay(day, new Date());
 
             return (
@@ -381,9 +397,11 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
 
   const renderDayView = () => {
     const hours = Array.from({ length: 24 }, (_, i) => i);
-    const daysSessions = filteredSessions.filter(session => 
-      isSameDay(parseISO(session.startTime), currentDate)
-    );
+    const daysSessions = filteredSessions.filter(session => {
+      const st = session.startTime ? parseISO(session.startTime) : null;
+      const et = !st && session.endTime ? parseISO(session.endTime) : null;
+      return (st && isSameDay(st, currentDate)) || (et && isSameDay(et, currentDate));
+    });
 
     return (
       <div className="overflow-auto max-h-[600px]">
@@ -642,14 +660,19 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
   };
 
   const renderListView = () => {
-    const groupedSessions = filteredSessions.reduce((groups, session) => {
+    const sorted = [...filteredSessions].sort((a, b) => {
+      const at = parseISO(a.startTime).getTime();
+      const bt = parseISO(b.startTime).getTime();
+      return listSortOrder === 'asc' ? at - bt : bt - at;
+    });
+    const groupedSessions = sorted.reduce((groups, session) => {
       const date = format(parseISO(session.startTime), 'yyyy-MM-dd');
       if (!groups[date]) groups[date] = [];
       groups[date].push(session);
       return groups;
     }, {} as Record<string, PhotographySession[]>);
 
-    const sortedDates = Object.keys(groupedSessions).sort();
+    const sortedDates = Object.keys(groupedSessions).sort((a, b) => listSortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a));
 
     return (
       <div className="space-y-6">
@@ -827,6 +850,29 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
               <Filter className="w-4 h-4" />
               <span className="text-sm">Filters</span>
             </button>
+            {/* Month/Year quick filters */}
+            <div className="flex items-center space-x-2">
+              <select
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                className="px-2 py-1 border rounded text-sm"
+              >
+                <option value="">All months</option>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                  <option key={m} value={String(m).padStart(2, '0')}>{String(m).padStart(2, '0')}</option>
+                ))}
+              </select>
+              <select
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+                className="px-2 py-1 border rounded text-sm"
+              >
+                <option value="">All years</option>
+                {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 3 + i).map(y => (
+                  <option key={y} value={String(y)}>{y}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Session count */}
@@ -892,6 +938,8 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                     setFilterType('all');
                     setFilterValue('');
                     setSearchQuery('');
+                    setFilterMonth('');
+                    setFilterYear('');
                   }}
                   className="px-3 py-2 border rounded text-sm hover:bg-gray-100"
                 >
@@ -899,6 +947,19 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
                 </button>
               </div>
             </div>
+            {view === 'list' && (
+              <div className="mt-3 flex items-center space-x-3">
+                <span className="text-sm text-gray-700">List sort:</span>
+                <select
+                  value={listSortOrder}
+                  onChange={(e) => setListSortOrder(e.target.value as 'asc' | 'desc')}
+                  className="px-2 py-1 border rounded text-sm"
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+            )}
           </div>
         )}
       </div>
