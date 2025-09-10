@@ -1,13 +1,12 @@
-// Production-safe server entry point
-import("./server/index.js").catch(async (err) => {
-  console.error("Failed to import compiled server, trying TypeScript:", err.message);
-  try {
-    // Fallback to tsx for TypeScript execution
-    const { register } = await import("tsx/esm");
-    register();
-    await import("./server/index.ts");
-  } catch (tsErr) {
-    console.error("Failed to start server:", tsErr);
-    process.exit(1);
-  }
-});
+// Production-safe server entry point with TypeScript support
+try {
+  // Try to register tsx for TypeScript execution first
+  const { register } = await import("tsx/esm");
+  register();
+  console.log("🔥 Starting server with TypeScript support...");
+  await import("./server/index.ts");
+} catch (err) {
+  console.error("❌ Failed to start server:", err);
+  console.error("Stack trace:", err.stack);
+  process.exit(1);
+}
