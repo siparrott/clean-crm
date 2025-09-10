@@ -32,6 +32,46 @@ const mockApiResponses = {
   }
 };
 
+// Handle login authentication
+function handleLogin(req, res) {
+  let body = '';
+  req.on('data', chunk => {
+    body += chunk.toString();
+  });
+  
+  req.on('end', () => {
+    try {
+      const { email, password } = JSON.parse(body);
+      
+      // Admin credentials check
+      if ((email === 'admin@newagefotografie.com' || email === 'matt@newagefotografie.com') && password === 'admin123') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          user: {
+            email: email,
+            role: 'admin',
+            name: 'Admin User'
+          },
+          token: 'admin-session-token'
+        }));
+      } else {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          error: 'Invalid credentials'
+        }));
+      }
+    } catch (error) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: 'Invalid request format'
+      }));
+    }
+  });
+}
+
 // MIME types for static files
 const mimeTypes = {
   '.html': 'text/html',
@@ -76,6 +116,13 @@ const server = http.createServer((req, res) => {
   
   // API endpoints
   if (pathname.startsWith('/api/')) {
+    // Handle login specifically
+    if (pathname === '/api/auth/login' && req.method === 'POST') {
+      handleLogin(req, res);
+      return;
+    }
+    
+    // Handle other API endpoints
     res.writeHead(200, { 'Content-Type': 'application/json' });
     const response = mockApiResponses[pathname] || {
       status: 'API_READY',
