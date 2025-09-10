@@ -211,31 +211,18 @@ const PhotographyCalendarPage: React.FC = () => {
     }
   };
 
-  const fetchDashboardStats = async () => {
-    try {
-      const resp = await fetch('/api/admin/dashboard-stats');
-      if (!resp.ok) return;
-      const data = await resp.json();
-      setStats({
-        totalSessions: data.totalSessions || 0,
-        upcomingSessions: data.upcomingSessions || 0,
-        completedSessions: data.completedSessions || 0,
-        totalRevenue: data.totalRevenue || 0,
-        pendingDeposits: data.pendingDeposits || 0,
-        equipmentConflicts: data.equipmentConflicts || 0,
-      });
-      if (typeof data.newLeads === 'number') setNewLeadsCount(data.newLeads);
-    } catch (err) {
-      // ignore
-    }
-  };
+  // (Legacy fetchDashboardStats removed; replaced later with enhanced version using auth + fallback)
 
   const fetchSessions = async () => {
     try {
       setIsLoading(true);
   const useDebug = import.meta.env.VITE_USE_DEBUG_SESSIONS === 'true';
   const endpoint = useDebug ? '/api/debug/photography-sessions' : '/api/photography/sessions';
-  const response = await fetch(endpoint);
+  const response = await fetch(endpoint, {
+    headers: {
+      'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+    }
+  });
       if (response.ok) {
         const data = await response.json();
         setSessions(data);
@@ -250,27 +237,100 @@ const PhotographyCalendarPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+  const [serverStatsLoaded, setServerStatsLoaded] = useState(false);
 
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const computeDerivedStats = (list: PhotographySession[]) => {
+    const now = new Date();
+    const in30Days = new Date(); in30Days.setDate(in30Days.getDate() + 30);
+    let totalRevenue = 0;
+    let upcoming = 0;
+    let completed = 0;
+    let pendingDeposits = 0;
+    // Simple equipment conflict detection (same start day & overlapping time w/ shared equipment)
+    let equipmentConflicts = 0;
+    const byDay: Record<string, PhotographySession[]> = {};
 
-  const getSessionsForDate = (date: Date) => {
-    return sessions.filter(session => 
-      isSameDay(parseISO(session.startTime), date)
-    );
+    list.forEach(s => {
+      if (s.basePrice && typeof s.basePrice === 'number') totalRevenue += s.basePrice;
+      const start = s.startTime ? new Date(s.startTime) : null;
+      const end = s.endTime ? new Date(s.endTime) : null;
+      if (start && start >= now && start <= in30Days) upcoming++;
+      if (s.status === 'completed') {
+        if (start && start.getFullYear() === now.getFullYear() && start.getMonth() === now.getMonth()) completed++;
+      }
+      if (s.depositAmount && !(s as any).depositPaid) pendingDeposits++;
+      if (start) {
+        const key = start.toISOString().slice(0,10);
+        byDay[key] = byDay[key] || []; byDay[key].push(s);
+      }
+    });
+    // naive conflict calc
+    Object.values(byDay).forEach(daySessions => {
+      for (let i=0;i<daySessions.length;i++) {
+        for (let j=i+1;j<daySessions.length;j++) {
+          const a = daySessions[i]; const b = daySessions[j];
+          if (!a.equipmentList || !b.equipmentList) continue;
+          const overlapEquip = a.equipmentList.filter(e => b.equipmentList!.includes(e));
+          if (overlapEquip.length) {
+            const aStart = new Date(a.startTime).getTime();
+            const aEnd = new Date(a.endTime).getTime();
+            const bStart = new Date(b.startTime).getTime();
+            const bEnd = new Date(b.endTime).getTime();
+            const overlapTime = aStart < bEnd && bStart < aEnd;
+            if (overlapTime) equipmentConflicts++;
+          }
+        }
+      }
+    });
+    return {
+      totalSessions: list.length,
+      upcomingSessions: upcoming,
+      completedSessions: completed,
+      totalRevenue,
+      pendingDeposits,
+      equipmentConflicts
+    } as DashboardStats;
   };
 
+  const fetchDashboardStats = async () => {
+    try {
+      const resp = await fetch('/api/admin/dashboard-stats', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` }
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      setStats({
+        totalSessions: data.totalSessions ?? 0,
+        upcomingSessions: data.upcomingSessions ?? 0,
+        completedSessions: data.completedSessions ?? 0,
+        totalRevenue: data.totalRevenue ?? 0,
+        pendingDeposits: data.pendingDeposits ?? 0,
+        equipmentConflicts: data.equipmentConflicts ?? 0,
+      });
+      setServerStatsLoaded(true);
+      if (typeof data.newLeads === 'number') setNewLeadsCount(data.newLeads);
+    } catch (err) {
+      // ignore; fallback will compute
+    }
+  };
+
+  // Fallback / live recompute when sessions load (if server stats unavailable)
+  useEffect(() => {
+    if (!serverStatsLoaded) {
+      setStats(computeDerivedStats(sessions));
+    }
+  }, [sessions, serverStatsLoaded]);
+  // Session type color helper (restored after metrics patch)
   const getSessionTypeColor = (sessionType: string) => {
-    const colors = {
-      'wedding': 'bg-pink-100 border-pink-300 text-pink-800',
-      'portrait': 'bg-blue-100 border-blue-300 text-blue-800',
-      'commercial': 'bg-green-100 border-green-300 text-green-800',
-      'event': 'bg-purple-100 border-purple-300 text-purple-800',
-      'family': 'bg-orange-100 border-orange-300 text-orange-800',
-      'fashion': 'bg-indigo-100 border-indigo-300 text-indigo-800',
+    const colors: Record<string,string> = {
+      wedding: 'bg-pink-100 border-pink-300 text-pink-800',
+      portrait: 'bg-blue-100 border-blue-300 text-blue-800',
+      commercial: 'bg-green-100 border-green-300 text-green-800',
+      event: 'bg-purple-100 border-purple-300 text-purple-800',
+      family: 'bg-orange-100 border-orange-300 text-orange-800',
+      fashion: 'bg-indigo-100 border-indigo-300 text-indigo-800'
     };
-    return colors[sessionType as keyof typeof colors] || 'bg-gray-100 border-gray-300 text-gray-800';
+    return colors[sessionType] || 'bg-gray-100 border-gray-300 text-gray-800';
   };
 
   const getStatusIcon = (status: string) => {
