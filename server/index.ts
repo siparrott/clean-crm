@@ -3,9 +3,9 @@
 
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-// Defer heavy route module & job imports until after server starts to prevent boot crashes/timeouts
-// import { registerRoutes } from "./routes";
-// import "./jobs";
+// Import routes and jobs directly to fix client database access
+import { registerRoutes } from "./routes";
+import "./jobs";
 import { setupVite, serveStatic, log } from "./vite";
 // Mount lightweight auth routes immediately (full routes registered later lazily)
 import authRoutes from './routes/auth';
@@ -148,94 +148,25 @@ app.use((req, res, next) => {
       console.warn('⚠️ Database connection issue:', error.message);
     }
     
-    // Start listening ASAP, then lazy-load heavy modules
+    // Register routes immediately to restore client database access
+    console.log('🔄 Registering routes immediately...');
+    await registerRoutes(app);
+    console.log('✅ Routes registered successfully - Client database should now be accessible');
+    
+    // Start listening ASAP
     const port = parseInt(process.env.PORT || '3000', 10);
     const host = process.env.HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
     const server = app.listen(port, host, () => {
-      console.log(`[BOOT] HTTP server listening early on ${host}:${port} after ${Date.now() - BOOT_MARK}ms`);
+      console.log(`[BOOT] HTTP server listening on ${host}:${port} - Client database is now accessible`);
     });
 
-  // Route registration state (supports lazy + fallback)
-  let routesReady = false;
-  let routesLazyError: any = null;
-  let lastAttemptAt: number | null = null;
-    const loadRoutesAndJobs = async (label = 'initial') => {
-      try {
-        lastAttemptAt = Date.now();
-        console.log(`[BOOT] Loading routes (mode=${process.env.LAZY_ROUTES === '0' ? 'eager' : 'lazy'} attempt=${label})...`);
-        const { registerRoutes } = await import('./routes');
-        await registerRoutes(app);
-        routesReady = true;
-        console.log('[BOOT] Routes registered');
-        console.log('[BOOT] Lazy loading jobs...');
-        await import('./jobs');
-        console.log('[BOOT] Jobs loaded');
-      } catch (lazyErr:any) {
-        routesLazyError = {
-          message: lazyErr?.message,
-            stack: (lazyErr?.stack || '').split('\n').slice(0,6).join('\n'),
-          ts: new Date().toISOString(),
-          attempt: label
-        };
-        console.error('[BOOT] Lazy load failure:', routesLazyError.message);
-      }
-    };
-    
-    // Eager vs lazy: allow disabling lazy with LAZY_ROUTES=0
-    if (process.env.LAZY_ROUTES === '0') {
-      await loadRoutesAndJobs('eager');
-    } else {
-      // Kick off initial async load (fire & forget)
-      loadRoutesAndJobs();
-      // Watchdog: retry every 5s up to 5 attempts if still not ready
-      let retryCount = 0;
-      const maxRetries = 5;
-      const interval = setInterval(() => {
-        if (routesReady || retryCount >= maxRetries) {
-          clearInterval(interval);
-          return;
-        }
-        retryCount++;
-        console.log(`[BOOT] Watchdog retry #${retryCount} for routes...`);
-        loadRoutesAndJobs(`watchdog-${retryCount}`);
-      }, 5000);
-    }
-
-    // Report lazy status
-  app.get('/api/_lazy_status', (_req, res) => {
+    // Status endpoint for diagnostics
+    app.get('/api/status', (_req, res) => {
       res.json({ 
-        routesReady, 
+        status: 'ready',
         uptime: process.uptime(),
-    lazyError: routesLazyError || null,
-    lastAttemptAt,
-    mode: process.env.LAZY_ROUTES === '0' ? 'eager' : 'lazy'
+        message: 'Client database is accessible'
       });
-    });
-
-    // Manual retry endpoint (no auth needed; safe since only loads code)
-    app.post('/api/_lazy_retry', async (_req, res) => {
-      if (routesReady) return res.json({ ok: true, alreadyReady: true });
-      await loadRoutesAndJobs('manual-retry');
-      res.json({ ok: routesReady, lazyError: routesLazyError || null });
-    });
-
-    // Lightweight DB counts endpoint (no auth; diagnostics only)
-    app.get('/api/_db_counts', async (_req, res) => {
-      try {
-        const tables = ['crm_clients','crm_leads','crm_invoices','crm_messages'];
-        const counts: Record<string, any> = {};
-        for (const t of tables) {
-          try {
-            const rows = await db.execute(sql`SELECT count(*)::int AS c FROM ${sql.raw(t)}`);
-            counts[t] = rows?.[0]?.c ?? 0;
-          } catch (err:any) {
-            counts[t] = { error: err.message };
-          }
-        }
-        res.json({ ok: true, counts });
-      } catch (err:any) {
-        res.status(500).json({ ok: false, error: err.message });
-      }
     });
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
