@@ -122,7 +122,7 @@ app.use((req, res, next) => {
       setTimeout(() => process.exit(1), 1000);
     });
 
-    console.log('� Starting New Age Fotografie CRM server...');
+    console.log('🚀 Starting New Age Fotografie CRM server...');
     
     // Initialize services with error handling
     try {
@@ -150,8 +150,14 @@ app.use((req, res, next) => {
     
     // Register routes immediately to restore client database access
     console.log('🔄 Registering routes immediately...');
-    await registerRoutes(app);
-    console.log('✅ Routes registered successfully - Client database should now be accessible');
+    try {
+      await registerRoutes(app);
+      console.log('✅ Routes registered successfully - Client database should now be accessible');
+    } catch (routeError) {
+      console.error('❌ Failed to register routes:', routeError.message);
+      console.error('Route registration stack:', routeError.stack);
+      // Continue without routes - at least serve health endpoints
+    }
     
     // Start listening ASAP
     const port = parseInt(process.env.PORT || '3000', 10);
