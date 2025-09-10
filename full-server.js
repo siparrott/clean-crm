@@ -184,6 +184,42 @@ const server = http.createServer(async (req, res) => {
         }
         return;
       }
+      
+      // Email sending endpoint
+      if (pathname === '/api/email/send' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const emailData = JSON.parse(body);
+              console.log('📧 Sending email to:', emailData.to);
+              
+              const result = await database.sendEmail(emailData);
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                messageId: result.messageId,
+                clientId: result.clientId,
+                message: 'Email sent successfully'
+              }));
+            } catch (error) {
+              console.error('❌ Email send error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: false, 
+                error: error.message 
+              }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Email API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
     }
     
     // Handle other API endpoints with fallback

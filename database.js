@@ -114,6 +114,79 @@ if (!connectionString) {
       } catch (error) {
         return { success: false, error: error.message };
       }
+    },
+
+    // Send email and log to database
+    async sendEmail(emailData) {
+      try {
+        const { to, subject, content, html, clientId, autoLinkClient } = emailData;
+        
+        // Try to find client if autoLinkClient is enabled
+        let finalClientId = clientId;
+        if (autoLinkClient && !clientId && to) {
+          const clientResult = await pool.query(
+            'SELECT id FROM crm_clients WHERE email ILIKE $1 LIMIT 1',
+            [`%${to}%`]
+          );
+          if (clientResult.rows.length > 0) {
+            finalClientId = clientResult.rows[0].id;
+          }
+        }
+
+        // Create email transporter (basic SMTP)
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransporter({
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT || '587'),
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+          tls: {
+            rejectUnauthorized: false
+          }
+        });
+
+        // Send email
+        const mailOptions = {
+          from: process.env.SMTP_USER,
+          to: to,
+          subject: subject,
+          text: content,
+          html: html || content
+        };
+
+        const result = await transporter.sendMail(mailOptions);
+        
+        // Log email to database
+        await pool.query(
+          `INSERT INTO crm_messages (client_id, type, content, subject, recipient, status, created_at) 
+           VALUES ($1, 'email', $2, $3, $4, 'sent', NOW())`,
+          [finalClientId, content, subject, to]
+        );
+
+        return { 
+          success: true, 
+          messageId: result.messageId,
+          clientId: finalClientId 
+        };
+      } catch (error) {
+        console.error('❌ Error sending email:', error.message);
+        
+        // Log failed email attempt
+        try {
+          await pool.query(
+            `INSERT INTO crm_messages (client_id, type, content, subject, recipient, status, created_at) 
+             VALUES ($1, 'email', $2, $3, $4, 'failed', NOW())`,
+            [emailData.clientId, emailData.content, emailData.subject, emailData.to]
+          );
+        } catch (logError) {
+          console.error('❌ Error logging failed email:', logError.message);
+        }
+
+        throw error;
+      }
     }
   };
 }
