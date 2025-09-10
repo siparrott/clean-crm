@@ -2,7 +2,7 @@
   "name": "photography-crm-demo",
   "version": "1.0.1",
   "description": "Live demo of Photography CRM SaaS platform",
-  "type": "module",
+  "main": "minimal-server.js",
   "engines": {
     "node": "20.x",
     "npm": ">=9.0.0"
@@ -20,7 +20,7 @@
   "build:server:prod": "tsc --project tsconfig.server.json",
   "build:full": "npm run build:client && npm run build:server:prod",
     "validate:deps": "npm list vite tailwindcss autoprefixer postcss",
-    "start": "node emergency-server.js",
+    "start": "node minimal-server.js",
     "start:prod": "cross-env NODE_ENV=production node start.mjs",
   "heroku-postbuild": "npm run build",
     "db:generate": "drizzle-kit generate",
