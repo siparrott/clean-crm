@@ -7,6 +7,8 @@ import express, { type Request, Response, NextFunction } from "express";
 // import { registerRoutes } from "./routes";
 // import "./jobs";
 import { setupVite, serveStatic, log } from "./vite";
+// Mount lightweight auth routes immediately (full routes registered later lazily)
+import authRoutes from './routes/auth';
 
 // Import and configure session middleware
 import { sessionConfig } from './auth';
@@ -50,6 +52,10 @@ app.get('/healthz', (_req, res) => {
 
 // Session middleware must be before auth routes (still early but after healthz)
 app.use(sessionConfig);
+
+// Early auth routes so backend login functions even before lazy route load
+app.use('/api/auth', authRoutes);
+app.use('/api/auth/*', (req, _res, next) => { console.log('[AUTH-EARLY]', req.method, req.originalUrl); next(); });
 
 // Serve uploaded files statically
 app.use('/uploads', express.static('public/uploads'));
