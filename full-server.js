@@ -4,6 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
+// Import database functions
+const database = require('./database.js');
+
 console.log('🚀 Starting PRODUCTION server with Neon database...');
 
 const port = process.env.PORT || 3000;
@@ -85,7 +88,7 @@ const mimeTypes = {
   '.ico': 'image/x-icon'
 };
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
   const pathname = parsedUrl.pathname;
   
@@ -122,7 +125,68 @@ const server = http.createServer((req, res) => {
       return;
     }
     
-    // Handle other API endpoints
+    // Handle database API endpoints
+    if (database) {
+      if (pathname === '/api/crm/clients' && req.method === 'GET') {
+        try {
+          const result = await database.getClients();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+      
+      if (pathname === '/api/crm/leads' && req.method === 'GET') {
+        try {
+          const result = await database.getLeads();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+      
+      if (pathname === '/api/_db_counts' && req.method === 'GET') {
+        try {
+          const result = await database.getCounts();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+      
+      if (pathname === '/api/status' && req.method === 'GET') {
+        try {
+          const dbTest = await database.testConnection();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            status: 'PRODUCTION_READY',
+            database: dbTest.success ? 'Neon PostgreSQL (Connected)' : 'Neon PostgreSQL (Connection Error)',
+            timestamp: new Date().toISOString(),
+            dbTest: dbTest
+          }));
+        } catch (error) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            status: 'DATABASE_ERROR',
+            database: 'Neon PostgreSQL (Error)',
+            error: error.message,
+            timestamp: new Date().toISOString()
+          }));
+        }
+        return;
+      }
+    }
+    
+    // Handle other API endpoints with fallback
     res.writeHead(200, { 'Content-Type': 'application/json' });
     const response = mockApiResponses[pathname] || {
       status: 'API_READY',
