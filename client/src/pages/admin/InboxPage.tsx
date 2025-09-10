@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { supabase } from '../../lib/supabase';
+// Supabase removed: inbox now backed by Neon + hourly server-side IMAP polling
 import { 
   Search, 
   Filter, 
@@ -41,7 +41,7 @@ const InboxPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true); // Hourly now
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -52,13 +52,13 @@ const InboxPage: React.FC = () => {
     filterMessages();
   }, [messages, searchTerm, statusFilter]);
 
-  // Auto-refresh emails every 30 seconds
+  // Auto-refresh emails every hour (aligned with server IMAP polling cadence)
   useEffect(() => {
     if (!autoRefreshEnabled) return;
     
     const interval = setInterval(() => {
       fetchMessages(true); // Silent refresh
-    }, 30000); // 30 seconds
+    }, 60 * 60 * 1000); // 1 hour
 
     return () => clearInterval(interval);
   }, [autoRefreshEnabled]);
@@ -267,7 +267,7 @@ const InboxPage: React.FC = () => {
           <div className="flex space-x-3">
             <div className="flex items-center space-x-2 text-sm text-gray-600">
               <div className={`w-2 h-2 rounded-full ${autoRefreshEnabled ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-              <span>Auto-refresh: {autoRefreshEnabled ? 'On' : 'Off'}</span>
+              <span>Auto-refresh (hourly): {autoRefreshEnabled ? 'On' : 'Off'}</span>
               {lastRefreshTime && (
                 <span className="text-xs text-gray-500">
                   Last: {lastRefreshTime.toLocaleTimeString()}

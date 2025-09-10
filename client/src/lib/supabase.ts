@@ -49,6 +49,9 @@ export const supabase = {
       list: () => Promise.resolve({ data: [], error: null }),
       remove: () => Promise.resolve({ data: null, error: null })
     })
+  },
+  functions: {
+    invoke: (name: string, _options?: any) => Promise.resolve({ data: null, error: { message: `Supabase Edge Function '${name}' disabled - migrate to internal API` } })
   }
 };
 
