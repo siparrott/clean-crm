@@ -27,6 +27,7 @@
     "db:push": "drizzle-kit push",
     "demo:setup": "node scripts/setup-demo-data.js",
     "demo:reset": "node scripts/reset-demo-data.js",
+  "diagnose:crm": "tsx scripts/diagnose-crm.ts",
     "deploy:start": "cross-env NODE_ENV=production tsx server/index.ts",
     "import:dry": "cross-env BASE_URL=http://127.0.0.1:3000 ICS_URL=https://calendar.google.com/calendar/ical/newagefotografen%40gmail.com/public/basic.ics node scripts/reimport-ics.js --dry-run",
     "import:full": "cross-env BASE_URL=http://127.0.0.1:3000 ICS_URL=https://calendar.google.com/calendar/ical/newagefotografen%40gmail.com/public/basic.ics node scripts/reimport-ics.js",
