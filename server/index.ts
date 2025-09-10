@@ -150,11 +150,13 @@ app.use((req, res, next) => {
     });
 
     // Lazy load routes & jobs
+    let routesReady = false;
     (async () => {
       try {
         console.log('[BOOT] Lazy loading routes...');
         const { registerRoutes } = await import('./routes');
-        const srv2 = await registerRoutes(app);
+        await registerRoutes(app);
+        routesReady = true;
         console.log('[BOOT] Routes registered');
         console.log('[BOOT] Lazy loading jobs...');
         await import('./jobs');
@@ -163,6 +165,11 @@ app.use((req, res, next) => {
         console.error('[BOOT] Lazy load failure:', lazyErr?.message, lazyErr?.stack);
       }
     })();
+
+    // Report lazy status
+    app.get('/api/_lazy_status', (_req, res) => {
+      res.json({ routesReady, uptime: process.uptime() });
+    });
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
@@ -192,19 +199,20 @@ app.use((req, res, next) => {
       if (fs.existsSync(distPath)) {
         app.use(express.static(distPath));
         
-        // SPA fallback for production
-        app.get('*', (req, res) => {
-          if (req.path.startsWith('/api')) {
-            return res.status(404).json({ message: 'API endpoint not found' });
-          }
-          
-          const indexPath = path.join(distPath, 'index.html');
-          if (fs.existsSync(indexPath)) {
-            res.sendFile(indexPath);
-          } else {
-            res.status(404).send('Frontend build not found');
-          }
-        });
+        // Defer wildcard registration slightly to let routes mount
+        setTimeout(() => {
+          app.get('*', (req, res) => {
+            if (req.path.startsWith('/api')) {
+              return res.status(404).json({ message: 'API endpoint not found' });
+            }
+            const indexPath = path.join(distPath, 'index.html');
+            if (fs.existsSync(indexPath)) {
+              res.sendFile(indexPath);
+            } else {
+              res.status(404).send('Frontend build not found');
+            }
+          });
+        }, 1500);
       } else {
         console.warn('⚠️ No dist folder found, falling back to development mode');
         await setupVite(app, server);
