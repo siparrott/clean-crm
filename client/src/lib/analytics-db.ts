@@ -1,14 +1,18 @@
-import { createClient } from '@supabase/supabase-js';
+// Supabase analytics removed - now using Neon database only
+// import { createClient } from '@supabase/supabase-js';
 
-// Separate Supabase project for analytics (if needed)
-const analyticsUrl = import.meta.env.VITE_ANALYTICS_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
-const analyticsKey = import.meta.env.VITE_ANALYTICS_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Analytics functionality disabled since moving to Neon
+const analyticsUrl = '';
+const analyticsKey = '';
 
-export const analyticsDb = createClient(analyticsUrl, analyticsKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false
+export const analyticsDb = {
+  from: () => ({
+    select: () => ({ data: [], error: null }),
+    insert: () => ({ data: null, error: null }),
+    update: () => ({ data: null, error: null }),
+    delete: () => ({ data: null, error: null })
+  })
+};
   }
 });
 

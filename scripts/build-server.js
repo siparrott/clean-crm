@@ -34,8 +34,7 @@ async function buildServerESM() {
         'papaparse',
         'uuid',
         'date-fns',
-        'zod',
-        '@supabase/supabase-js'
+        'zod'
       ],
       allowOverwrite: true,
       sourcemap: false,
