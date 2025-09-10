@@ -49,6 +49,10 @@ const InboxPage: React.FC = () => {
   const [showComposer, setShowComposer] = useState(false);
   const [composeSentCount, setComposeSentCount] = useState(0);
   const [isImporting, setIsImporting] = useState(false);
+  const [showClientAssignment, setShowClientAssignment] = useState(false);
+  const [clientAssignmentMessage, setClientAssignmentMessage] = useState<Message | null>(null);
+  const [clients, setClients] = useState<any[]>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
   const [activeTab, setActiveTab] = useState<'inbox' | 'sent'>('inbox');
 
   useEffect(() => {
@@ -290,6 +294,69 @@ const InboxPage: React.FC = () => {
       setError(`Failed to import emails: ${err.message}`);
     } finally {
       setIsImporting(false);
+    }
+  };
+
+  // Load clients for assignment
+  const fetchClients = async () => {
+    if (clients.length > 0) return; // Already loaded
+    
+    setLoadingClients(true);
+    try {
+      const response = await fetch('/api/crm/clients');
+      if (!response.ok) {
+        throw new Error('Failed to fetch clients');
+      }
+      const clientData = await response.json();
+      setClients(clientData);
+    } catch (err: any) {
+      console.error('❌ Error fetching clients:', err);
+      setError(`Failed to load clients: ${err.message}`);
+    } finally {
+      setLoadingClients(false);
+    }
+  };
+
+  // Open client assignment modal
+  const openClientAssignment = (message: Message) => {
+    setClientAssignmentMessage(message);
+    setShowClientAssignment(true);
+    fetchClients(); // Load clients when opening modal
+  };
+
+  // Assign email to client
+  const handleAssignClient = async (clientId: string) => {
+    if (!clientAssignmentMessage) return;
+    
+    try {
+      const response = await fetch('/api/emails/assign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messageId: clientAssignmentMessage.id,
+          clientId: clientId
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to assign email');
+      }
+      
+      // Refresh messages to show updated assignment
+      await fetchMessages(true);
+      
+      // Close modal
+      setShowClientAssignment(false);
+      setClientAssignmentMessage(null);
+      
+      alert('Email assigned to client successfully!');
+      
+    } catch (err: any) {
+      console.error('❌ Email assignment error:', err);
+      setError(`Failed to assign email: ${err.message}`);
     }
   };
 
@@ -628,17 +695,32 @@ const InboxPage: React.FC = () => {
                     </div>
                     
                     {/* Client Information */}
-                    {selectedMessage.clientName && (
-                      <div className="mb-6">
-                        <h3 className="text-sm font-medium text-gray-700 mb-2">Client Information</h3>
+                    <div className="mb-6">
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Client Information</h3>
+                      {selectedMessage.clientName ? (
                         <div className="bg-blue-50 p-4 rounded-lg">
                           <div className="flex items-center">
                             <User size={16} className="text-blue-500 mr-2" />
                             <span className="text-sm text-gray-700">{selectedMessage.clientName}</span>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="bg-yellow-50 p-4 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <User size={16} className="text-yellow-500 mr-2" />
+                              <span className="text-sm text-gray-700">No client assigned</span>
+                            </div>
+                            <button
+                              onClick={() => openClientAssignment(selectedMessage)}
+                              className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs"
+                            >
+                              Assign to Client
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     
                     {/* Reply Form */}
                     <div>
@@ -747,6 +829,59 @@ const InboxPage: React.FC = () => {
                 className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Client Assignment Modal */}
+      {showClientAssignment && clientAssignmentMessage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-96 overflow-y-auto">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Assign Email to Client</h3>
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">Email from: {clientAssignmentMessage.senderEmail}</p>
+              <p className="text-sm text-gray-600">Subject: {clientAssignmentMessage.subject}</p>
+            </div>
+            
+            {loadingClients ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                <span className="ml-2 text-gray-600">Loading clients...</span>
+              </div>
+            ) : (
+              <div className="space-y-2 mb-6 max-h-48 overflow-y-auto">
+                {clients.length > 0 ? (
+                  clients.map((client) => (
+                    <button
+                      key={client.id}
+                      onClick={() => handleAssignClient(client.id)}
+                      className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-purple-300"
+                    >
+                      <div className="font-medium text-gray-900">
+                        {client.firstName} {client.lastName}
+                      </div>
+                      <div className="text-sm text-gray-500">{client.email}</div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    No clients found in database
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => {
+                  setShowClientAssignment(false);
+                  setClientAssignmentMessage(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
               </button>
             </div>
           </div>
