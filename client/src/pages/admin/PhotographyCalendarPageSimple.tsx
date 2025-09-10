@@ -378,6 +378,22 @@ const PhotographyCalendarPage: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
+              <label className="text-sm text-gray-600">Date Format:</label>
+              <select 
+                value={dateFormat}
+                onChange={(e) => {
+                  setDateFormat(e.target.value);
+                  localStorage.setItem('preferredDateFormat', e.target.value);
+                }}
+                className="text-sm border rounded px-2 py-1"
+              >
+                <option value="MM/dd/yyyy">MM/DD/YYYY</option>
+                <option value="dd/MM/yyyy">DD/MM/YYYY</option>
+                <option value="yyyy-MM-dd">YYYY-MM-DD</option>
+                <option value="dd.MM.yyyy">DD.MM.YYYY</option>
+              </select>
+            </div>
             <button 
               onClick={() => setShowGoogleCalendarModal(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
@@ -724,10 +740,18 @@ const PhotographyCalendarPage: React.FC = () => {
                         <Sun className="w-4 h-4 text-yellow-600" />
                         <span className="text-sm font-medium text-yellow-800">Golden Hour Optimization</span>
                       </div>
-                      <p className="text-xs text-yellow-700">
-                        Based on your timezone, Golden Hour today is approximately 6:30 AM - 7:30 AM and 7:00 PM - 8:00 PM.
-                        Consider weather conditions for optimal lighting.
-                      </p>
+                      {(() => {
+                        const sessionDate = new Date(formData.startTime);
+                        // Default to Berlin coordinates - in production, get from user location
+                        const goldenHours = calculateGoldenHour(sessionDate, 52.52, 13.405);
+                        return (
+                          <div className="text-xs text-yellow-700 space-y-1">
+                            <p><strong>Morning Golden Hour:</strong> {goldenHours.morning}</p>
+                            <p><strong>Evening Golden Hour:</strong> {goldenHours.evening}</p>
+                            <p className="text-yellow-600 mt-2">💡 Consider weather conditions for optimal lighting</p>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
