@@ -155,11 +155,12 @@ app.use((req, res, next) => {
       console.log(`[BOOT] HTTP server listening early on ${host}:${port} after ${Date.now() - BOOT_MARK}ms`);
     });
 
-    // Lazy load routes & jobs
-    let routesReady = false;
-    (async () => {
+  // Lazy load routes & jobs
+  let routesReady = false;
+  let routesLazyError: any = null;
+    const loadRoutesAndJobs = async (label = 'initial') => {
       try {
-        console.log('[BOOT] Lazy loading routes...');
+        console.log(`[BOOT] Lazy loading routes (attempt: ${label})...`);
         const { registerRoutes } = await import('./routes');
         await registerRoutes(app);
         routesReady = true;
@@ -168,13 +169,33 @@ app.use((req, res, next) => {
         await import('./jobs');
         console.log('[BOOT] Jobs loaded');
       } catch (lazyErr:any) {
-        console.error('[BOOT] Lazy load failure:', lazyErr?.message, lazyErr?.stack);
+        routesLazyError = {
+          message: lazyErr?.message,
+            stack: (lazyErr?.stack || '').split('\n').slice(0,6).join('\n'),
+          ts: new Date().toISOString(),
+          attempt: label
+        };
+        console.error('[BOOT] Lazy load failure:', routesLazyError.message);
       }
-    })();
+    };
+
+    // Kick off initial async load (fire & forget)
+    loadRoutesAndJobs();
 
     // Report lazy status
     app.get('/api/_lazy_status', (_req, res) => {
-      res.json({ routesReady, uptime: process.uptime() });
+      res.json({ 
+        routesReady, 
+        uptime: process.uptime(),
+        lazyError: routesLazyError || null
+      });
+    });
+
+    // Manual retry endpoint (no auth needed; safe since only loads code)
+    app.post('/api/_lazy_retry', async (_req, res) => {
+      if (routesReady) return res.json({ ok: true, alreadyReady: true });
+      await loadRoutesAndJobs('manual-retry');
+      res.json({ ok: routesReady, lazyError: routesLazyError || null });
     });
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
