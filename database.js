@@ -1,5 +1,6 @@
 // Simple Node.js database connection for production server
 const { Pool } = require('pg');
+const nodemailer = require('nodemailer');
 
 console.log('🔌 Connecting to Neon database...');
 
@@ -134,7 +135,6 @@ if (!connectionString) {
         }
 
         // Create email transporter (basic SMTP)
-        const nodemailer = require('nodemailer');
         const transporter = nodemailer.createTransporter({
           host: process.env.SMTP_HOST,
           port: parseInt(process.env.SMTP_PORT || '587'),
