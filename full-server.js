@@ -234,6 +234,42 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // Communications email endpoint (frontend expects this path)
+      if (pathname === '/api/communications/email/send' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const emailData = JSON.parse(body);
+              console.log('📧 Sending email via communications to:', emailData.to);
+              
+              const result = await database.sendEmail(emailData);
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                messageId: result.messageId,
+                clientId: result.clientId,
+                message: 'Email sent successfully'
+              }));
+            } catch (error) {
+              console.error('❌ Communications email send error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: false, 
+                error: error.message 
+              }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Communications email API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+      
       // Email test endpoint
       if (pathname === '/api/email/test' && req.method === 'POST') {
         try {

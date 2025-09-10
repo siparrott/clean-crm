@@ -119,7 +119,7 @@ if (!connectionString) {
     // Send email and log to database
     async sendEmail(emailData) {
       try {
-        const { to, subject, content, html, clientId, autoLinkClient } = emailData;
+        const { to, subject, content, html, clientId, autoLinkClient, attachments } = emailData;
         
         // Try to find client if autoLinkClient is enabled
         let finalClientId = clientId;
@@ -148,7 +148,7 @@ if (!connectionString) {
           }
         });
 
-        // Send email
+        // Prepare mail options
         const mailOptions = {
           from: process.env.SMTP_USER,
           to: to,
@@ -157,6 +157,16 @@ if (!connectionString) {
           html: html || content
         };
 
+        // Add attachments if provided
+        if (attachments && attachments.length > 0) {
+          mailOptions.attachments = attachments.map(att => ({
+            filename: att.name,
+            content: att.data.split(',')[1], // Remove data:mime;base64, prefix
+            encoding: 'base64'
+          }));
+        }
+
+        // Send email
         const result = await transporter.sendMail(mailOptions);
         
         // Log email to database
