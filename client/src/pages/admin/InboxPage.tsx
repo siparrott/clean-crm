@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SimpleEmailComposer from '../../components/inbox/SimpleEmailComposer';
 import AdminLayout from '../../components/admin/AdminLayout';
 // Supabase removed: inbox now backed by Neon + hourly server-side IMAP polling
 import { 
@@ -43,6 +44,8 @@ const InboxPage: React.FC = () => {
   const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true); // Hourly now
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
+  const [showComposer, setShowComposer] = useState(false);
+  const [composeSentCount, setComposeSentCount] = useState(0);
 
   useEffect(() => {
     fetchMessages();
@@ -291,13 +294,13 @@ const InboxPage: React.FC = () => {
             </button>
             <button 
               className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center"
-              onClick={() => {
-                // Add compose functionality here
-                alert('Compose feature coming soon!');
-              }}
+              onClick={() => setShowComposer(true)}
             >
               <Mail className="h-4 w-4 mr-2" />
               Compose
+              {composeSentCount > 0 && (
+                <span className="ml-2 bg-white/20 px-2 py-0.5 rounded-full text-xs">{composeSentCount}</span>
+              )}
             </button>
           </div>
         </div>
@@ -372,7 +375,7 @@ const InboxPage: React.FC = () => {
                 </div>
                 <ul className="divide-y divide-gray-200">
                   {filteredMessages.map((message) => (
-                    <li 
+                    <li
                       key={message.id}
                       className={`hover:bg-gray-50 cursor-pointer ${
                         selectedMessage?.id === message.id ? 'bg-purple-50' : ''
@@ -546,6 +549,19 @@ const InboxPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Email Composer Modal */}
+      {showComposer && (
+        <SimpleEmailComposer
+          isOpen={showComposer}
+          onClose={() => setShowComposer(false)}
+          onSent={() => {
+            setComposeSentCount(c => c + 1);
+            setShowComposer(false);
+            setTimeout(() => fetchMessages(true), 4000);
+          }}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmation && (

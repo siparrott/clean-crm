@@ -10,12 +10,40 @@ import { eq, desc } from 'drizzle-orm';
  */
 export const sendEmail = async (req: Request, res: Response) => {
   try {
-    const { to, subject, content, html, clientId, autoLinkClient = true } = req.body;
+  const { to, subject, content, html, clientId, autoLinkClient = true, attachments } = req.body;
 
     if (!to || !subject || !content) {
       return res.status(400).json({ 
         error: 'Missing required fields: to, subject, content' 
       });
+    }
+
+    // Normalize attachments (convert base64 string -> Buffer)
+    let normalizedAttachments = undefined;
+    if (Array.isArray(attachments) && attachments.length > 0) {
+      try {
+        normalizedAttachments = attachments.map((att: any) => {
+          if (att?.content && typeof att.content === 'string') {
+            // Attempt base64 decode; ignore failures silently
+            try {
+              return {
+                filename: att.filename || att.name || 'attachment',
+                content: Buffer.from(att.content, 'base64'),
+                contentType: att.contentType || att.mimetype || undefined,
+              };
+            } catch {
+              return {
+                filename: att.filename || att.name || 'attachment',
+                content: undefined,
+                contentType: att.contentType || att.mimetype || undefined,
+              };
+            }
+          }
+          return att;
+        });
+      } catch (e) {
+        console.warn('Attachment normalization failed, continuing without attachments');
+      }
     }
 
     const result = await EnhancedEmailService.sendEmail({
@@ -25,6 +53,7 @@ export const sendEmail = async (req: Request, res: Response) => {
       html,
       clientId,
       autoLinkClient,
+      attachments: normalizedAttachments,
     });
 
     res.json(result);

@@ -63,16 +63,18 @@ const SimpleEmailComposer: React.FC<SimpleEmailComposerProps> = ({
 
       const processedAttachments = await Promise.all(attachmentPromises);
 
-      const response = await fetch('/api/email/send', {
+    const response = await fetch('/api/communications/email/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          to,
-          subject,
-          body,
-          attachments: processedAttachments
+      to,
+      subject,
+      content: body,
+      html: body.replace(/\n/g, '<br>'),
+      attachments: processedAttachments,
+      autoLinkClient: true
         })
       });
 
