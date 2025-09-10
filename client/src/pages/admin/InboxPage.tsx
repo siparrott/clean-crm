@@ -35,6 +35,7 @@ interface Message {
 
 const InboxPage: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [sentEmails, setSentEmails] = useState<any[]>([]);
   const [filteredMessages, setFilteredMessages] = useState<Message[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -46,9 +47,11 @@ const InboxPage: React.FC = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [composeSentCount, setComposeSentCount] = useState(0);
+  const [activeTab, setActiveTab] = useState<'inbox' | 'sent'>('inbox');
 
   useEffect(() => {
     fetchMessages();
+    fetchSentEmails();
   }, []);
 
   useEffect(() => {
@@ -61,10 +64,33 @@ const InboxPage: React.FC = () => {
     
     const interval = setInterval(() => {
       fetchMessages(true); // Silent refresh
+      fetchSentEmails(true); // Also refresh sent emails
     }, 60 * 60 * 1000); // 1 hour
 
     return () => clearInterval(interval);
   }, [autoRefreshEnabled]);
+
+  const fetchSentEmails = async (silent: boolean = false) => {
+    try {
+      const response = await fetch('/api/emails/sent');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch sent emails');
+      }
+
+      const data = await response.json();
+      setSentEmails(data || []);
+      
+      if (!silent) {
+        console.log(`Fetched ${data.length} sent emails from API`);
+      }
+    } catch (err) {
+      console.error('Failed to load sent emails:', err);
+      if (!silent) {
+        setError('Failed to load sent emails. Please try again.');
+      }
+    }
+  };
 
   const fetchMessages = async (silent: boolean = false) => {
     try {
@@ -287,6 +313,7 @@ const InboxPage: React.FC = () => {
               className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center"
               onClick={() => {
                 fetchMessages();
+                fetchSentEmails();
               }}
             >
               <Loader2 className="h-4 w-4 mr-2" />
@@ -302,6 +329,40 @@ const InboxPage: React.FC = () => {
                 <span className="ml-2 bg-white/20 px-2 py-0.5 rounded-full text-xs">{composeSentCount}</span>
               )}
             </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab('inbox')}
+                className={`py-4 px-6 border-b-2 font-medium text-sm ${
+                  activeTab === 'inbox'
+                    ? 'border-purple-500 text-purple-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center">
+                  <Mail className="h-5 w-5 mr-2" />
+                  Inbox ({messages.length})
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('sent')}
+                className={`py-4 px-6 border-b-2 font-medium text-sm ${
+                  activeTab === 'sent'
+                    ? 'border-purple-500 text-purple-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center">
+                  <Reply className="h-5 w-5 mr-2" />
+                  Sent ({sentEmails.length})
+                </div>
+              </button>
+            </nav>
           </div>
         </div>
 
@@ -356,63 +417,104 @@ const InboxPage: React.FC = () => {
             <Loader2 className="h-8 w-8 text-purple-600 animate-spin" />
             <span className="ml-2 text-gray-600">Loading messages...</span>
           </div>
-        ) : filteredMessages.length > 0 || selectedMessage ? (
+        ) : filteredMessages.length > 0 || sentEmails.length > 0 || selectedMessage ? (
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="grid grid-cols-1 md:grid-cols-3 h-[600px]">
               {/* Message List */}
               <div className={`border-r border-gray-200 overflow-y-auto ${selectedMessage ? 'hidden md:block' : ''}`}>
                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                   <h3 className="font-medium text-gray-700">
-                    {statusFilter === 'all' ? 'All Messages' : 
+                    {activeTab === 'sent' ? 'Sent Messages' : 
+                     statusFilter === 'all' ? 'All Messages' : 
                      statusFilter === 'unread' ? 'Unread Messages' : 
                      statusFilter === 'read' ? 'Read Messages' : 
                      statusFilter === 'replied' ? 'Replied Messages' : 
                      'Archived Messages'}
                   </h3>
                   <div className="text-sm text-gray-500">
-                    {filteredMessages.length} {filteredMessages.length === 1 ? 'message' : 'messages'}
+                    {activeTab === 'sent' ? 
+                      `${sentEmails.length} ${sentEmails.length === 1 ? 'email' : 'emails'}` :
+                      `${filteredMessages.length} ${filteredMessages.length === 1 ? 'message' : 'messages'}`
+                    }
                   </div>
                 </div>
                 <ul className="divide-y divide-gray-200">
-                  {filteredMessages.map((message) => (
-                    <li
-                      key={message.id}
-                      className={`hover:bg-gray-50 cursor-pointer ${
-                        selectedMessage?.id === message.id ? 'bg-purple-50' : ''
-                      } ${message.status === 'unread' ? 'font-semibold' : ''}`}
-                      onClick={() => {
-                        setSelectedMessage(message);
-                        if (message.status === 'unread') {
-                          handleStatusChange(message.id, 'read');
-                        }
-                      }}
-                    >
-                      <div className="p-4">
-                        <div className="flex justify-between items-start mb-1">
-                          <div className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
-                            {message.senderName}
+                  {activeTab === 'sent' ? (
+                    sentEmails.map((email) => (
+                      <li
+                        key={email.id}
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => setSelectedMessage(email)}
+                      >
+                        <div className="p-4">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
+                              To: {email.recipient || email.to_email}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {formatDate(email.sent_at || email.createdAt)}
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-500">
-                            {formatDate(message.createdAt)}
+                          <div className="text-sm text-gray-900 font-medium truncate mb-1">
+                            {email.subject}
                           </div>
-                        </div>
-                        <div className="text-sm text-gray-900 font-medium truncate mb-1">
-                          {message.subject}
-                        </div>
-                        <div className="text-xs text-gray-500 truncate">
-                          {message.content.substring(0, 100)}...
-                        </div>
-                        <div className="mt-2 flex justify-between items-center">
-                          {getStatusBadge(message.status)}
-                          {message.clientName && (
-                            <span className="text-xs text-gray-500">
-                              Client: {message.clientName}
+                          <div className="text-xs text-gray-500 truncate">
+                            {email.content ? email.content.substring(0, 100) : email.body ? email.body.substring(0, 100) : ''}...
+                          </div>
+                          <div className="mt-2 flex justify-between items-center">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Sent
                             </span>
-                          )}
+                            {email.client_name && (
+                              <span className="text-xs text-gray-500">
+                                Client: {email.client_name}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    ))
+                  ) : (
+                    filteredMessages.map((message) => (
+                      <li
+                        key={message.id}
+                        className={`hover:bg-gray-50 cursor-pointer ${
+                          selectedMessage?.id === message.id ? 'bg-purple-50' : ''
+                        } ${message.status === 'unread' ? 'font-semibold' : ''}`}
+                        onClick={() => {
+                          setSelectedMessage(message);
+                          if (message.status === 'unread') {
+                            handleStatusChange(message.id, 'read');
+                          }
+                        }}
+                      >
+                        <div className="p-4">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
+                              {message.senderName}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {formatDate(message.createdAt)}
+                            </div>
+                          </div>
+                          <div className="text-sm text-gray-900 font-medium truncate mb-1">
+                            {message.subject}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate">
+                            {message.content.substring(0, 100)}...
+                          </div>
+                          <div className="mt-2 flex justify-between items-center">
+                            {getStatusBadge(message.status)}
+                            {message.clientName && (
+                              <span className="text-xs text-gray-500">
+                                Client: {message.clientName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    ))
+                  )}
                 </ul>
               </div>
 
@@ -540,9 +642,13 @@ const InboxPage: React.FC = () => {
             <div className="mx-auto h-12 w-12 text-gray-400">
               <Mail className="h-12 w-12 mx-auto" />
             </div>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No messages found</h3>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">
+              {activeTab === 'sent' ? 'No sent emails found' : 'No messages found'}
+            </h3>
             <p className="mt-1 text-sm text-gray-500">
-              {searchTerm || statusFilter !== 'all'
+              {activeTab === 'sent' 
+                ? 'Sent emails will appear here once you send them.'
+                : searchTerm || statusFilter !== 'all'
                 ? 'Try adjusting your search or filter criteria.'
                 : 'Your inbox is empty.'}
             </p>
@@ -558,7 +664,10 @@ const InboxPage: React.FC = () => {
           onSent={() => {
             setComposeSentCount(c => c + 1);
             setShowComposer(false);
-            setTimeout(() => fetchMessages(true), 4000);
+            setTimeout(() => {
+              fetchMessages(true);
+              fetchSentEmails(true); // Refresh sent emails
+            }, 1000);
           }}
         />
       )}

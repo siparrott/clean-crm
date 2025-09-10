@@ -187,8 +187,31 @@ if (!connectionString) {
             );
             console.log('✅ Email logged to communications table');
           } catch (altLogError) {
-            console.log('⚠️ Could not log email to database, but email was sent successfully');
-            console.log('Database log error:', logError.message);
+            // Create a simple sent_emails table if nothing else works
+            try {
+              await pool.query(`
+                CREATE TABLE IF NOT EXISTS sent_emails (
+                  id SERIAL PRIMARY KEY,
+                  recipient VARCHAR(255) NOT NULL,
+                  subject VARCHAR(500),
+                  content TEXT,
+                  html TEXT,
+                  client_id INTEGER,
+                  message_id VARCHAR(255),
+                  sent_at TIMESTAMP DEFAULT NOW()
+                )
+              `);
+              
+              await pool.query(
+                `INSERT INTO sent_emails (recipient, subject, content, html, client_id, message_id, sent_at) 
+                 VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+                [to, subject, content, html, finalClientId, result.messageId]
+              );
+              console.log('✅ Email logged to sent_emails table (created)');
+            } catch (createError) {
+              console.log('⚠️ Could not log email to database, but email was sent successfully');
+              console.log('Database log error:', logError.message);
+            }
           }
         }
 
@@ -268,6 +291,51 @@ if (!connectionString) {
         return result.rows;
       } catch (error) {
         console.error('❌ Error fetching client messages:', error.message);
+        return [];
+      }
+    },
+
+    // Get all sent emails
+    async getSentEmails() {
+      try {
+        // Try multiple table structures
+        let result;
+        
+        try {
+          result = await pool.query(`
+            SELECT id, recipient, subject, content, message_id, sent_at as "sentAt", client_id as "clientId"
+            FROM sent_emails 
+            ORDER BY sent_at DESC 
+            LIMIT 100
+          `);
+        } catch (error) {
+          try {
+            result = await pool.query(`
+              SELECT id, recipient, subject, content, status, created_at as "sentAt", client_id as "clientId"
+              FROM crm_messages 
+              WHERE type = 'email' AND status = 'sent'
+              ORDER BY created_at DESC 
+              LIMIT 100
+            `);
+          } catch (altError) {
+            try {
+              result = await pool.query(`
+                SELECT id, recipient, subject, content, status, created_at as "sentAt", client_id as "clientId"
+                FROM communications 
+                WHERE message_type = 'email' AND status = 'sent'
+                ORDER BY created_at DESC 
+                LIMIT 100
+              `);
+            } catch (finalError) {
+              console.log('⚠️ No sent emails table found, returning empty array');
+              return [];
+            }
+          }
+        }
+        
+        return result.rows;
+      } catch (error) {
+        console.error('❌ Error fetching sent emails:', error.message);
         return [];
       }
     }

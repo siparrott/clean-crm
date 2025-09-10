@@ -164,6 +164,19 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // Get sent emails endpoint
+      if (pathname === '/api/emails/sent' && req.method === 'GET') {
+        try {
+          const sentEmails = await database.getSentEmails();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(sentEmails));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+      
       if (pathname === '/api/_db_counts' && req.method === 'GET') {
         try {
           const result = await database.getCounts();
