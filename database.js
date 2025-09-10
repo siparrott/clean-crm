@@ -338,7 +338,7 @@ if (!connectionString) {
         console.error('❌ Error fetching sent emails:', error.message);
         return [];
       }
-    }
+    },
 
     // Find client by email address
     async findClientByEmail(email) {
@@ -354,7 +354,7 @@ if (!connectionString) {
         console.error('❌ Error finding client by email:', error.message);
         return null;
       }
-    }
+    },
 
     // IMAP Email Import Function
     async importEmailsFromIMAP() {
@@ -522,7 +522,7 @@ if (!connectionString) {
 
         connection.connect();
       });
-    }
+    },
 
     // Assign email to client manually
     async assignEmailToClient(messageId, clientId) {
