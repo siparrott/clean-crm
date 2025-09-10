@@ -18,17 +18,17 @@ export async function loadStudioCreds(studioId: string): Promise<StudioCreds> {
   const integration = rows[0];
   return {
     smtp: {
-      host: integration.smtpHost,
-      port: integration.smtpPort,
-      user: integration.smtpUser,
-      pass: decrypt(integration.smtpPassEncrypted ?? ''),
-      from: integration.defaultFromEmail ?? process.env.STUDIO_DEFAULT_EMAIL_FROM ?? 'no-reply@example.com'
+      host: (integration as any).smtp_host,
+      port: (integration as any).smtp_port,
+      user: (integration as any).smtp_user,
+      pass: decrypt(((integration as any).smtp_pass_encrypted) ?? ''),
+      from: (integration as any).default_from_email ?? process.env.STUDIO_DEFAULT_EMAIL_FROM ?? 'no-reply@example.com'
     },
-    stripe: { accountId: integration.stripeAccountId ?? undefined },
+    stripe: { accountId: (integration as any).stripe_account_id ?? undefined },
     openai: {
-      apiKey: integration.openaiApiKeyEncrypted ? decrypt(integration.openaiApiKeyEncrypted) : undefined,
+      apiKey: (integration as any).openai_api_key_encrypted ? decrypt((integration as any).openai_api_key_encrypted) : undefined,
     },
-    currency: integration.defaultCurrency ?? 'EUR'
+    currency: (integration as any).default_currency ?? 'EUR'
   };
 }
 
