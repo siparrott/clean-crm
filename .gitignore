@@ -6,6 +6,11 @@ node_modules/
 # Production builds
 client/dist/
 build/
+dist-server/
+
+# Local tooling / analysis caches
+.config/
+local/state/
 
 # Environment variables
 .env
