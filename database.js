@@ -187,6 +187,24 @@ if (!connectionString) {
 
         throw error;
       }
+    },
+
+    // Get email messages for a client
+    async getClientMessages(clientId) {
+      try {
+        const result = await pool.query(`
+          SELECT id, type, content, subject, recipient, status, 
+                 created_at as "createdAt"
+          FROM crm_messages 
+          WHERE client_id = $1 
+          ORDER BY created_at DESC
+        `, [clientId]);
+        
+        return result.rows;
+      } catch (error) {
+        console.error('❌ Error fetching client messages:', error.message);
+        throw error;
+      }
     }
   };
 }

@@ -151,6 +151,19 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      if (pathname.startsWith('/api/crm/clients/') && pathname.endsWith('/messages') && req.method === 'GET') {
+        try {
+          const clientId = pathname.split('/')[4]; // Extract client ID from URL
+          const messages = await database.getClientMessages(clientId);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(messages));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+      
       if (pathname === '/api/_db_counts' && req.method === 'GET') {
         try {
           const result = await database.getCounts();
@@ -215,6 +228,55 @@ const server = http.createServer(async (req, res) => {
           });
         } catch (error) {
           console.error('❌ Email API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+      
+      // Email test endpoint
+      if (pathname === '/api/email/test' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { to } = JSON.parse(body);
+              console.log('📧 Testing email to:', to);
+              
+              const testEmail = {
+                to: to || 'test@example.com',
+                subject: 'CRM Email Test',
+                content: 'This is a test email from your CRM system.',
+                html: '<p>This is a <strong>test email</strong> from your CRM system.</p>',
+                autoLinkClient: true
+              };
+              
+              const result = await database.sendEmail(testEmail);
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                messageId: result.messageId,
+                clientId: result.clientId,
+                message: 'Test email sent successfully'
+              }));
+            } catch (error) {
+              console.error('❌ Email test error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: false, 
+                error: error.message,
+                details: {
+                  smtpHost: !!process.env.SMTP_HOST,
+                  smtpUser: !!process.env.SMTP_USER,
+                  smtpPass: !!process.env.SMTP_PASS
+                }
+              }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Email test API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
         }
