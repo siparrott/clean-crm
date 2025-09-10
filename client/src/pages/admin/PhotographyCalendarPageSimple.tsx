@@ -72,6 +72,40 @@ interface DashboardStats {
   equipmentConflicts: number;
 }
 
+// Golden Hour calculation function
+const calculateGoldenHour = (date: Date, latitude: number = 52.52, longitude: number = 13.405) => {
+  // Simplified golden hour calculation (normally you'd use a library like suncalc)
+  // This is a basic approximation - for production use a proper solar calculation library
+  
+  const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
+  const solarDeclination = 23.45 * Math.sin((2 * Math.PI * (284 + dayOfYear)) / 365) * Math.PI / 180;
+  
+  const latRad = latitude * Math.PI / 180;
+  const hourAngle = Math.acos(-Math.tan(latRad) * Math.tan(solarDeclination));
+  
+  // Solar noon approximation
+  const solarNoon = 12 - (longitude / 15);
+  const sunriseHour = solarNoon - (hourAngle * 12 / Math.PI);
+  const sunsetHour = solarNoon + (hourAngle * 12 / Math.PI);
+  
+  // Golden hour is typically 1 hour after sunrise and 1 hour before sunset
+  const morningGoldenStart = sunriseHour;
+  const morningGoldenEnd = sunriseHour + 1;
+  const eveningGoldenStart = sunsetHour - 1;
+  const eveningGoldenEnd = sunsetHour;
+  
+  const formatHour = (hour: number) => {
+    const h = Math.floor(hour);
+    const m = Math.floor((hour - h) * 60);
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  };
+  
+  return {
+    morning: `${formatHour(morningGoldenStart)} - ${formatHour(morningGoldenEnd)}`,
+    evening: `${formatHour(eveningGoldenStart)} - ${formatHour(eveningGoldenEnd)}`
+  };
+};
+
 const PhotographyCalendarPage: React.FC = () => {
   const [sessions, setSessions] = useState<PhotographySession[]>([]);
   const [showGoogleCalendarModal, setShowGoogleCalendarModal] = useState(false);
