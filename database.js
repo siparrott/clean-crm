@@ -38,10 +38,28 @@ if (!connectionString) {
     async getClients() {
       try {
         const result = await pool.query('SELECT * FROM crm_clients ORDER BY created_at DESC');
-        return { success: true, data: result.rows };
+        // Map database fields to frontend expected format
+        const mappedClients = result.rows.map(client => ({
+          id: client.id,
+          firstName: client.first_name || '',
+          lastName: client.last_name || '', 
+          clientId: client.client_id || client.id,
+          email: client.email || '',
+          phone: client.phone || '',
+          address: client.address || '',
+          city: client.city || '',
+          state: client.state || '',
+          zip: client.zip || '',
+          country: client.country || '',
+          total_sales: client.total_sales || 0,
+          outstanding_balance: client.outstanding_balance || 0,
+          createdAt: client.created_at,
+          updatedAt: client.updated_at
+        }));
+        return mappedClients;
       } catch (error) {
         console.error('❌ Error fetching clients:', error.message);
-        return { success: false, error: error.message };
+        throw error;
       }
     },
 
@@ -49,10 +67,23 @@ if (!connectionString) {
     async getLeads() {
       try {
         const result = await pool.query('SELECT * FROM leads ORDER BY created_at DESC');
-        return { success: true, data: result.rows };
+        // Map database fields to frontend expected format
+        const mappedLeads = result.rows.map(lead => ({
+          id: lead.id,
+          firstName: lead.first_name || '',
+          lastName: lead.last_name || '',
+          email: lead.email || '',
+          phone: lead.phone || '',
+          message: lead.message || '',
+          source: lead.source || '',
+          status: lead.status || 'new',
+          createdAt: lead.created_at,
+          updatedAt: lead.updated_at
+        }));
+        return mappedLeads;
       } catch (error) {
         console.error('❌ Error fetching leads:', error.message);
-        return { success: false, error: error.message };
+        throw error;
       }
     },
 

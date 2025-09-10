@@ -129,24 +129,24 @@ const server = http.createServer(async (req, res) => {
     if (database) {
       if (pathname === '/api/crm/clients' && req.method === 'GET') {
         try {
-          const result = await database.getClients();
+          const clients = await database.getClients();
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
+          res.end(JSON.stringify(clients));
         } catch (error) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: error.message }));
+          res.end(JSON.stringify({ error: error.message }));
         }
         return;
       }
       
       if (pathname === '/api/crm/leads' && req.method === 'GET') {
         try {
-          const result = await database.getLeads();
+          const leads = await database.getLeads();
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
+          res.end(JSON.stringify(leads));
         } catch (error) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: error.message }));
+          res.end(JSON.stringify({ error: error.message }));
         }
         return;
       }
