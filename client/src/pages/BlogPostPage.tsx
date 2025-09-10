@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
-import { supabase } from '../lib/supabase';
+// Supabase removed - blog data now served via Neon database API
 import { Calendar, ArrowLeft, Clock } from 'lucide-react';
 import { Helmet } from 'react-helmet';
 

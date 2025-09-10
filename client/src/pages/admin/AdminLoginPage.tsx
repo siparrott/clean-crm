@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { checkSupabaseProjectStatus, isProjectPausedError } from '../../lib/supabase';
+// Supabase removed - using Neon database with Express sessions
 import { Mail, Lock, AlertCircle, CheckCircle, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
 
 const AdminLoginPage: React.FC = () => {

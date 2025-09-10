@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
-import { supabase } from '../lib/supabase';
+// Supabase removed - blog data now served via Neon database API
 import { Calendar, ChevronRight, Tag, Search, Loader2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
