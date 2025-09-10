@@ -1,4 +1,4 @@
-,,import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isAfter, isBefore, startOfWeek, endOfWeek, eachHourOfInterval, startOfDay, addDays, startOfYear, endOfYear } from 'date-fns';
 import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Camera, Clock, DollarSign, AlertTriangle, CheckCircle, Star, Sun, Cloud, Users, Filter, Search, Download, Upload, RefreshCw, Settings, Eye, Edit, Trash2, Copy, ExternalLink } from 'lucide-react';
@@ -137,7 +137,8 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
       const coverMap = new Map<string, string>();
       
       // Get all unique client IDs from sessions
-      const clientIds = [...new Set(sessions.map(s => s.clientId).filter(Boolean))];
+  // Use Array.from(Set) to avoid downlevel iteration issues in stricter TS targets
+  const clientIds = Array.from(new Set(sessions.map(s => s.clientId).filter(Boolean)));
       
       // Fetch gallery covers for each client
       await Promise.all(clientIds.map(async (clientId) => {
@@ -207,8 +208,9 @@ const AdvancedPhotographyCalendar: React.FC<CalendarProps> = ({
               onError={(e) => {
                 // Fallback to initials if image fails to load
                 const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                target.nextElementSibling!.style.display = 'flex';
+                (target as HTMLElement).style.display = 'none';
+                const next = target.nextElementSibling as HTMLElement | null;
+                if (next) next.style.display = 'flex';
               }}
             />
           ) : null}
