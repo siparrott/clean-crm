@@ -199,8 +199,34 @@ if (!connectionString) {
       }
     },
 
-    // Get email messages for a client
-    async getClientMessages(clientId) {
+    // Get database schema info
+    async getTableInfo() {
+      try {
+        const tables = await pool.query(`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public'
+          ORDER BY table_name
+        `);
+        
+        const tableInfo = {};
+        for (const table of tables.rows) {
+          const columns = await pool.query(`
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = $1 AND table_schema = 'public'
+            ORDER BY ordinal_position
+          `, [table.table_name]);
+          
+          tableInfo[table.table_name] = columns.rows;
+        }
+        
+        return { success: true, tables: tableInfo };
+      } catch (error) {
+        console.error('❌ Error getting table info:', error.message);
+        return { success: false, error: error.message };
+      }
+    },
       try {
         const result = await pool.query(`
           SELECT id, type, content, subject, recipient, status, 

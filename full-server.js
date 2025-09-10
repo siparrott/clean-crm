@@ -198,6 +198,19 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // Database schema info endpoint
+      if (pathname === '/api/db/schema' && req.method === 'GET') {
+        try {
+          const schemaInfo = await database.getTableInfo();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(schemaInfo));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+      
       // Email sending endpoint
       if (pathname === '/api/email/send' && req.method === 'POST') {
         try {
