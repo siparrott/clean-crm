@@ -4,7 +4,7 @@
     "noEmit": false,
     "outDir": "dist-server",
     "target": "ES2020",
-    "module": "ESNext",
+  "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": false,
     "esModuleInterop": true,
