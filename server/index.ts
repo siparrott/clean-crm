@@ -3,9 +3,10 @@
 
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+// Defer heavy route module & job imports until after server starts to prevent boot crashes/timeouts
+// import { registerRoutes } from "./routes";
+// import "./jobs";
 import { setupVite, serveStatic, log } from "./vite";
-import "./jobs";
 
 // Import and configure session middleware
 import { sessionConfig } from './auth';
@@ -21,6 +22,8 @@ import { db } from './db';
 process.env.DEMO_MODE = 'false';
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
+const BOOT_MARK = Date.now();
+console.log('[BOOT] Starting minimal server bootstrap');
 const app = express();
 // Increase body size limits to accommodate large ICS payloads
 app.use(express.json({ limit: '5mb' }));
@@ -40,7 +43,12 @@ app.use((req, res, next) => {
   }
 });
 
-// Session middleware must be before auth routes
+// Health & ping endpoints before anything else for diagnostics
+app.get('/healthz', (_req, res) => {
+  res.json({ status: 'ok-preinit', uptime: process.uptime(), bootMs: Date.now() - BOOT_MARK });
+});
+
+// Session middleware must be before auth routes (still early but after healthz)
 app.use(sessionConfig);
 
 // Serve uploaded files statically
@@ -134,7 +142,27 @@ app.use((req, res, next) => {
       console.warn('⚠️ Database connection issue:', error.message);
     }
     
-    const server = await registerRoutes(app);
+    // Start listening ASAP, then lazy-load heavy modules
+    const port = parseInt(process.env.PORT || '3000', 10);
+    const host = process.env.HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
+    const server = app.listen(port, host, () => {
+      console.log(`[BOOT] HTTP server listening early on ${host}:${port} after ${Date.now() - BOOT_MARK}ms`);
+    });
+
+    // Lazy load routes & jobs
+    (async () => {
+      try {
+        console.log('[BOOT] Lazy loading routes...');
+        const { registerRoutes } = await import('./routes');
+        const srv2 = await registerRoutes(app);
+        console.log('[BOOT] Routes registered');
+        console.log('[BOOT] Lazy loading jobs...');
+        await import('./jobs');
+        console.log('[BOOT] Jobs loaded');
+      } catch (lazyErr:any) {
+        console.error('[BOOT] Lazy load failure:', lazyErr?.message, lazyErr?.stack);
+      }
+    })();
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
@@ -154,7 +182,7 @@ app.use((req, res, next) => {
     });
 
     // For production on Heroku, serve static files differently
-    if (process.env.NODE_ENV === "production" && process.env.PORT) {
+  if (process.env.NODE_ENV === "production" && process.env.PORT) {
       // Heroku production mode - serve built files
       const path = await import('path');
       const fs = await import('fs');
@@ -188,18 +216,11 @@ app.use((req, res, next) => {
 
     // Heroku provides the PORT, use it exactly as provided
   // Prefer 3000 for local development to match client expectations; platforms set PORT explicitly
-  const port = parseInt(process.env.PORT || '3000', 10);
-  // Use 0.0.0.0 when a platform PORT is provided (e.g., Heroku/Render) so the app is reachable externally
-  // Default to 127.0.0.1 for local development if no PORT is provided
-  const host = process.env.HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
-
-    server.listen(port, host, () => {
-      console.log(`✅ New Age Fotografie CRM successfully started on ${host}:${port}`);
-      console.log(`Environment: ${process.env.NODE_ENV}`);
-      console.log(`Working directory: ${process.cwd()}`);
-      console.log(`Demo mode: ${process.env.DEMO_MODE}`);
-      console.log(`Database URL configured: ${!!process.env.DATABASE_URL}`);
-    });
+  // Additional runtime info after initial async init completes
+  console.log(`✅ New Age Fotografie CRM post-init. Environment: ${process.env.NODE_ENV}`);
+  console.log(`Working directory: ${process.cwd()}`);
+  console.log(`Demo mode: ${process.env.DEMO_MODE}`);
+  console.log(`Database URL configured: ${!!process.env.DATABASE_URL}`);
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     console.error('Stack trace:', error.stack);
