@@ -344,6 +344,83 @@ const server = http.createServer(async (req, res) => {
         }
         return;
       }
+
+      // IMAP Email Import endpoint
+      if (pathname === '/api/emails/import' && req.method === 'POST') {
+        try {
+          console.log('📥 Starting IMAP email import...');
+          
+          const result = await database.importEmailsFromIMAP();
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            imported: result.imported || 0,
+            processed: result.processed || 0,
+            message: `Successfully imported ${result.imported || 0} new emails`
+          }));
+        } catch (error) {
+          console.error('❌ Email import error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ 
+            success: false, 
+            error: error.message,
+            details: {
+              imapHost: !!process.env.IMAP_HOST,
+              imapUser: !!process.env.IMAP_USER,
+              imapPass: !!process.env.IMAP_PASS
+            }
+          }));
+        }
+        return;
+      }
+
+      // Get inbox messages endpoint
+      if (pathname === '/api/messages' && req.method === 'GET') {
+        try {
+          const messages = await database.getCrmMessages();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(messages));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+
+      // Assign email to client endpoint
+      if (pathname === '/api/emails/assign' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { messageId, clientId } = JSON.parse(body);
+              console.log(`🔗 Assigning message ${messageId} to client ${clientId}`);
+              
+              const result = await database.assignEmailToClient(messageId, clientId);
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                message: 'Email assigned to client successfully'
+              }));
+            } catch (error) {
+              console.error('❌ Email assignment error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: false, 
+                error: error.message 
+              }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Email assignment API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
     }
     
     // Handle other API endpoints with fallback

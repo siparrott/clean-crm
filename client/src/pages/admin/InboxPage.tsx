@@ -14,6 +14,7 @@ import {
   Star,
   Archive,
   Loader2,
+  Download,
   AlertCircle,
   ChevronDown
 } from 'lucide-react';
@@ -47,6 +48,7 @@ const InboxPage: React.FC = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [composeSentCount, setComposeSentCount] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<'inbox' | 'sent'>('inbox');
 
   useEffect(() => {
@@ -250,6 +252,47 @@ const InboxPage: React.FC = () => {
     }
   };
 
+  // Import emails from IMAP
+  const handleImportEmails = async () => {
+    if (isImporting) return;
+    
+    setIsImporting(true);
+    setError(null);
+    
+    try {
+      console.log('📥 Starting email import...');
+      
+      const response = await fetch('/api/emails/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to import emails');
+      }
+      
+      const result = await response.json();
+      
+      console.log('✅ Email import completed:', result);
+      
+      // Refresh messages to show newly imported emails
+      await fetchMessages(true);
+      
+      // Show success message
+      setError(null);
+      alert(`Successfully imported ${result.imported || 0} new emails!`);
+      
+    } catch (err: any) {
+      console.error('❌ Email import error:', err);
+      setError(`Failed to import emails: ${err.message}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const getStatusBadge = (status: Message['status']) => {
     const statusConfig = {
       unread: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Unread' },
@@ -318,6 +361,18 @@ const InboxPage: React.FC = () => {
             >
               <Loader2 className="h-4 w-4 mr-2" />
               Refresh
+            </button>
+            <button 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center"
+              onClick={handleImportEmails}
+              disabled={isImporting}
+            >
+              {isImporting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              {isImporting ? 'Importing...' : 'Import Emails'}
             </button>
             <button 
               className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center"

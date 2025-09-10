@@ -339,5 +339,232 @@ if (!connectionString) {
         return [];
       }
     }
+
+    // Find client by email address
+    async findClientByEmail(email) {
+      try {
+        const result = await pool.query(`
+          SELECT id, first_name, last_name, email 
+          FROM crm_clients 
+          WHERE LOWER(email) = LOWER($1)
+        `, [email]);
+        
+        return result.rows.length > 0 ? result.rows[0] : null;
+      } catch (error) {
+        console.error('❌ Error finding client by email:', error.message);
+        return null;
+      }
+    }
+
+    // IMAP Email Import Function
+    async importEmailsFromIMAP() {
+      const imap = require('imap');
+      const { simpleParser } = require('mailparser');
+      
+      return new Promise((resolve, reject) => {
+        console.log('📥 Starting IMAP email import...');
+        
+        // IMAP Configuration from environment variables
+        const imapConfig = {
+          user: process.env.IMAP_USER || process.env.SMTP_USER || 'hallo@newagefotografie.com',
+          password: process.env.IMAP_PASS || process.env.SMTP_PASS || 'HoveBN41!',
+          host: process.env.IMAP_HOST || 'imap.easyname.com',
+          port: parseInt(process.env.IMAP_PORT || '993'),
+          tls: (process.env.IMAP_TLS || 'true').toLowerCase() !== 'false',
+          tlsOptions: { rejectUnauthorized: false },
+          connTimeout: 30000,
+          authTimeout: 30000,
+          keepalive: false
+        };
+
+        console.log(`🔌 Connecting to IMAP: ${imapConfig.user}@${imapConfig.host}:${imapConfig.port}`);
+
+        const connection = new imap(imapConfig);
+        const emails = [];
+        let imported = 0;
+        let processed = 0;
+
+        // Add timeout for the whole operation
+        const timeout = setTimeout(() => {
+          connection.end();
+          reject(new Error('IMAP connection timeout after 60 seconds'));
+        }, 60000);
+
+        connection.once('ready', () => {
+          console.log('✅ IMAP connection ready');
+          
+          connection.openBox('INBOX', true, (err, box) => {
+            if (err) {
+              clearTimeout(timeout);
+              return reject(err);
+            }
+
+            console.log(`📧 INBOX opened - ${box.messages.total} total messages`);
+            
+            if (box.messages.total === 0) {
+              clearTimeout(timeout);
+              connection.end();
+              return resolve({ imported: 0, processed: 0 });
+            }
+
+            // Fetch recent emails (last 20 to avoid overwhelming)
+            const recent = Math.max(1, box.messages.total - 19);
+            const fetchRange = `${recent}:${box.messages.total}`;
+            
+            console.log(`📨 Fetching emails ${fetchRange}`);
+            
+            const fetch = connection.fetch(fetchRange, {
+              bodies: '',
+              struct: true,
+              markSeen: false
+            });
+
+            const emailPromises = [];
+
+            fetch.on('message', (msg, seqno) => {
+              const emailPromise = new Promise(async (emailResolve) => {
+                let buffer = '';
+                
+                msg.on('body', (stream, info) => {
+                  stream.on('data', (chunk) => {
+                    buffer += chunk.toString('utf8');
+                  });
+                  
+                  stream.once('end', async () => {
+                    try {
+                      const parsed = await simpleParser(buffer);
+                      
+                      const emailData = {
+                        senderName: parsed.from?.text?.split('<')[0]?.trim() || 'Unknown',
+                        senderEmail: parsed.from?.value?.[0]?.address || parsed.from?.text || 'unknown@unknown.com',
+                        subject: parsed.subject || 'No Subject',
+                        content: parsed.text || parsed.html || 'No content',
+                        createdAt: parsed.date || new Date(),
+                        status: 'unread',
+                        messageType: 'email'
+                      };
+                      
+                      // Skip sent items and system messages
+                      if (!emailData.subject.startsWith('[SENT]') && 
+                          !emailData.subject.includes('Auto-Reply') &&
+                          emailData.senderEmail !== 'hallo@newagefotografie.com') {
+                        
+                        // Check if email already exists
+                        const existing = await this.getCrmMessages();
+                        const isDuplicate = existing.some(msg =>
+                          msg.subject === emailData.subject &&
+                          msg.senderEmail === emailData.senderEmail &&
+                          Math.abs(new Date(msg.createdAt).getTime() - new Date(emailData.createdAt).getTime()) < 300000
+                        );
+                        
+                        if (!isDuplicate) {
+                          // Try to auto-link to client
+                          const client = await this.findClientByEmail(emailData.senderEmail);
+                          if (client) {
+                            emailData.clientId = client.id;
+                            emailData.clientName = `${client.first_name} ${client.last_name}`.trim();
+                            console.log(`🔗 Auto-linked email to client: ${emailData.clientName}`);
+                          }
+
+                          // Save email to database
+                          await this.createCrmMessage(emailData);
+                          emails.push(emailData);
+                          imported++;
+                        }
+                      }
+                      
+                      processed++;
+                      emailResolve();
+                    } catch (error) {
+                      console.error('❌ Error processing email:', error);
+                      emailResolve();
+                    }
+                  });
+                });
+              });
+              
+              emailPromises.push(emailPromise);
+            });
+
+            fetch.once('error', (err) => {
+              clearTimeout(timeout);
+              console.error('❌ Fetch error:', err);
+              reject(err);
+            });
+
+            fetch.once('end', async () => {
+              try {
+                await Promise.all(emailPromises);
+                clearTimeout(timeout);
+                connection.end();
+                
+                console.log(`✅ Email import completed: ${imported} new emails, ${processed} processed`);
+                resolve({ imported, processed, emails });
+              } catch (error) {
+                clearTimeout(timeout);
+                console.error('❌ Error processing emails:', error);
+                connection.end();
+                reject(error);
+              }
+            });
+          });
+        });
+
+        connection.once('error', (err) => {
+          clearTimeout(timeout);
+          console.error('❌ IMAP connection error:', err);
+          reject(err);
+        });
+
+        connection.once('end', () => {
+          console.log('📪 IMAP connection ended');
+        });
+
+        connection.connect();
+      });
+    }
+
+    // Assign email to client manually
+    async assignEmailToClient(messageId, clientId) {
+      try {
+        // Try different table structures
+        let result;
+        
+        try {
+          result = await pool.query(`
+            UPDATE crm_messages 
+            SET client_id = $1, client_name = (
+              SELECT CONCAT(first_name, ' ', last_name) 
+              FROM crm_clients 
+              WHERE id = $1
+            )
+            WHERE id = $2
+            RETURNING *
+          `, [clientId, messageId]);
+        } catch (error) {
+          // Try alternative table structure
+          try {
+            result = await pool.query(`
+              UPDATE communications 
+              SET client_id = $1
+              WHERE id = $2
+              RETURNING *
+            `, [clientId, messageId]);
+          } catch (altError) {
+            throw new Error(`Unable to assign email to client: ${error.message}`);
+          }
+        }
+        
+        if (result.rows.length > 0) {
+          console.log(`✅ Email ${messageId} assigned to client ${clientId}`);
+          return result.rows[0];
+        } else {
+          throw new Error('Email not found');
+        }
+      } catch (error) {
+        console.error('❌ Error assigning email to client:', error.message);
+        throw error;
+      }
+    }
   };
 }
