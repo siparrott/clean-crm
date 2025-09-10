@@ -41,7 +41,7 @@ interface AdminLayoutProps {
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   const [newLeadsCount, setNewLeadsCount] = useState(0);
   const [unreadEmailsCount, setUnreadEmailsCount] = useState(0);
   const location = useLocation();
@@ -83,30 +83,30 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   }, []);
 
   const sidebarItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/admin/dashboard' },
-    { icon: UserPlus, label: 'New Leads', path: '/admin/leads', badge: newLeadsCount },
-    { icon: ShoppingCart, label: 'Online Voucher Sales', path: '/admin/voucher-sales' },
-    { icon: Users, label: 'Clients', path: '/admin/clients' },
-    { icon: Crown, label: 'Top Clients', path: '/admin/high-value-clients' },
-    { icon: Image, label: 'Galleries', path: '/admin/galleries' },
-    { icon: FileText, label: 'Invoices', path: '/admin/invoices' },
-    { icon: Calendar, label: 'Calendar', path: '/admin/calendar' },
-    { icon: FolderOpen, label: 'Digital Files', path: '/admin/pro-files' },
-    { icon: PenTool, label: 'Blog', path: '/admin/blog' },
-    { icon: Wand2, label: 'AI AutoBlog', path: '/admin/autoblog' },
-    { icon: Mail, label: 'Email Campaigns', path: '/admin/campaigns' },
-    { icon: MessageSquare, label: 'Communications', path: '/admin/communications' },
-    { icon: Inbox, label: 'Inbox', path: '/admin/inbox', badge: unreadEmailsCount },
-    { icon: ClipboardList, label: 'Questionnaires', path: '/admin/questionnaires' },
-    { icon: BarChart3, label: 'Reports', path: '/admin/reports' },
-    { icon: Bot, label: 'CRM Operations Assistant', path: '/admin/crm-assistant' },
-    { icon: BookOpen, label: 'Knowledge Base', path: '/admin/knowledge-base' },
-    { icon: TestTube, label: 'Test Chat', path: '/admin/test' },
-    { icon: Settings, label: 'Settings', path: '/admin/settings' },
-    { icon: Palette, label: 'Customization', path: '/admin/customization' },
-    { icon: Palette, label: 'Studio Templates', path: '/admin/studio-templates' },
-    { icon: Wand2, label: 'Website Wizard', path: '/admin/website-wizard' },
-    { icon: Search, label: 'Website Analyzer', path: '/admin/website-analyzer' },
+    { icon: LayoutDashboard, label: t('nav.dashboard'), path: '/admin/dashboard' },
+    { icon: UserPlus, label: t('nav.newLeads'), path: '/admin/leads', badge: newLeadsCount },
+    { icon: ShoppingCart, label: t('nav.onlineVoucherSales'), path: '/admin/voucher-sales' },
+    { icon: Users, label: t('nav.clients'), path: '/admin/clients' },
+    { icon: Crown, label: t('nav.topClients'), path: '/admin/high-value-clients' },
+    { icon: Image, label: t('nav.galleriesAdmin'), path: '/admin/galleries' },
+    { icon: FileText, label: t('nav.invoices'), path: '/admin/invoices' },
+    { icon: Calendar, label: t('nav.calendar'), path: '/admin/calendar' },
+    { icon: FolderOpen, label: t('nav.digitalFiles'), path: '/admin/pro-files' },
+    { icon: PenTool, label: t('nav.blogAdmin'), path: '/admin/blog' },
+    { icon: Wand2, label: t('nav.aiAutoblog'), path: '/admin/autoblog' },
+    { icon: Mail, label: t('nav.emailCampaigns'), path: '/admin/campaigns' },
+    { icon: MessageSquare, label: t('nav.communications'), path: '/admin/communications' },
+    { icon: Inbox, label: t('nav.inbox'), path: '/admin/inbox', badge: unreadEmailsCount },
+    { icon: ClipboardList, label: t('nav.questionnaires'), path: '/admin/questionnaires' },
+    { icon: BarChart3, label: t('nav.reports'), path: '/admin/reports' },
+    { icon: Bot, label: t('nav.crmAssistant'), path: '/admin/crm-assistant' },
+    { icon: BookOpen, label: t('nav.knowledgeBase'), path: '/admin/knowledge-base' },
+    { icon: TestTube, label: t('nav.testChat'), path: '/admin/test' },
+    { icon: Settings, label: t('nav.settings'), path: '/admin/settings' },
+    { icon: Palette, label: t('nav.customization'), path: '/admin/customization' },
+    { icon: Palette, label: t('nav.studioTemplates'), path: '/admin/studio-templates' },
+    { icon: Wand2, label: t('nav.websiteWizard'), path: '/admin/website-wizard' },
+    { icon: Search, label: t('nav.websiteAnalyzer'), path: '/admin/website-analyzer' },
   ];
 
   const handleSignOut = async () => {
@@ -250,7 +250,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           >
             <ExternalLink size={20} className="flex-shrink-0" />
             {!sidebarCollapsed && (
-              <span className="ml-3">View Website</span>
+              <span className="ml-3">{t('nav.viewWebsite')}</span>
             )}
           </a>
         </nav>
@@ -262,7 +262,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             className="flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded transition-colors"
           >
             <LogOut size={20} className="flex-shrink-0" />
-            {!sidebarCollapsed && <span className="ml-3">Sign Out</span>}
+            {!sidebarCollapsed && <span className="ml-3">{t('nav.signOut')}</span>}
           </button>
         </div>
       </div>
@@ -297,7 +297,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 className="flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100"
               >
                 <ExternalLink size={16} className="mr-1" />
-                <span>View Website</span>
+                <span>{t('nav.viewWebsite')}</span>
               </a>
 
               {/* User Avatar */}

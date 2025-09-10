@@ -13,7 +13,9 @@ import { eq } from "drizzle-orm";
 import path from 'path';
 import os from 'os';
 import multer from 'multer';
-import Imap from 'imap';
+// Using require for 'imap' to satisfy commonjs typings within ESM context
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Imap = require('imap');
 import { simpleParser } from 'mailparser';
 
 // Lightweight helpers/stubs to keep routes type-safe where optional features are used
@@ -1645,6 +1647,159 @@ Bitte versuchen Sie es später noch einmal.`;
     } catch (error) {
       console.error('Error merging duplicate clients:', error);
       res.status(500).json({ error: 'Failed to merge duplicates' });
+    }
+  });
+
+  // Generate detailed merge suggestions (no mutations)
+  app.get("/api/crm/clients/merge-suggestions", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const mode = String(req.query.by || 'email').toLowerCase() === 'phone' ? 'phone' : 'email';
+      const strategy = String(req.query.strategy || 'keep-oldest').toLowerCase();
+      const keepOldest = strategy !== 'keep-newest';
+      const limit = Math.max(1, Math.min(500, Number(req.query.limit ?? 100)));
+      const keyExpr = mode === 'phone' ? `NULLIF(TRIM(phone),'')` : `LOWER(NULLIF(TRIM(email),'') )`;
+      const groups = await runSql(
+        `SELECT ${keyExpr} AS dup_key, ARRAY_AGG(id) AS ids, COUNT(*)::int AS count
+         FROM crm_clients
+         WHERE ${keyExpr} IS NOT NULL
+         GROUP BY 1
+         HAVING COUNT(*) > 1
+         ORDER BY COUNT(*) DESC
+         LIMIT $1`,
+        [limit]
+      );
+
+      const suggestions: any[] = [];
+      for (const g of groups) {
+        const ids: string[] = g.ids || [];
+        if (!ids || ids.length < 2) continue;
+        const rows = await runSql(
+          `SELECT id, created_at, updated_at, first_name, last_name, email, phone, address, city, state, zip, country, company, notes
+           FROM crm_clients WHERE id = ANY($1)`,
+          [ids]
+        );
+        if (!rows || rows.length < 2) continue;
+        rows.sort((a: any, b: any) => {
+          const ta = new Date(a.created_at || a.updated_at || 0).getTime();
+          const tb = new Date(b.created_at || b.updated_at || 0).getTime();
+          return keepOldest ? (ta - tb) : (tb - ta);
+        });
+        const primary = rows[0];
+        const duplicates = rows.slice(1);
+        suggestions.push({ key: g.dup_key, primary, duplicates });
+      }
+
+      res.json({ success: true, by: mode, strategy, count: suggestions.length, suggestions });
+    } catch (error) {
+      console.error('Error creating merge suggestions:', error);
+      res.status(500).json({ error: 'Failed to build merge suggestions' });
+    }
+  });
+
+  // Execute a specific merge decision from wizard
+  app.post("/api/crm/clients/merge-execute", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const { primaryId, duplicateIds } = req.body || {};
+      if (!primaryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
+        return res.status(400).json({ error: 'primaryId and duplicateIds[] required' });
+      }
+      // Basic validation to ensure primary exists
+      const primaryRows = await runSql(`SELECT id, phone, address, city, state, zip, country, company, notes FROM crm_clients WHERE id = $1`, [primaryId]);
+      if (!primaryRows || primaryRows.length === 0) {
+        return res.status(404).json({ error: 'Primary client not found' });
+      }
+
+      let merged = 0;
+      for (const dupId of duplicateIds) {
+        if (dupId === primaryId) continue;
+        const dupRows = await runSql(`SELECT id, phone, address, city, state, zip, country, company, notes FROM crm_clients WHERE id = $1`, [dupId]);
+        if (!dupRows || dupRows.length === 0) continue;
+        const d = dupRows[0];
+        // Relink references
+        await runSql(`UPDATE crm_invoices SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]);
+        await runSql(`UPDATE crm_messages SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]);
+        await runSql(`UPDATE voucher_sales SET redeemed_by = $1 WHERE redeemed_by = $2`, [primaryId, dupId]);
+        await runSql(`UPDATE galleries SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]).catch(()=>{});
+        await runSql(`UPDATE photography_sessions SET client_id = $1::text WHERE client_id = $2::text`, [primaryId, dupId]).catch(()=>{});
+        // Fill missing primary fields
+        await runSql(
+          `UPDATE crm_clients AS c SET
+             phone = COALESCE(NULLIF(c.phone,''), NULLIF($2,'')),
+             address = COALESCE(NULLIF(c.address,''), NULLIF($3,'')),
+             city = COALESCE(NULLIF(c.city,''), NULLIF($4,'')),
+             state = COALESCE(NULLIF(c.state,''), NULLIF($5,'')),
+             zip = COALESCE(NULLIF(c.zip,''), NULLIF($6,'')),
+             country = COALESCE(NULLIF(c.country,''), NULLIF($7,'')),
+             company = COALESCE(NULLIF(c.company,''), NULLIF($8,'')),
+             notes = COALESCE(NULLIF(c.notes,''), NULLIF($9,'')),
+             updated_at = NOW()
+           WHERE c.id = $1`,
+          [primaryId, d.phone, d.address, d.city, d.state, d.zip, d.country, d.company, d.notes]
+        ).catch(()=>{});
+        await runSql(`DELETE FROM crm_clients WHERE id = $1`, [dupId]);
+        merged++;
+      }
+      const updatedPrimary = await runSql(`SELECT * FROM crm_clients WHERE id = $1`, [primaryId]);
+      res.json({ success: true, merged, primaryId, primary: updatedPrimary?.[0] });
+    } catch (error) {
+      console.error('Error executing targeted merge:', error);
+      res.status(500).json({ error: 'Failed to execute merge' });
+    }
+  });
+
+  // Batch execute multiple merge decisions in a single request
+  app.post("/api/crm/clients/merge-execute-batch", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const { merges } = req.body || {};
+      if (!Array.isArray(merges) || merges.length === 0) {
+        return res.status(400).json({ error: 'merges[] required: [{primaryId, duplicateIds[]}]' });
+      }
+      const results: any[] = [];
+      for (const m of merges) {
+        const primaryId = m.primaryId;
+        const duplicateIds: string[] = Array.isArray(m.duplicateIds) ? m.duplicateIds : [];
+        if (!primaryId || duplicateIds.length === 0) {
+          results.push({ primaryId, skipped: true, reason: 'missing primaryId or duplicateIds' });
+          continue;
+        }
+        try {
+          let merged = 0;
+            for (const dupId of duplicateIds) {
+              if (dupId === primaryId) continue;
+              const dupRows = await runSql(`SELECT id, phone, address, city, state, zip, country, company, notes FROM crm_clients WHERE id = $1`, [dupId]);
+              if (!dupRows || dupRows.length === 0) continue;
+              const d = dupRows[0];
+              await runSql(`UPDATE crm_invoices SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]);
+              await runSql(`UPDATE crm_messages SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]);
+              await runSql(`UPDATE voucher_sales SET redeemed_by = $1 WHERE redeemed_by = $2`, [primaryId, dupId]);
+              await runSql(`UPDATE galleries SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]).catch(()=>{});
+              await runSql(`UPDATE photography_sessions SET client_id = $1::text WHERE client_id = $2::text`, [primaryId, dupId]).catch(()=>{});
+              await runSql(
+                `UPDATE crm_clients AS c SET
+                  phone = COALESCE(NULLIF(c.phone,''), NULLIF($2,'')),
+                  address = COALESCE(NULLIF(c.address,''), NULLIF($3,'')),
+                  city = COALESCE(NULLIF(c.city,''), NULLIF($4,'')),
+                  state = COALESCE(NULLIF(c.state,''), NULLIF($5,'')),
+                  zip = COALESCE(NULLIF(c.zip,''), NULLIF($6,'')),
+                  country = COALESCE(NULLIF(c.country,''), NULLIF($7,'')),
+                  company = COALESCE(NULLIF(c.company,''), NULLIF($8,'')),
+                  notes = COALESCE(NULLIF(c.notes,''), NULLIF($9,'')),
+                  updated_at = NOW()
+                 WHERE c.id = $1`,
+                [primaryId, d.phone, d.address, d.city, d.state, d.zip, d.country, d.company, d.notes]
+              ).catch(()=>{});
+              await runSql(`DELETE FROM crm_clients WHERE id = $1`, [dupId]);
+              merged++;
+            }
+          results.push({ primaryId, merged });
+        } catch (innerErr: any) {
+          results.push({ primaryId: m.primaryId, error: innerErr?.message || 'merge failed' });
+        }
+      }
+      res.json({ success: true, count: results.length, results });
+    } catch (error) {
+      console.error('Error executing batch merge:', error);
+      res.status(500).json({ error: 'Failed batch merge' });
     }
   });
 

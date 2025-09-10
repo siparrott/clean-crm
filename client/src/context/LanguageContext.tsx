@@ -528,6 +528,33 @@ const translations = {
     
     // Reviews
     'reviews.viewAllOnGoogle': 'View All Reviews on Google'
+  ,// Admin sidebar navigation additions
+  'nav.dashboard': 'Dashboard',
+  'nav.newLeads': 'New Leads',
+  'nav.onlineVoucherSales': 'Online Voucher Sales',
+  'nav.clients': 'Clients',
+  'nav.topClients': 'Top Clients',
+  'nav.galleriesAdmin': 'Galleries',
+  'nav.invoices': 'Invoices',
+  'nav.calendar': 'Calendar',
+  'nav.digitalFiles': 'Digital Files',
+  'nav.blogAdmin': 'Blog',
+  'nav.aiAutoblog': 'AI AutoBlog',
+  'nav.emailCampaigns': 'Email Campaigns',
+  'nav.communications': 'Communications',
+  'nav.inbox': 'Inbox',
+  'nav.questionnaires': 'Questionnaires',
+  'nav.reports': 'Reports',
+  'nav.crmAssistant': 'CRM Operations Assistant',
+  'nav.knowledgeBase': 'Knowledge Base',
+  'nav.testChat': 'Test Chat',
+  'nav.settings': 'Settings',
+  'nav.customization': 'Customization',
+  'nav.studioTemplates': 'Studio Templates',
+  'nav.websiteWizard': 'Website Wizard',
+  'nav.websiteAnalyzer': 'Website Analyzer',
+  'nav.viewWebsite': 'View Website',
+  'nav.signOut': 'Sign Out'
   },
   de: {
     'nav.home': 'Startseite',
@@ -1036,6 +1063,33 @@ const translations = {
     
     // Reviews
     'reviews.viewAllOnGoogle': 'Alle Bewertungen auf Google ansehen'
+  ,// Admin sidebar navigation additions
+  'nav.dashboard': 'Dashboard',
+  'nav.newLeads': 'Neue Leads',
+  'nav.onlineVoucherSales': 'Online Gutschein-Verkäufe',
+  'nav.clients': 'Kunden',
+  'nav.topClients': 'Top Kunden',
+  'nav.galleriesAdmin': 'Galerien',
+  'nav.invoices': 'Rechnungen',
+  'nav.calendar': 'Kalender',
+  'nav.digitalFiles': 'Digitale Dateien',
+  'nav.blogAdmin': 'Blog',
+  'nav.aiAutoblog': 'KI AutoBlog',
+  'nav.emailCampaigns': 'E-Mail Kampagnen',
+  'nav.communications': 'Kommunikation',
+  'nav.inbox': 'Posteingang',
+  'nav.questionnaires': 'Fragebögen',
+  'nav.reports': 'Berichte',
+  'nav.crmAssistant': 'CRM-Assistent',
+  'nav.knowledgeBase': 'Wissensdatenbank',
+  'nav.testChat': 'Test Chat',
+  'nav.settings': 'Einstellungen',
+  'nav.customization': 'Anpassung',
+  'nav.studioTemplates': 'Studio Vorlagen',
+  'nav.websiteWizard': 'Website-Assistent',
+  'nav.websiteAnalyzer': 'Website-Analyse',
+  'nav.viewWebsite': 'Website anzeigen',
+  'nav.signOut': 'Abmelden'
   }
 };
 

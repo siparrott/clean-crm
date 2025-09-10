@@ -19,7 +19,8 @@ import {
   FileText,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Merge
 } from 'lucide-react';
 
 interface Client {
@@ -50,6 +51,22 @@ const ClientsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [sortBy, setSortBy] = useState<'name' | 'created'>('name');
+  const [showMerge, setShowMerge] = useState(false);
+
+  // Merge wizard state
+  interface MergeSuggestionRow {
+    key: string;
+    primary: any;
+    duplicates: any[];
+    selected: boolean; // user choose to merge this group
+  }
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [mergeSuggestions, setMergeSuggestions] = useState<MergeSuggestionRow[]>([]);
+  const [mergeMode, setMergeMode] = useState<'email' | 'phone'>('email');
+  const [mergeStrategy, setMergeStrategy] = useState<'keep-oldest' | 'keep-newest'>('keep-oldest');
+  const [executingMerge, setExecutingMerge] = useState(false);
+  const [mergeMessage, setMergeMessage] = useState<string | null>(null);
+  const [showFilterModal, setShowFilterModal] = useState(false);
 
   useEffect(() => {
     fetchClients();
@@ -229,6 +246,75 @@ const ClientsPage: React.FC = () => {
     }
   };
 
+  // Fetch merge suggestions
+  const loadMergeSuggestions = async () => {
+    setMergeLoading(true);
+    setMergeMessage(null);
+    try {
+      const resp = await fetch(`/api/crm/clients/merge-suggestions?by=${mergeMode}&strategy=${mergeStrategy}&limit=100`);
+      if (!resp.ok) throw new Error('Failed to fetch merge suggestions');
+      const data = await resp.json();
+      const suggestions: MergeSuggestionRow[] = (data?.suggestions || []).map((s: any) => ({ ...s, selected: true }));
+      setMergeSuggestions(suggestions);
+    } catch (e: any) {
+      setMergeMessage(e.message || 'Error loading suggestions');
+    } finally {
+      setMergeLoading(false);
+    }
+  };
+
+  const openMergeWizard = () => {
+    setShowMerge(true);
+    // lazy load on open
+    loadMergeSuggestions();
+  };
+
+  const executeSelectedMerges = async () => {
+    const selected = mergeSuggestions.filter(s => s.selected);
+    if (selected.length === 0) {
+      setMergeMessage('No groups selected to merge.');
+      return;
+    }
+    if (!window.confirm(`Merge ${selected.length} duplicate group(s)? This cannot be undone.`)) return;
+    setExecutingMerge(true);
+    setMergeMessage(null);
+    let successCount = 0;
+    try {
+      const mergesPayload = selected.map(group => ({ primaryId: group.primary.id, duplicateIds: group.duplicates.map(d => d.id) }));
+      const resp = await fetch('/api/crm/clients/merge-execute-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merges: mergesPayload })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        successCount = data?.results?.filter((r: any) => r.merged > 0).length || 0;
+      }
+      setMergeMessage(`Merged ${successCount} group(s). Refreshing client list...`);
+      await fetchClients();
+      // Refresh suggestions after merges
+      await loadMergeSuggestions();
+    } catch (e: any) {
+      setMergeMessage(e.message || 'Failed executing merges');
+    } finally {
+      setExecutingMerge(false);
+    }
+  };
+
+  const toggleGroupSelected = (key: string) => {
+    setMergeSuggestions(prev => prev.map(s => s.key === key ? { ...s, selected: !s.selected } : s));
+  };
+
+  const selectAllGroups = (val: boolean) => {
+    setMergeSuggestions(prev => prev.map(s => ({ ...s, selected: val })));
+  };
+
+  const summaryCounts = () => {
+    const totalGroups = mergeSuggestions.length;
+    const totalClientsImpacted = mergeSuggestions.reduce((acc, g) => acc + 1 + g.duplicates.length, 0);
+    return { totalGroups, totalClientsImpacted };
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -239,6 +325,13 @@ const ClientsPage: React.FC = () => {
             <p className="text-gray-600">{t('clients.manage_database')}</p>
           </div>
           <div className="flex space-x-3">
+            <button
+              onClick={openMergeWizard}
+              className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center"
+            >
+              <Merge size={20} className="mr-2" />
+              Merge Wizard
+            </button>
             <button
               onClick={handleExportCSV}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center"
@@ -303,7 +396,7 @@ const ClientsPage: React.FC = () => {
               </button>
             </div>
             
-            <button className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+            <button onClick={() => setShowFilterModal(true)} className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
               <Filter size={20} className="mr-2" />
               {t('clients.more_filters')}
             </button>
@@ -394,6 +487,148 @@ const ClientsPage: React.FC = () => {
         ) : (
           <div className="text-center py-12">
             <p className="text-gray-500">{t('clients.no_clients_found')}</p>
+          </div>
+        )}
+
+        {showMerge && (
+          <div className="fixed inset-0 z-50 flex items-start justify-center bg-black bg-opacity-50 overflow-auto p-6">
+            <div className="bg-white w-full max-w-6xl rounded-lg shadow-lg p-6 relative">
+              <button
+                className="absolute top-3 right-3 text-gray-500 hover:text-gray-700"
+                onClick={() => setShowMerge(false)}
+              >
+                ✕
+              </button>
+              <h2 className="text-xl font-semibold mb-4 flex items-center"><Merge className="mr-2" size={22}/>Merge Wizard</h2>
+              <div className="flex flex-wrap gap-4 mb-4 items-end">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Mode</label>
+                  <select
+                    value={mergeMode}
+                    onChange={(e) => { setMergeMode(e.target.value as any); loadMergeSuggestions(); }}
+                    className="border rounded px-2 py-1"
+                  >
+                    <option value="email">Email</option>
+                    <option value="phone">Phone</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Strategy</label>
+                  <select
+                    value={mergeStrategy}
+                    onChange={(e) => { setMergeStrategy(e.target.value as any); loadMergeSuggestions(); }}
+                    className="border rounded px-2 py-1"
+                  >
+                    <option value="keep-oldest">Keep Oldest</option>
+                    <option value="keep-newest">Keep Newest</option>
+                  </select>
+                </div>
+                <div className="text-sm text-gray-600">
+                  {mergeLoading ? 'Loading suggestions...' : `${mergeSuggestions.length} group(s) found`}
+                </div>
+                <div className="ml-auto flex gap-2">
+                  <button
+                    className="px-3 py-2 text-xs rounded bg-gray-200 hover:bg-gray-300"
+                    onClick={() => selectAllGroups(true)}
+                  >Select All</button>
+                  <button
+                    className="px-3 py-2 text-xs rounded bg-gray-200 hover:bg-gray-300"
+                    onClick={() => selectAllGroups(false)}
+                  >Deselect All</button>
+                  <button
+                    disabled={executingMerge || mergeLoading}
+                    onClick={executeSelectedMerges}
+                    className="px-4 py-2 rounded bg-orange-600 hover:bg-orange-700 text-white disabled:opacity-60"
+                  >
+                    {executingMerge ? 'Merging...' : 'Execute Merges'}
+                  </button>
+                </div>
+              </div>
+              {mergeMessage && (
+                <div className="mb-4 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded p-2">
+                  {mergeMessage}
+                </div>
+              )}
+              <div className="overflow-auto max-h-[60vh] border rounded">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                    <tr>
+                      <th className="p-2">Select</th>
+                      <th className="p-2">Key</th>
+                      <th className="p-2">Primary</th>
+                      <th className="p-2">Duplicates</th>
+                      <th className="p-2">Preview</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mergeSuggestions.map(group => (
+                      <tr key={group.key} className={group.selected ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="p-2 align-top">
+                          <input
+                            type="checkbox"
+                            checked={group.selected}
+                            onChange={() => toggleGroupSelected(group.key)}
+                          />
+                        </td>
+                        <td className="p-2 align-top font-mono text-xs">{group.key}</td>
+                        <td className="p-2 align-top w-48">
+                          <div className="font-semibold">{group.primary.last_name || group.primary.lastName || ''} {group.primary.first_name || group.primary.firstName || ''}</div>
+                          <div className="text-xs text-gray-500 break-all">{group.primary.email || group.primary.phone}</div>
+                          <div className="text-[10px] text-gray-400">id: {group.primary.id}</div>
+                        </td>
+                        <td className="p-2 align-top w-64">
+                          {group.duplicates.map(d => (
+                            <div key={d.id} className="mb-2 border-b last:border-b-0 pb-1">
+                              <div className="font-medium">{d.last_name || d.lastName || ''} {d.first_name || d.firstName || ''}</div>
+                              <div className="text-xs text-gray-500 break-all">{d.email || d.phone}</div>
+                              <div className="text-[10px] text-gray-400">id: {d.id}</div>
+                            </div>
+                          ))}
+                        </td>
+                        <td className="p-2 align-top text-xs w-72">
+                          <div className="space-y-1">
+                            {['phone','address','city','state','zip','country','company','notes'].map(f => {
+                              const pVal = group.primary[f] || '';
+                              const anyDupVal = group.duplicates.find(d => d[f])?.[f];
+                              if (!anyDupVal) return null;
+                              if (pVal) return null; // only show fields that would be enriched
+                              return (
+                                <div key={f} className="flex justify-between gap-2">
+                                  <span className="text-gray-500">{f}:</span>
+                                  <span className="font-medium text-gray-800 truncate max-w-[160px]" title={anyDupVal}>{String(anyDupVal).slice(0,60)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {(!mergeLoading && mergeSuggestions.length === 0) && (
+                      <tr><td colSpan={5} className="p-4 text-center text-gray-500">No duplicate groups found.</td></tr>
+                    )}
+                    {mergeLoading && (
+                      <tr><td colSpan={5} className="p-4 text-center">Loading...</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 text-xs text-gray-500">
+                {(() => { const s = summaryCounts(); return `Groups: ${s.totalGroups} | Total Clients Impacted: ${s.totalClientsImpacted}`; })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showFilterModal && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 relative">
+              <button onClick={() => setShowFilterModal(false)} className="absolute top-3 right-3 text-gray-500 hover:text-gray-700">✕</button>
+              <h3 className="text-lg font-semibold mb-4 flex items-center"><Filter className="mr-2" size={18}/>Advanced Filters</h3>
+              <p className="text-sm text-gray-600 mb-4">(Placeholder) Add additional filtering options here (status, date range, has email, has phone, etc.).</p>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShowFilterModal(false)} className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm">{t('action.close')}</button>
+              </div>
+            </div>
           </div>
         )}
       </div>
