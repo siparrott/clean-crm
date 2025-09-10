@@ -72,37 +72,38 @@ interface DashboardStats {
   equipmentConflicts: number;
 }
 
-// Golden Hour calculation function
+// Golden Hour calculation returning formatted windows plus raw Date objects for scheduling suggestions
 const calculateGoldenHour = (date: Date, latitude: number = 52.52, longitude: number = 13.405) => {
-  // Simplified golden hour calculation (normally you'd use a library like suncalc)
-  // This is a basic approximation - for production use a proper solar calculation library
-  
   const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
   const solarDeclination = 23.45 * Math.sin((2 * Math.PI * (284 + dayOfYear)) / 365) * Math.PI / 180;
-  
   const latRad = latitude * Math.PI / 180;
   const hourAngle = Math.acos(-Math.tan(latRad) * Math.tan(solarDeclination));
-  
-  // Solar noon approximation
   const solarNoon = 12 - (longitude / 15);
   const sunriseHour = solarNoon - (hourAngle * 12 / Math.PI);
   const sunsetHour = solarNoon + (hourAngle * 12 / Math.PI);
-  
-  // Golden hour is typically 1 hour after sunrise and 1 hour before sunset
   const morningGoldenStart = sunriseHour;
   const morningGoldenEnd = sunriseHour + 1;
   const eveningGoldenStart = sunsetHour - 1;
   const eveningGoldenEnd = sunsetHour;
-  
   const formatHour = (hour: number) => {
     const h = Math.floor(hour);
     const m = Math.floor((hour - h) * 60);
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   };
-  
+  const hourToDate = (base: Date, hour: number) => {
+    const d = new Date(base);
+    const h = Math.floor(hour);
+    const m = Math.floor((hour - h) * 60);
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
   return {
     morning: `${formatHour(morningGoldenStart)} - ${formatHour(morningGoldenEnd)}`,
-    evening: `${formatHour(eveningGoldenStart)} - ${formatHour(eveningGoldenEnd)}`
+    evening: `${formatHour(eveningGoldenStart)} - ${formatHour(eveningGoldenEnd)}`,
+    windows: {
+      morning: { start: hourToDate(date, morningGoldenStart), end: hourToDate(date, morningGoldenEnd) },
+      evening: { start: hourToDate(date, eveningGoldenStart), end: hourToDate(date, eveningGoldenEnd) }
+    }
   };
 };
 
@@ -144,6 +145,9 @@ const PhotographyCalendarPage: React.FC = () => {
   });
   const [newClientDraft, setNewClientDraft] = useState({ firstName: '', lastName: '', email: '', phone: '' });
   const [creatingClient, setCreatingClient] = useState(false);
+  const [manualEndOverride, setManualEndOverride] = useState(false);
+  const [manualStartOverride, setManualStartOverride] = useState(false);
+  const [clientNameSuggestions, setClientNameSuggestions] = useState<ClientLight[]>([]);
 
   const [stats, setStats] = useState<DashboardStats>({
     totalSessions: 0,
@@ -279,9 +283,34 @@ const PhotographyCalendarPage: React.FC = () => {
     }
   };
 
+  // Helper to format a Date to yyyy-MM-ddTHH:mm in local time for datetime-local inputs
+  const formatLocalDateTime = (date: Date) => {
+    const tzOffsetMs = date.getTimezoneOffset() * 60000;
+    const local = new Date(date.getTime() - tzOffsetMs);
+    return local.toISOString().slice(0, 16);
+  };
+
   const handleCreateSession = () => {
-  // Load CRM clients when opening the form to enable linking
-  fetchClients();
+    // Load CRM clients when opening the form to enable linking
+    fetchClients();
+    // Ensure start & end time default visibility
+    setFormData(prev => {
+      if (!prev.startTime) {
+        const start = formatLocalDateTime(new Date());
+        // Portrait default = +1 hour per requirement
+        const endDate = new Date();
+        endDate.setHours(endDate.getHours() + 1);
+        const end = formatLocalDateTime(endDate);
+        return { ...prev, startTime: start, endTime: prev.sessionType === 'portrait' ? end : prev.endTime };
+      }
+      // If session type is portrait and endTime missing, set +1h
+      if (prev.sessionType === 'portrait' && prev.startTime && !prev.endTime) {
+        const startDate = new Date(prev.startTime);
+        const endDate = new Date(startDate.getTime() + 60 * 60000);
+        return { ...prev, endTime: formatLocalDateTime(endDate) };
+      }
+      return prev;
+    });
     setShowSessionForm(true);
   };
 
@@ -298,10 +327,11 @@ const PhotographyCalendarPage: React.FC = () => {
         endTime: formData.endTime ? new Date(formData.endTime).toISOString() : undefined
       };
 
-      const response = await fetch('/api/photography/sessions', {
+    const response = await fetch('/api/photography/sessions', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         },
         body: JSON.stringify(sessionData),
       });
@@ -339,11 +369,74 @@ const PhotographyCalendarPage: React.FC = () => {
   };
 
   const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    if (field === 'endTime') setManualEndOverride(true);
+    if (field === 'startTime') setManualStartOverride(true);
+    if (field === 'clientName') {
+      const v = (value || '').toLowerCase();
+      if (v.length >= 2) {
+        const suggestions = clients.filter(c => {
+          const full = `${c.firstName} ${c.lastName}`.trim().toLowerCase();
+          return full.includes(v);
+        }).slice(0, 5);
+        setClientNameSuggestions(suggestions);
+      } else {
+        setClientNameSuggestions([]);
+      }
+    }
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
+
+  // Keep portrait sessions to 1 hour by default unless manually overridden
+  useEffect(() => {
+    if (formData.sessionType === 'portrait' && formData.startTime) {
+      if (!manualEndOverride || !formData.endTime) {
+        const startDate = new Date(formData.startTime);
+        const endDate = new Date(startDate.getTime() + 60 * 60000);
+        const tzOffsetMs = endDate.getTimezoneOffset() * 60000;
+        const local = new Date(endDate.getTime() - tzOffsetMs).toISOString().slice(0, 16);
+        setFormData(prev => ({ ...prev, endTime: local }));
+      }
+    }
+  }, [formData.sessionType, formData.startTime]);
+
+  // Suggest a golden hour start time automatically when toggled on (if user hasn't manually set start)
+  useEffect(() => {
+    if (formData.goldenHourOptimized) {
+      if (!formData.startTime || !manualStartOverride) {
+        const base = formData.startTime ? new Date(formData.startTime) : new Date();
+        let lat = 52.52, lon = 13.405; // default
+        if (formData.locationCoordinates && formData.locationCoordinates.includes(',')) {
+          const [plat, plon] = formData.locationCoordinates.split(',').map(parseFloat);
+            if (!isNaN(plat) && !isNaN(plon)) { lat = plat; lon = plon; }
+        }
+        const golden = calculateGoldenHour(base, lat, lon);
+        const now = new Date();
+        let target = golden.windows.evening.start > now ? golden.windows.evening.start : golden.windows.morning.start;
+        if (golden.windows.evening.end < now) {
+          // choose tomorrow morning
+          const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+          const goldenTomorrow = calculateGoldenHour(tomorrow, lat, lon);
+          target = goldenTomorrow.windows.morning.start;
+        }
+        const tzOffsetMs = target.getTimezoneOffset() * 60000;
+        const startLocal = new Date(target.getTime() - tzOffsetMs).toISOString().slice(0, 16);
+        const endLocal = new Date(target.getTime() + 60*60000 - tzOffsetMs).toISOString().slice(0, 16);
+        setFormData(prev => ({ ...prev, startTime: startLocal, endTime: endLocal }));
+      }
+    }
+  }, [formData.goldenHourOptimized]);
+
+  // If user types an exact existing client name, auto-link
+  useEffect(() => {
+    if (formData.clientName) {
+      const normalized = formData.clientName.trim().toLowerCase();
+      const exact = clients.find(c => `${c.firstName} ${c.lastName}`.trim().toLowerCase() === normalized);
+      if (exact) {
+        if (!formData.clientId) handleInputChange('clientId', exact.id);
+        if (!formData.clientEmail && exact.email) handleInputChange('clientEmail', exact.email);
+      }
+    }
+  }, [formData.clientName, clients]);
 
   const addEquipmentItem = () => {
     const equipment = prompt('Enter equipment item:');
@@ -710,12 +803,14 @@ const PhotographyCalendarPage: React.FC = () => {
                           // Auto-calculate end time based on session type
                           if (e.target.value) {
                             const startDate = new Date(e.target.value);
-                            const durationMinutes = formData.sessionType === 'family' ? 60 : 
-                                                   formData.sessionType === 'wedding' ? 480 :
-                                                   formData.sessionType === 'portrait' ? 90 : 60;
+                            const durationMinutes = formData.sessionType === 'wedding' ? 480 : 60; // portrait & others default 60
                             const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
-                            const endTimeString = endDate.toISOString().slice(0, 16);
-                            handleInputChange('endTime', endTimeString);
+                            const endTimeString = formatLocalDateTime(endDate);
+                            if (formData.sessionType === 'portrait') {
+                              handleInputChange('endTime', endTimeString);
+                            } else if (!formData.endTime) {
+                              handleInputChange('endTime', endTimeString);
+                            }
                           }
                         }}
                         className="w-full border rounded px-4 py-3 text-lg font-medium"
@@ -879,6 +974,27 @@ const PhotographyCalendarPage: React.FC = () => {
                     onChange={(e) => handleInputChange('clientName', e.target.value)}
                     className="w-full border rounded px-3 py-2"
                   />
+                  {clientNameSuggestions.length > 0 && (
+                    <ul className="mt-1 border rounded bg-white shadow divide-y max-h-40 overflow-auto text-sm">
+                      {clientNameSuggestions.map(s => (
+                        <li
+                          key={s.id}
+                          className="px-3 py-2 hover:bg-blue-50 cursor-pointer"
+                          onClick={() => {
+                            handleInputChange('clientId', s.id);
+                            handleInputChange('clientName', `${s.firstName} ${s.lastName}`.trim());
+                            if (s.email) handleInputChange('clientEmail', s.email);
+                            setClientNameSuggestions([]);
+                          }}
+                        >
+                          {s.firstName} {s.lastName}{s.email ? ` – ${s.email}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {formData.clientName && clientNameSuggestions.length === 0 && clients.some(c => `${c.firstName} ${c.lastName}`.trim().toLowerCase() === formData.clientName.trim().toLowerCase()) && (
+                    <p className="text-xs text-green-600 mt-1">Matched existing client. Will link automatically.</p>
+                  )}
                 </div>
 
                 <div>

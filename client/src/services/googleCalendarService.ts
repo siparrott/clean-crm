@@ -43,7 +43,7 @@ class GoogleCalendarService {
   }
 
   // Create a calendar event
-  async createEvent(event: CalendarEvent): Promise<string | null> {
+  async createEvent(event: CalendarEvent, options: { promptGoogle?: boolean } = {}): Promise<string | null> {
     try {
       // For now, we'll create a local event and provide instructions for manual addition
       const eventData = {
@@ -62,12 +62,11 @@ class GoogleCalendarService {
       events.push(eventData);
       localStorage.setItem('calendarEvents', JSON.stringify(events));
 
-      // Generate Google Calendar URL for manual addition
-      const googleCalendarUrl = this.generateGoogleCalendarUrl(event);
-      
-      // Open Google Calendar with pre-filled event data
-      if (window.confirm('Would you like to add this event to Google Calendar?')) {
-        window.open(googleCalendarUrl, '_blank');
+      if (options.promptGoogle) {
+        const googleCalendarUrl = this.generateGoogleCalendarUrl(event);
+        if (window.confirm('Would you like to also add this event to Google Calendar?')) {
+          window.open(googleCalendarUrl, '_blank');
+        }
       }
 
       return eventData.id;

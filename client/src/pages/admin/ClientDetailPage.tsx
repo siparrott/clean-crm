@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { ArrowLeft, Mail, Phone, MapPin, Building, Edit, Trash2, Calendar, Euro, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Building, Edit, Trash2, Calendar, Euro, MessageSquare, Plus } from 'lucide-react';
 import { googleCalendarService } from '../../services/googleCalendarService';
 
 interface Client {
@@ -102,14 +102,32 @@ const ClientDetailPage: React.FC = () => {
         clientId: client.id
       };
       
-      await googleCalendarService.createEvent(event);
-      
-      // Also navigate to calendar page
-      navigate(`/admin/calendar?clientId=${client.id}&action=new`);
+      // Create internally without forcing Google prompt
+      await googleCalendarService.createEvent(event, { promptGoogle: false });
+      // Navigate to internal calendar with new event context
+      navigate(`/admin/calendar?clientId=${client.id}`);
     } catch (error) {
       console.error('Failed to schedule session:', error);
       alert('Failed to schedule session. Please try again.');
     }
+  };
+
+  const handleAddAppointment = async () => {
+    if (!client) return;
+    // Open a lightweight appointment creation (reuse schedule logic but no default times)
+    const start = new Date();
+    start.setHours(start.getHours() + 2, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(end.getHours() + 1);
+    const event = {
+      title: `Appointment - ${client.firstName} ${client.lastName}`,
+      description: `Linked to client ${client.firstName} ${client.lastName} (${client.email})`,
+      startTime: start,
+      endTime: end,
+      clientId: client.id
+    };
+    await googleCalendarService.createEvent(event, { promptGoogle: false });
+    navigate(`/admin/calendar?clientId=${client.id}`);
   };
 
   const handleCreateInvoice = () => {
@@ -119,22 +137,7 @@ const ClientDetailPage: React.FC = () => {
 
   const handleSendEmail = async () => {
     if (!client) return;
-    
-    try {
-      // Open email composition modal or navigate to email page
-      const subject = `New Age Fotografie - ${client.firstName} ${client.lastName}`;
-      const body = `Liebe/r ${client.firstName},\n\nVielen Dank für Ihr Interesse an New Age Fotografie.\n\nMit freundlichen Grüßen,\nIhr New Age Fotografie Team`;
-      
-      // For now, open default email client
-      const mailtoLink = `mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      window.open(mailtoLink);
-      
-      // TODO: Implement internal email system
-      // navigate(`/admin/communications?action=email&clientId=${client.id}`);
-    } catch (error) {
-      console.error('Failed to compose email:', error);
-      alert('Failed to open email composer');
-    }
+    navigate(`/admin/inbox?compose=1&to=${encodeURIComponent(client.email)}&name=${encodeURIComponent(client.firstName + ' ' + client.lastName)}`);
   };
 
   const handleSendSMS = async () => {
@@ -309,13 +312,20 @@ const ClientDetailPage: React.FC = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <button 
             onClick={handleScheduleSession}
             className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 hover:border-purple-300 transition-colors flex items-center justify-center"
           >
             <Calendar size={20} className="mr-2 text-purple-600" />
             <span>Schedule Session</span>
+          </button>
+          <button
+            onClick={handleAddAppointment}
+            className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 hover:border-purple-300 transition-colors flex items-center justify-center"
+          >
+            <Plus size={20} className="mr-2 text-purple-600" />
+            <span>Add Appointment</span>
           </button>
           <button 
             onClick={handleCreateInvoice}
