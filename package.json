@@ -1,6 +1,7 @@
 {
   "name": "photography-crm-demo",
   "version": "1.0.1",
+  "type": "module",
   "description": "Live demo of Photography CRM SaaS platform",
   "main": "minimal-server.js",
   "engines": {
