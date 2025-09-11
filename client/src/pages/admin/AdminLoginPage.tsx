@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { checkSupabaseProjectStatus, isProjectPausedError } from '../../lib/supabase';
-// Supabase removed - using Neon database with Express sessions
+// API status check removed - using Neon database with Express sessions
 import { Mail, Lock, AlertCircle, CheckCircle, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
 
 const AdminLoginPage: React.FC = () => {
@@ -32,12 +31,21 @@ const AdminLoginPage: React.FC = () => {
   const checkStatus = async () => {
     setCheckingStatus(true);
     try {
-      const status = await checkSupabaseProjectStatus();
-      setProjectStatus(status);
+      // Check Neon database health instead of Supabase
+      const response = await fetch('/api/status');
+      if (response.ok) {
+        setProjectStatus({ 
+          active: true, 
+          error: null,
+          statusCode: response.status
+        });
+      } else {
+        throw new Error('API not responding');
+      }
     } catch (err) {
       setProjectStatus({ 
         active: false, 
-        error: 'Failed to check project status',
+        error: 'Failed to connect to database',
         statusCode: 0
       });
     } finally {
@@ -140,7 +148,7 @@ const AdminLoginPage: React.FC = () => {
         {/* Project Status Indicator */}
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-300">Supabase Status:</span>
+            <span className="text-sm font-medium text-gray-300">Database Status:</span>
             <div className={`flex items-center ${getStatusColor()}`}>
               {getStatusIcon()}
               <span className="text-sm">{getStatusText()}</span>
@@ -156,7 +164,7 @@ const AdminLoginPage: React.FC = () => {
               <p className={`text-sm mb-2 ${
                 isPausedProject ? 'text-orange-100' : 'text-red-100'
               }`}>
-                {projectStatus?.error || 'Supabase project is not accessible'}
+                {projectStatus?.error || 'Database is not accessible'}
               </p>
               
               <div className="flex flex-col sm:flex-row gap-2">
@@ -175,13 +183,13 @@ const AdminLoginPage: React.FC = () => {
                 
                 {isPausedProject && (
                   <a
-                    href="https://supabase.com/dashboard"
+                    href="https://console.neon.tech"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center text-xs text-orange-300 hover:text-orange-100 px-3 py-1 rounded border border-orange-600 hover:border-orange-500 transition-colors"
                   >
                     <ExternalLink className="h-3 w-3 mr-1" />
-                    Open Dashboard
+                    Open Database Console
                   </a>
                 )}
               </div>
@@ -265,8 +273,8 @@ const AdminLoginPage: React.FC = () => {
             {!projectStatus?.active && !checkingStatus && (
               <p className="mt-2 text-xs text-gray-400 text-center">
                 {isPausedProject 
-                  ? 'Login disabled - Supabase project is paused'
-                  : 'Login disabled due to Supabase connection issues'
+                  ? 'Login disabled - Database project is paused'
+                  : 'Login disabled due to database connection issues'
                 }
               </p>
             )}

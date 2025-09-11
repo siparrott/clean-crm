@@ -120,9 +120,9 @@ const GalleryPage: React.FC = () => {
       return;
     }
     
-    // Create a download link
+    // Create a download link using Neon API
     const link = document.createElement('a');
-    link.href = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/galleries/public/galleries/${slug}/download`;
+    link.href = `/api/galleries/${slug}/download`;
     link.download = `${gallery.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.zip`;
     
     // Add authorization header
