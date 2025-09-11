@@ -151,8 +151,8 @@ const SimpleEmailComposer: React.FC<SimpleEmailComposerProps> = ({
               className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               dir="ltr"
               style={{ 
-                direction: 'ltr !important',
-                textAlign: 'left !important',
+                direction: 'ltr' as const,
+                textAlign: 'left' as const,
                 unicodeBidi: 'embed'
               }}
             />
@@ -169,8 +169,8 @@ const SimpleEmailComposer: React.FC<SimpleEmailComposerProps> = ({
               className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               dir="ltr"
               style={{ 
-                direction: 'ltr !important',
-                textAlign: 'left !important',
+                direction: 'ltr' as const,
+                textAlign: 'left' as const,
                 unicodeBidi: 'embed'
               }}
             />
@@ -187,8 +187,8 @@ const SimpleEmailComposer: React.FC<SimpleEmailComposerProps> = ({
               className="w-full border border-gray-300 rounded px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
               dir="ltr"
               style={{ 
-                direction: 'ltr !important',
-                textAlign: 'left !important',
+                direction: 'ltr' as const,
+                textAlign: 'left' as const,
                 unicodeBidi: 'embed',
                 writingMode: 'horizontal-tb'
               }}

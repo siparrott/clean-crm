@@ -327,13 +327,13 @@ export default function AdminVoucherSalesPageV3() {
       code: coupon.code,
       name: coupon.name,
       description: coupon.description || "",
-      discountType: coupon.discountType,
+      discountType: coupon.discountType as "percentage" | "fixed_amount",
       discountValue: coupon.discountValue.toString(),
       minOrderAmount: coupon.minOrderAmount?.toString() || "",
       maxDiscountAmount: coupon.maxDiscountAmount?.toString() || "",
       usageLimit: coupon.usageLimit?.toString() || "",
-      startDate: coupon.startDate || "",
-      endDate: coupon.endDate || "",
+      startDate: coupon.startDate ? coupon.startDate.toString() : "",
+      endDate: coupon.endDate ? coupon.endDate.toString() : "",
       isActive: coupon.isActive,
     });
     setIsCouponDialogOpen(true);
@@ -554,7 +554,8 @@ const DashboardView: React.FC<{
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-white border-2 border-dashed border-blue-300 hover:border-blue-500 transition-colors cursor-pointer hover:bg-blue-50" onClick={onCreateProduct}>
+        <div className="cursor-pointer" onClick={onCreateProduct}>
+          <Card className="bg-white border-2 border-dashed border-blue-300 hover:border-blue-500 transition-colors hover:bg-blue-50">
           <CardHeader className="text-center">
             <div className="mx-auto w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
               <Package className="h-6 w-6 text-blue-600" />
@@ -571,8 +572,10 @@ const DashboardView: React.FC<{
             </Button>
           </CardContent>
         </Card>
+        </div>
 
-        <Card className="bg-white border-2 border-dashed border-purple-300 hover:border-purple-500 transition-colors cursor-pointer hover:bg-purple-50" onClick={onCreateCoupon}>
+        <div className="cursor-pointer" onClick={onCreateCoupon}>
+          <Card className="bg-white border-2 border-dashed border-purple-300 hover:border-purple-500 transition-colors hover:bg-purple-50">
           <CardHeader className="text-center">
             <div className="mx-auto w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
               <Tag className="h-6 w-6 text-purple-600" />
@@ -589,6 +592,7 @@ const DashboardView: React.FC<{
             </Button>
           </CardContent>
         </Card>
+        </div>
       </div>
 
       {/* Recent Sales */}
@@ -682,7 +686,7 @@ const ProductsView: React.FC<{
                         {product.isActive ? "Active" : "Inactive"}
                       </Badge>
                       <Badge variant="outline">
-                        {product.validityMonths} months
+                        {product.validity_period || 12} months
                       </Badge>
                     </div>
                   </div>
@@ -956,8 +960,8 @@ const SalesView: React.FC<{
                         €{Number(sale.finalAmount).toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={sale.status === 'active' ? 'default' : 'secondary'}>
-                          {sale.status}
+                        <Badge variant={sale.paymentStatus === 'completed' ? 'default' : 'secondary'}>
+                          {sale.paymentStatus || 'pending'}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

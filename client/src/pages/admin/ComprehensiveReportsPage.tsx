@@ -148,13 +148,7 @@ const ComprehensiveReportsPage: React.FC = () => {
         bookingsByType: processBookingsByType(bookings),
         bookingsByMonth: processBookingsByMonth(bookings),
         seasonalTrends: processSeasonalTrends(bookings),
-        emailCampaigns: campaigns.map(c => ({
-          name: c.name || 'Untitled',
-          sent: c.sent_count || 0,
-          opened: c.open_count || 0,
-          clicked: c.click_count || 0,
-          revenue: c.revenue_generated || 0
-        })),
+        emailCampaigns: [], // TODO: Add campaigns data when available
         blogMetrics: blogPosts.map(p => ({
           title: p.title || 'Untitled',
           views: p.view_count || 0,
