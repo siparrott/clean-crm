@@ -1,5 +1,3 @@
-import { supabase } from '../lib/supabaseClient';
-
 export interface Message {
   id: string;
   from_email: string;
@@ -19,23 +17,38 @@ export interface EmailSettings {
   fromName: string;
 }
 
-export async function fetchMessages() {
-  const { data, error } = await supabase
-    .from<Message>('messages')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data;
+export async function fetchMessages(): Promise<Message[]> {
+  const response = await fetch('/api/messages', {
+    method: 'GET',
+    credentials: 'include'
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch messages');
+  }
+
+  const result = await response.json();
+  return result.messages;
 }
 
-export async function sendMessage(payload: Omit<Message, 'id' | 'created_at'>) {
-  const { data, error } = await supabase
-    .from<Message>('messages')
-    .insert([payload])
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+export async function sendMessage(payload: Omit<Message, 'id' | 'created_at'>): Promise<Message> {
+  const response = await fetch('/api/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to send message');
+  }
+
+  const result = await response.json();
+  return result.message;
 }
 
 export async function saveEmailSettings(settings: EmailSettings) {

@@ -65,138 +65,137 @@ export const invoiceService = {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
     
-    // Get the latest invoice number for this year
-    const { data, error } = await supabase
-      .from('invoices')
-      .select('invoice_number')
-      .like('invoice_number', `INV-${year}%`)
-      .order('invoice_number', { ascending: false })
-      .limit(1);
+    try {
+      // Get the latest invoice number for this year via API
+      const response = await fetch(`/api/invoices/latest-number?year=${year}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to fetch latest invoice number');
+      }
+      
+      const data = await response.json();
+      let nextNumber = 1;
+      
+      if (data && data.invoice_number) {
+        const lastNumber = data.invoice_number;
+        const lastSequence = parseInt(lastNumber.split('-')[2] || '0');
+        nextNumber = lastSequence + 1;
+      }
 
-    if (error) {
-      // console.error removed
+      return `INV-${year}-${String(nextNumber).padStart(4, '0')}`;
+    } catch (error) {
+      console.error('Error generating invoice number:', error);
+      // Fallback to simple timestamp-based number
+      return `INV-${year}-${String(Date.now()).slice(-4)}`;
     }
-
-    let nextNumber = 1;
-    if (data && data.length > 0) {
-      const lastNumber = data[0].invoice_number;
-      const lastSequence = parseInt(lastNumber.split('-')[2] || '0');
-      nextNumber = lastSequence + 1;
-    }
-
-    return `INV-${year}-${String(nextNumber).padStart(4, '0')}`;
   },
 
   async createInvoice(invoiceData: Omit<Invoice, 'id' | 'created_at' | 'updated_at'>): Promise<Invoice> {
     try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .insert([{
+      const response = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
           ...invoiceData,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
+        })
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to create invoice');
+      }
 
+      const data = await response.json();
       return data;
     } catch (error) {
-      // console.error removed
+      console.error('Error creating invoice:', error);
       throw error;
     }
   },
 
   async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
     try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .update({
+      const response = await fetch(`/api/invoices/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
           ...updates,
           updated_at: new Date().toISOString()
         })
-        .eq('id', id)
-        .select()
-        .single();
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to update invoice');
+      }
 
+      const data = await response.json();
       return data;
     } catch (error) {
-      // console.error removed
+      console.error('Error updating invoice:', error);
       throw error;
     }
   },
 
   async getInvoices(limit = 50, offset = 0): Promise<Invoice[]> {
     try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select(`
-          *,
-          clients (
-            id,
-            first_name,
-            last_name,
-            email,
-            company
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+      const response = await fetch(`/api/invoices?limit=${limit}&offset=${offset}`, {
+        credentials: 'include'
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to fetch invoices');
+      }
 
+      const data = await response.json();
       return data || [];
     } catch (error) {
-      // console.error removed
+      console.error('Error fetching invoices:', error);
       throw error;
     }
   },
 
   async getInvoiceById(id: string): Promise<Invoice | null> {
     try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select(`
-          *,
-          clients (
-            id,
-            first_name,
-            last_name,
-            email,
-            phone,
-            address,
-            city,
-            postal_code,
-            country,
-            company,
-            tax_number
-          )
-        `)
-        .eq('id', id)
-        .single();
+      const response = await fetch(`/api/invoices/${id}`, {
+        credentials: 'include'
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error('Failed to fetch invoice');
+      }
 
+      const data = await response.json();
       return data;
     } catch (error) {
-      // console.error removed
+      console.error('Error fetching invoice:', error);
       return null;
     }
   },
 
   async deleteInvoice(id: string): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', id);
+      const response = await fetch(`/api/invoices/${id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to delete invoice');
+      }
     } catch (error) {
-      // console.error removed
+      console.error('Error deleting invoice:', error);
       throw error;
     }
   },
@@ -371,46 +370,63 @@ export const emailService = {
         reader.readAsDataURL(pdfBlob);
       });
 
-      // Send email via Supabase Edge Function
-      const { data, error } = await supabase.functions.invoke('send-invoice-email', {
-        body: {
+      // Send email via API
+      const response = await fetch('/api/invoices/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
           to: client.email,
           subject: `Invoice ${invoice.invoice_number} from TogNinja`,
           invoice: invoice,
           client: client,
           customMessage: customMessage,
           pdfAttachment: pdfBase64
-        }
+        })
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to send invoice email');
+      }
+
+      const data = await response.json();
 
       // Update invoice status
       await invoiceService.updateInvoice(invoice.id!, { status: 'sent' });
 
       return data;
     } catch (error) {
-      // console.error removed
+      console.error('Error sending invoice email:', error);
       throw error;
     }
   },
 
   async sendPaymentReminder(invoice: Invoice, client: Client): Promise<void> {
     try {
-      const { data, error } = await supabase.functions.invoke('send-payment-reminder', {
-        body: {
+      const response = await fetch('/api/invoices/send-reminder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
           to: client.email,
           subject: `Payment Reminder - Invoice ${invoice.invoice_number}`,
           invoice: invoice,
           client: client
-        }
+        })
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to send payment reminder');
+      }
 
+      const data = await response.json();
       return data;
     } catch (error) {
-      // console.error removed
+      console.error('Error sending payment reminder:', error);
       throw error;
     }
   }
@@ -455,48 +471,62 @@ export const priceListService = {
 
   async updatePriceListItem(id: string, updates: Partial<PriceListItem>): Promise<PriceListItem> {
     try {
-      const { data, error } = await supabase
-        .from('price_list')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+      const response = await fetch(`/api/crm/price-list/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(updates)
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to update price list item');
+      }
 
+      const data = await response.json();
       return data;
     } catch (error) {
-      // console.error removed
+      console.error('Error updating price list item:', error);
       throw error;
     }
   },
 
   async deletePriceListItem(id: string): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('price_list')
-        .delete()
-        .eq('id', id);
+      const response = await fetch(`/api/crm/price-list/${id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to delete price list item');
+      }
     } catch (error) {
-      // console.error removed
+      console.error('Error deleting price list item:', error);
       throw error;
     }
   },
 
   async importPriceList(items: Omit<PriceListItem, 'id'>[]): Promise<PriceListItem[]> {
     try {
-      const { data, error } = await supabase
-        .from('price_list')
-        .insert(items)
-        .select();
+      const response = await fetch('/api/crm/price-list/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ items })
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to import price list');
+      }
 
+      const data = await response.json();
       return data || [];
     } catch (error) {
-      // console.error removed
+      console.error('Error importing price list:', error);
       throw error;
     }
   }
@@ -506,19 +536,23 @@ export const priceListService = {
 export const paymentService = {
   async markInvoiceAsPaid(invoiceId: string, paymentDate?: string, paymentMethod?: string): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('invoices')
-        .update({
-          status: 'paid',
+      const response = await fetch(`/api/invoices/${invoiceId}/pay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
           paid_date: paymentDate || new Date().toISOString(),
-          payment_method: paymentMethod,
-          updated_at: new Date().toISOString()
+          payment_method: paymentMethod
         })
-        .eq('id', invoiceId);
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to mark invoice as paid');
+      }
     } catch (error) {
-      // console.error removed
+      console.error('Error marking invoice as paid:', error);
       throw error;
     }
   },
@@ -530,44 +564,30 @@ export const paymentService = {
     averagePaymentTime: number;
   }> {
     try {
-      const { data: invoices, error } = await supabase
-        .from('invoices')
-        .select('*');
+      const response = await fetch('/api/invoices/payment-stats', {
+        credentials: 'include'
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to fetch payment stats');
+      }
 
-      const paidInvoices = invoices?.filter(inv => inv.status === 'paid') || [];
-      const pendingInvoices = invoices?.filter(inv => inv.status === 'sent') || [];
-      const overdueInvoices = invoices?.filter(inv => {
-        return inv.status === 'sent' && new Date(inv.due_date) < new Date();
-      }) || [];
-
-      const totalPaid = paidInvoices.reduce((sum, inv) => sum + inv.total_amount, 0);
-      const totalPending = pendingInvoices.reduce((sum, inv) => sum + inv.total_amount, 0);
-      const totalOverdue = overdueInvoices.reduce((sum, inv) => sum + inv.total_amount, 0);
-
-      // Calculate average payment time
-      const paymentTimes = paidInvoices
-        .filter(inv => inv.paid_date && inv.issue_date)
-        .map(inv => {
-          const issueDate = new Date(inv.issue_date);
-          const paidDate = new Date(inv.paid_date!);
-          return Math.floor((paidDate.getTime() - issueDate.getTime()) / (1000 * 60 * 60 * 24));
-        });
-
-      const averagePaymentTime = paymentTimes.length > 0 
-        ? paymentTimes.reduce((sum, days) => sum + days, 0) / paymentTimes.length
-        : 0;
-
+      const data = await response.json();
       return {
-        totalPaid,
-        totalPending,
-        totalOverdue,
-        averagePaymentTime: Math.round(averagePaymentTime)
+        totalPaid: data.totalPaid || 0,
+        totalPending: data.totalPending || 0,
+        totalOverdue: data.totalOverdue || 0,
+        averagePaymentTime: data.averagePaymentTime || 0
       };
     } catch (error) {
-      // console.error removed
-      throw error;
+      console.error('Error fetching payment stats:', error);
+      // Return default values on error
+      return {
+        totalPaid: 0,
+        totalPending: 0,
+        totalOverdue: 0,
+        averagePaymentTime: 0
+      };
     }
   }
 };

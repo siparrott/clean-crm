@@ -59,8 +59,8 @@ const AdminInvoicesPage: React.FC = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(invoice =>
-        invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.clientName.toLowerCase().includes(searchTerm.toLowerCase())
+        invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.client_name.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -93,13 +93,13 @@ const AdminInvoicesPage: React.FC = () => {
   };
 
   const getTotalStats = () => {
-    const totalAmount = filteredInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const totalAmount = filteredInvoices.reduce((sum, inv) => sum + inv.total_amount, 0);
     const paidAmount = filteredInvoices
       .filter(inv => inv.status === 'paid')
-      .reduce((sum, inv) => sum + inv.totalAmount, 0);
+      .reduce((sum, inv) => sum + inv.total_amount, 0);
     const overdueAmount = filteredInvoices
       .filter(inv => inv.status === 'overdue')
-      .reduce((sum, inv) => sum + inv.totalAmount, 0);
+      .reduce((sum, inv) => sum + inv.total_amount, 0);
 
     return { totalAmount, paidAmount, overdueAmount };
   };
@@ -236,23 +236,23 @@ const AdminInvoicesPage: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredInvoices.map((invoice) => (
                   <tr key={invoice.id} className={`hover:bg-gray-50 ${
-                    isOverdue(invoice.dueDate, invoice.status) ? 'bg-red-50' : ''
+                    isOverdue(invoice.due_date, invoice.status) ? 'bg-red-50' : ''
                   }`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{invoice.invoiceNumber}</div>
+                        <div className="text-sm font-medium text-gray-900">{invoice.invoice_number}</div>
                         <div className="text-sm text-gray-500">
-                          Created {new Date(invoice.createdAt).toLocaleDateString()}
+                          Created {new Date(invoice.created_at).toLocaleDateString()}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {invoice.clientName}
+                      {invoice.client_name}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">€{invoice.totalAmount.toFixed(2)}</div>
+                      <div className="text-sm font-medium text-gray-900">€{invoice.total_amount.toFixed(2)}</div>
                       <div className="text-sm text-gray-500">
-                        €{invoice.amount.toFixed(2)} + €{invoice.taxAmount.toFixed(2)} tax
+                        €{invoice.amount.toFixed(2)} + €{invoice.tax_amount.toFixed(2)} tax
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -260,13 +260,13 @@ const AdminInvoicesPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className={`text-sm ${
-                        isOverdue(invoice.dueDate, invoice.status) ? 'text-red-600 font-medium' : 'text-gray-900'
+                        isOverdue(invoice.due_date, invoice.status) ? 'text-red-600 font-medium' : 'text-gray-900'
                       }`}>
-                        {new Date(invoice.dueDate).toLocaleDateString()}
+                        {new Date(invoice.due_date).toLocaleDateString()}
                       </div>
-                      {invoice.paidDate && (
+                      {invoice.paid_date && (
                         <div className="text-sm text-green-600">
-                          Paid {new Date(invoice.paidDate).toLocaleDateString()}
+                          Paid {new Date(invoice.paid_date).toLocaleDateString()}
                         </div>
                       )}
                     </td>

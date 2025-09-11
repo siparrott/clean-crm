@@ -85,7 +85,7 @@ const AdminLoginPage: React.FC = () => {
       setError(errorMessage);
       
       // If it's a project paused error, refresh the status
-      if (isProjectPausedError(err)) {
+      if (errorMessage.toLowerCase().includes('project paused') || errorMessage.toLowerCase().includes('project_paused')) {
         setTimeout(() => {
           checkStatus();
         }, 1000);
