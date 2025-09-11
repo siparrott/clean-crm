@@ -686,7 +686,7 @@ const ProductsView: React.FC<{
                         {product.isActive ? "Active" : "Inactive"}
                       </Badge>
                       <Badge variant="outline">
-                        {product.validity_period || 12} months
+                        {product.validityPeriod || 12} months
                       </Badge>
                     </div>
                   </div>
