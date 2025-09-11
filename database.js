@@ -168,8 +168,10 @@ if (!connectionString) {
 
         // Send email
         const result = await transporter.sendMail(mailOptions);
+        console.log(`📧 Email sent successfully to ${to}, Message ID: ${result.messageId}`);
         
         // Try to log email to database (if table exists)
+        console.log('💾 Attempting to log sent email to database...');
         try {
           await pool.query(
             `INSERT INTO crm_messages (client_id, type, content, subject, recipient, status, created_at) 
@@ -178,6 +180,7 @@ if (!connectionString) {
           );
           console.log('✅ Email logged to crm_messages table');
         } catch (logError) {
+          console.log('⚠️ crm_messages failed, trying communications table...');
           // Try alternative table structure
           try {
             await pool.query(
@@ -187,6 +190,7 @@ if (!connectionString) {
             );
             console.log('✅ Email logged to communications table');
           } catch (altLogError) {
+            console.log('⚠️ communications failed, creating/using sent_emails table...');
             // Create a simple sent_emails table if nothing else works
             try {
               await pool.query(`
@@ -210,7 +214,8 @@ if (!connectionString) {
               console.log('✅ Email logged to sent_emails table (created)');
             } catch (createError) {
               console.log('⚠️ Could not log email to database, but email was sent successfully');
-              console.log('Database log error:', logError.message);
+              console.log('Database log error details:', createError.message);
+              console.log('Original error:', logError.message);
             }
           }
         }
@@ -298,17 +303,21 @@ if (!connectionString) {
     // Get all sent emails
     async getSentEmails() {
       try {
+        console.log('🔍 Fetching sent emails from database...');
         // Try multiple table structures
         let result;
         
         try {
+          console.log('📧 Trying sent_emails table...');
           result = await pool.query(`
             SELECT id, recipient, subject, content, message_id, sent_at as "sentAt", client_id as "clientId"
             FROM sent_emails 
             ORDER BY sent_at DESC 
             LIMIT 100
           `);
+          console.log(`✅ Found ${result.rows.length} emails in sent_emails table`);
         } catch (error) {
+          console.log('⚠️ sent_emails table not found, trying crm_messages...');
           try {
             result = await pool.query(`
               SELECT id, recipient, subject, content, status, created_at as "sentAt", client_id as "clientId"
@@ -317,7 +326,9 @@ if (!connectionString) {
               ORDER BY created_at DESC 
               LIMIT 100
             `);
+            console.log(`✅ Found ${result.rows.length} emails in crm_messages table`);
           } catch (altError) {
+            console.log('⚠️ crm_messages table not found, trying communications...');
             try {
               result = await pool.query(`
                 SELECT id, recipient, subject, content, status, created_at as "sentAt", client_id as "clientId"
@@ -326,13 +337,16 @@ if (!connectionString) {
                 ORDER BY created_at DESC 
                 LIMIT 100
               `);
+              console.log(`✅ Found ${result.rows.length} emails in communications table`);
             } catch (finalError) {
               console.log('⚠️ No sent emails table found, returning empty array');
+              console.log('Available tables might not include email logging structures');
               return [];
             }
           }
         }
         
+        console.log(`📤 Returning ${result.rows.length} sent emails`);
         return result.rows;
       } catch (error) {
         console.error('❌ Error fetching sent emails:', error.message);
