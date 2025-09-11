@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+// Using Neon database with Express API endpoints
 import { invoiceService, priceListService, Invoice, InvoiceItem, PriceListItem, Client } from '../../lib/invoicing';
 import { 
   Plus, 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { Plus, Search, Filter, Eye, Edit, Trash2, Download, Send, DollarSign, Calendar, FileText } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+// Using Neon database with Express API endpoints
 
 interface Invoice {
   id: string;
@@ -37,19 +37,14 @@ const AdminInvoicesPage: React.FC = () => {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        // console.error removed
-        // Fallback to empty array if table doesn't exist yet
+      const response = await fetch('/api/invoices');
+      if (response.ok) {
+        const data = await response.json();
+        setInvoices(data || []);
+      } else {
+        console.error('Failed to fetch invoices');
         setInvoices([]);
-        return;
       }
-
-      setInvoices(data || []);
     } catch (err) {
       // console.error removed
       // Fallback to empty array

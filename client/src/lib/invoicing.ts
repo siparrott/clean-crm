@@ -1,5 +1,5 @@
-import { supabase } from './supabase';
 import jsPDF from 'jspdf';
+// Using Neon database with Express API endpoints
 
 export interface InvoiceItem {
   id?: string;
@@ -433,14 +433,19 @@ export const priceListService = {
 
   async createPriceListItem(item: Omit<PriceListItem, 'id'>): Promise<PriceListItem> {
     try {
-      const { data, error } = await supabase
-        .from('price_list')
-        .insert([item])
-        .select()
-        .single();
+      const response = await fetch('/api/crm/price-list', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(item),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error('Failed to create price list item');
+      }
 
+      const data = await response.json();
       return data;
     } catch (error) {
       // console.error removed

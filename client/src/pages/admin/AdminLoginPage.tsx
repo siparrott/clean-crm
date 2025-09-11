@@ -291,7 +291,7 @@ const AdminLoginPage: React.FC = () => {
             {isPausedProject ? (
               <div className="space-y-2">
                 <p className="text-xs text-orange-200 mb-2">
-                  Your Supabase project appears to be paused. This commonly happens due to:
+                  Your database project appears to be paused. This commonly happens due to:
                 </p>
                 <ul className="text-xs text-orange-300 space-y-1 ml-4">
                   <li>• Project inactivity (free tier projects pause after 1 week of inactivity)</li>
@@ -301,8 +301,8 @@ const AdminLoginPage: React.FC = () => {
                 <div className="mt-3 p-2 bg-orange-800 rounded">
                   <p className="text-xs text-orange-100 font-medium">To resolve:</p>
                   <ol className="text-xs text-orange-200 mt-1 space-y-1">
-                    <li>1. Visit your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="underline hover:text-orange-100">Supabase Dashboard</a></li>
-                    <li>2. Find your project and click "Resume" if it shows as paused</li>
+                    <li>1. Visit your <a href="https://console.neon.tech" target="_blank" rel="noopener noreferrer" className="underline hover:text-orange-100">Neon Console</a></li>
+                    <li>2. Find your project and check if it shows as paused</li>
                     <li>3. Verify your billing plan is active</li>
                     <li>4. Wait 1-2 minutes for the project to fully resume</li>
                     <li>5. Click "Retry Check" above to test the connection</li>
@@ -311,12 +311,12 @@ const AdminLoginPage: React.FC = () => {
               </div>
             ) : (
               <ul className="text-xs text-gray-400 space-y-1">
-                <li>1. Check your Supabase dashboard to ensure the project is active</li>
+                <li>1. Check your Neon console to ensure the project is active</li>
                 <li>2. Verify environment variables match your project settings</li>
-                <li>3. Check Supabase project logs for specific errors</li>
+                <li>3. Check database connection logs for specific errors</li>
                 <li>4. Ensure your project hasn't been paused due to inactivity</li>
-                <li>5. Try regenerating your anon key if the issue persists</li>
-                <li>6. Check the Supabase status page for service outages</li>
+                <li>5. Try refreshing your connection string if the issue persists</li>
+                <li>6. Check the Neon status page for service outages</li>
               </ul>
             )}
           </div>
