@@ -30,8 +30,137 @@ if (!connectionString) {
     } else {
       console.log('✅ Database connected successfully');
       release();
+      
+      // Initialize database schema
+      initializeDatabaseSchema();
     }
   });
+
+  // Initialize database schema
+  async function initializeDatabaseSchema() {
+    try {
+      console.log('🔨 Initializing database schema...');
+      
+      // Create CRM Clients table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS crm_clients (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          client_id TEXT UNIQUE,
+          first_name VARCHAR(255),
+          last_name VARCHAR(255),
+          email VARCHAR(255),
+          phone VARCHAR(50),
+          address TEXT,
+          city VARCHAR(100),
+          state VARCHAR(100),
+          zip VARCHAR(20),
+          country VARCHAR(100),
+          total_sales DECIMAL(10,2) DEFAULT 0,
+          outstanding_balance DECIMAL(10,2) DEFAULT 0,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+      
+      // Create Leads table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS leads (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          first_name VARCHAR(255),
+          last_name VARCHAR(255),
+          email VARCHAR(255),
+          phone VARCHAR(50),
+          message TEXT,
+          source VARCHAR(100),
+          status VARCHAR(50) DEFAULT 'new',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+      
+      // Create Invoices table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS invoices (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          client_id TEXT,
+          invoice_number VARCHAR(50) UNIQUE,
+          status VARCHAR(50) DEFAULT 'draft',
+          due_date DATE,
+          subtotal DECIMAL(10,2) DEFAULT 0,
+          tax_amount DECIMAL(10,2) DEFAULT 0,
+          total_amount DECIMAL(10,2) DEFAULT 0,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+      
+      // Create Digital Files table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS digital_files (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          folder_name TEXT,
+          file_name TEXT NOT NULL,
+          file_type TEXT NOT NULL,
+          file_size INTEGER DEFAULT 0,
+          client_id TEXT,
+          session_id TEXT,
+          description TEXT,
+          tags TEXT,
+          is_public BOOLEAN DEFAULT FALSE,
+          uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          file_path TEXT,
+          original_filename TEXT,
+          mime_type TEXT,
+          category TEXT,
+          uploaded_by TEXT,
+          location TEXT
+        )
+      `);
+      
+      // Create CRM Messages table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS crm_messages (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          client_id TEXT,
+          type VARCHAR(50) DEFAULT 'email',
+          content TEXT,
+          subject VARCHAR(500),
+          recipient VARCHAR(255),
+          sender_name VARCHAR(255),
+          sender_email VARCHAR(255),
+          status VARCHAR(50) DEFAULT 'unread',
+          message_type VARCHAR(50),
+          client_name VARCHAR(255),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+      
+      // Create Galleries table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS galleries (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          slug VARCHAR(255) UNIQUE,
+          cover_image TEXT,
+          password_hash TEXT,
+          download_enabled BOOLEAN DEFAULT TRUE,
+          is_public BOOLEAN DEFAULT FALSE,
+          client_id TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+      
+      console.log('✅ Database schema initialized successfully');
+      
+    } catch (error) {
+      console.error('❌ Error initializing database schema:', error.message);
+    }
+  }
 
   // Export database functions
   module.exports = {
