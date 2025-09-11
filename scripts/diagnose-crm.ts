@@ -22,14 +22,14 @@ import { db } from '../server/db';
         )
       ORDER BY table_name;
     `);
-    report.tables = (tables as any[]).map(r => r.table_name);
+    report.tables = (tables.rows as any[]).map(r => r.table_name);
 
     // Helper to count table rows if table exists
     const countIf = async (name: string) => {
       if (!report.tables.includes(name)) return { table: name, exists: false };
       try {
         const rows = await db.execute(sql`SELECT count(*)::int AS count FROM ${sql.raw(name)}`);
-        const count = (rows as any[])[0]?.count ?? 0;
+        const count = (rows.rows as any[])[0]?.count ?? 0;
         return { table: name, exists: true, count };
       } catch (err: any) {
         return { table: name, exists: true, error: err.message };

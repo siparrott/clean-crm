@@ -10,11 +10,15 @@ export const analyticsDb = {
     select: () => ({ data: [], error: null }),
     insert: () => ({ data: null, error: null }),
     update: () => ({ data: null, error: null }),
-    delete: () => ({ data: null, error: null })
+    delete: () => ({ data: null, error: null }),
+    upsert: () => ({ data: null, error: null }),
+    eq: () => ({ data: [], error: null }),
+    gte: () => ({ data: [], error: null }),
+    lte: () => ({ data: [], error: null }),
+    order: () => ({ data: [], error: null }),
+    single: () => ({ data: null, error: null })
   })
 };
-  }
-});
 
 // Analytics data types
 export interface BusinessMetric {
@@ -61,14 +65,9 @@ export interface MarketingAnalytics {
 // Analytics service functions
 export class AnalyticsService {
   static async trackBusinessMetric(metric: Omit<BusinessMetric, 'id' | 'created_at'>) {
-    const { data, error } = await analyticsDb
-      .from('business_metrics')
-      .insert([metric])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    // Mock implementation - analytics disabled
+    console.log('Analytics disabled - metric not tracked:', metric);
+    return { id: 'mock-id', ...metric, created_at: new Date().toISOString() };
   }
 
   static async getBusinessMetrics(
@@ -77,106 +76,45 @@ export class AnalyticsService {
     startDate?: string,
     endDate?: string
   ) {
-    let query = analyticsDb.from('business_metrics').select('*');
-
-    if (metricType) query = query.eq('metric_type', metricType);
-    if (periodType) query = query.eq('period_type', periodType);
-    if (startDate) query = query.gte('period_start', startDate);
-    if (endDate) query = query.lte('period_end', endDate);
-
-    const { data, error } = await query.order('period_start', { ascending: false });
-    if (error) throw error;
-    return data;
+    // Mock implementation - analytics disabled
+    console.log('Analytics disabled - returning empty metrics');
+    return [];
   }
 
   static async updateClientAnalytics(clientId: string, analytics: Partial<ClientAnalytics>) {
-    const { data, error } = await analyticsDb
-      .from('client_analytics')
-      .upsert([{ client_id: clientId, ...analytics, updated_at: new Date().toISOString() }])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    // Mock implementation - analytics disabled
+    console.log('Analytics disabled - client analytics not updated:', { clientId, analytics });
+    return { id: 'mock-id', client_id: clientId, ...analytics, updated_at: new Date().toISOString() };
   }
 
   static async getClientAnalytics(clientId?: string) {
-    let query = analyticsDb.from('client_analytics').select('*');
-    
-    if (clientId) query = query.eq('client_id', clientId);
-
-    const { data, error } = await query.order('total_revenue', { ascending: false });
-    if (error) throw error;
-    return data;
+    // Mock implementation - analytics disabled
+    console.log('Analytics disabled - returning empty client analytics');
+    return [];
   }
 
   static async trackMarketingCampaign(campaign: Omit<MarketingAnalytics, 'id' | 'created_at'>) {
-    const { data, error } = await analyticsDb
-      .from('marketing_analytics')
-      .insert([campaign])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    // Mock implementation - analytics disabled
+    console.log('Analytics disabled - campaign not tracked:', campaign);
+    return { id: 'mock-id', ...campaign, created_at: new Date().toISOString() };
   }
 
   static async getMarketingAnalytics(campaignType?: string, startDate?: string, endDate?: string) {
-    let query = analyticsDb.from('marketing_analytics').select('*');
-
-    if (campaignType) query = query.eq('campaign_type', campaignType);
-    if (startDate) query = query.gte('period_start', startDate);
-    if (endDate) query = query.lte('period_end', endDate);
-
-    const { data, error } = await query.order('period_start', { ascending: false });
-    if (error) throw error;
-    return data;
+    // Mock implementation - analytics disabled
+    console.log('Analytics disabled - returning empty marketing analytics');
+    return [];
   }
 
   // Calculate derived metrics
   static async calculateMonthlyRevenue(year: number, month: number) {
-    const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // Last day of month
-
-    const { data, error } = await analyticsDb
-      .from('business_metrics')
-      .select('metric_value')
-      .eq('metric_type', 'revenue')
-      .eq('period_type', 'daily')
-      .gte('period_start', startDate)
-      .lte('period_end', endDate);
-
-    if (error) throw error;
-    
-    const totalRevenue = data?.reduce((sum, metric) => sum + metric.metric_value, 0) || 0;
-    
-    // Store monthly aggregate
-    await this.trackBusinessMetric({
-      metric_name: 'monthly_revenue',
-      metric_value: totalRevenue,
-      metric_type: 'revenue',
-      period_type: 'monthly',
-      period_start: startDate,
-      period_end: endDate
-    });
-
-    return totalRevenue;
+    // Mock implementation - analytics disabled
+    console.log('Analytics disabled - monthly revenue calculation skipped');
+    return 0;
   }
 
   static async calculateClientLifetimeValue(clientId: string) {
-    // This would integrate with your main CRM database
-    // to calculate total revenue from a specific client
-    const { data: orders } = await analyticsDb
-      .from('client_orders') // This would be a view or synced table
-      .select('total_amount')
-      .eq('client_id', clientId);
-
-    const ltv = orders?.reduce((sum, order) => sum + order.total_amount, 0) || 0;
-
-    await this.updateClientAnalytics(clientId, {
-      client_lifetime_value: ltv
-    });
-
-    return ltv;
+    // Mock implementation - analytics disabled
+    console.log('Analytics disabled - LTV calculation skipped for client:', clientId);
+    return 0;
   }
 }
