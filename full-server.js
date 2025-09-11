@@ -8,15 +8,29 @@ const path = require('path');
 const url = require('url');
 const crypto = require('crypto');
 
-// Import database functions
-const database = require('./database.js');
+// Import database functions - with error handling
+let database = null;
+try {
+  database = require('./database.js');
+} catch (error) {
+  console.log('⚠️ Database module not available, API will use fallback responses');
+}
 
 console.log('🚀 Starting PRODUCTION server with Neon database...');
 
 // Files API handler function
 async function handleFilesAPI(req, res, pathname, query) {
-  const { neon } = await import('@neondatabase/serverless');
-  const sql = neon(process.env.DATABASE_URL);
+  let neon, sql;
+  try {
+    const neonModule = require('@neondatabase/serverless');
+    neon = neonModule.neon;
+    sql = neon(process.env.DATABASE_URL);
+  } catch (error) {
+    console.error('❌ Neon database not available:', error.message);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Database not available' }));
+    return;
+  }
   
   // Parse the pathname to get the specific endpoint
   const pathParts = pathname.split('/');
