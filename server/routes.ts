@@ -980,6 +980,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Demo checkout success page route
+  app.get("/checkout/mock-success", (req: Request, res: Response) => {
+    const { session_id } = req.query;
+    console.log('Demo checkout success accessed with session:', session_id);
+    
+    // Redirect to the frontend success page
+    res.redirect(`/demo-success?session_id=${session_id}`);
+  });
+
   // Stripe connection test routes
   app.get("/api/stripe/test", async (req: Request, res: Response) => {
     try {

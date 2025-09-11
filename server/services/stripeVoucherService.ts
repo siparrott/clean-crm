@@ -108,16 +108,20 @@ export class StripeVoucherService {
       // Instead of throwing an error, return a mock success for demo purposes
       console.warn('⚠️  Stripe not configured, returning demo response');
       
+      // Get the proper base URL for demo mode
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+      
       // Create a mock session object that mimics Stripe's response
       const mockSession = {
         id: `demo_session_${Date.now()}`,
-        url: `/checkout/mock-success?session_id=demo_session_${Date.now()}`,
+        url: `${baseUrl}/checkout/mock-success?session_id=demo_session_${Date.now()}`,
         object: 'checkout.session',
         payment_status: 'paid',
         success_url: data.successUrl,
         cancel_url: data.cancelUrl
       } as Stripe.Checkout.Session;
 
+      console.log('Demo checkout session created:', mockSession.url);
       return mockSession;
     }
 

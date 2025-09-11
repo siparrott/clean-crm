@@ -5,17 +5,29 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
   try {
     const checkoutData: CheckoutSessionData = req.body;
     
+    console.log('Creating checkout session with data:', checkoutData);
+    
     // Validate required fields
     if (!checkoutData.items || checkoutData.items.length === 0) {
       return res.status(400).json({ error: 'No items provided' });
     }
 
-    // Add base URLs
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:10001';
+    // Add base URLs - fix the URL to match the frontend
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     checkoutData.successUrl = `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
     checkoutData.cancelUrl = `${baseUrl}/cart`;
 
+    console.log('Using URLs:', { 
+      successUrl: checkoutData.successUrl, 
+      cancelUrl: checkoutData.cancelUrl 
+    });
+
     const session = await StripeVoucherService.createCheckoutSession(checkoutData);
+
+    console.log('Checkout session created:', { 
+      sessionId: session.id, 
+      url: session.url 
+    });
 
     res.json({ 
       sessionId: session.id, 
