@@ -868,6 +868,41 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // Voucher Products API endpoints
+      if (pathname === '/api/vouchers/products' && req.method === 'GET') {
+        try {
+          console.log('📦 Fetching voucher products...');
+          const products = await database.getVoucherProducts();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(products));
+        } catch (error) {
+          console.error('❌ Voucher products API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      if (pathname.startsWith('/api/vouchers/products/') && req.method === 'GET') {
+        try {
+          const id = pathname.split('/').pop();
+          console.log('📦 Fetching voucher product:', id);
+          const product = await database.getVoucherProduct(id);
+          if (!product) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Voucher product not found' }));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(product));
+        } catch (error) {
+          console.error('❌ Voucher product API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
       // Digital Files API endpoints
       if (pathname.startsWith('/api/files')) {
         try {
