@@ -868,6 +868,35 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // CRM Price List API endpoint (returns voucher products for invoice creation)
+      if (pathname === '/api/crm/price-list' && req.method === 'GET') {
+        try {
+          console.log('📋 Fetching price list (voucher products) for invoice creation...');
+          const products = await database.getVoucherProducts();
+          
+          // Transform voucher products to price list format expected by frontend
+          const priceListItems = products.map(product => ({
+            id: product.id,
+            name: product.name,
+            description: product.description,
+            price: parseFloat(product.price),
+            category: product.category,
+            type: product.type || 'service',
+            unit: 'session', // Default unit for photography services
+            taxRate: 19, // Default German VAT rate
+            isActive: product.is_active
+          }));
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(priceListItems));
+        } catch (error) {
+          console.error('❌ Price list API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
       // Voucher Products API endpoints
       if (pathname === '/api/vouchers/products' && req.method === 'GET') {
         try {

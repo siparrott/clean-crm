@@ -1326,14 +1326,20 @@ if (!connectionString) {
     // Voucher Products Functions
     async getVoucherProducts() {
       try {
+        console.log('🔍 Getting voucher products from database...');
         const result = await pool.query(`
           SELECT * FROM voucher_products 
           WHERE is_active = true 
           ORDER BY display_order ASC, created_at DESC
         `);
+        console.log('✅ Found voucher products:', result.rows.length);
+        if (result.rows.length > 0) {
+          console.log('📋 First product:', result.rows[0].name, '- €' + result.rows[0].price);
+        }
         return result.rows;
       } catch (error) {
         console.error('❌ Error fetching voucher products:', error.message);
+        console.error('❌ Error details:', error);
         throw error;
       }
     },
