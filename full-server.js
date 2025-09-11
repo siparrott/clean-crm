@@ -946,6 +946,124 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // Stripe Checkout API endpoints
+      if (pathname === '/api/checkout/create-session' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const checkoutData = JSON.parse(body);
+              console.log('💳 Creating Stripe checkout session:', checkoutData);
+              
+              // For demo purposes without full Stripe setup, create a mock success response
+              const mockSessionId = `mock_session_${Date.now()}`;
+              const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
+              const mockSuccessUrl = `${baseUrl}/checkout/mock-success?session_id=${mockSessionId}`;
+              
+              console.log('🎭 Demo mode: Redirecting to mock success page:', mockSuccessUrl);
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                sessionId: mockSessionId,
+                url: mockSuccessUrl,
+                message: 'Demo checkout session created'
+              }));
+            } catch (error) {
+              console.error('❌ Checkout creation error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: false, 
+                error: error.message 
+              }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Checkout API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      if (pathname === '/api/checkout/success' && req.method === 'GET') {
+        try {
+          const { session_id } = parsedUrl.query;
+          console.log('✅ Processing checkout success for session:', session_id);
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            session: {
+              id: session_id,
+              payment_status: 'paid',
+              customer_email: 'demo@example.com'
+            },
+            message: 'Demo payment successful'
+          }));
+        } catch (error) {
+          console.error('❌ Checkout success error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      if (pathname === '/api/vouchers/validate' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { code, cartTotal } = JSON.parse(body);
+              console.log('🎫 Validating voucher code:', code, 'for total:', cartTotal);
+              
+              // Mock voucher validation for demo
+              const mockVouchers = {
+                'DEMO10': { type: 'percentage', value: 10, description: 'Demo 10% discount' },
+                'SAVE20': { type: 'fixed', value: 20, description: 'Demo €20 off' },
+                'WELCOME': { type: 'percentage', value: 15, description: 'Demo 15% welcome discount' }
+              };
+              
+              const voucher = mockVouchers[code.toUpperCase()];
+              if (voucher) {
+                const discount = voucher.type === 'percentage' 
+                  ? cartTotal * (voucher.value / 100)
+                  : Math.min(voucher.value, cartTotal);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                  valid: true,
+                  code: code.toUpperCase(),
+                  discount: discount,
+                  type: voucher.type,
+                  description: voucher.description
+                }));
+              } else {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                  valid: false,
+                  message: 'Ungültiger Gutscheincode'
+                }));
+              }
+            } catch (error) {
+              console.error('❌ Voucher validation error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: false, 
+                error: error.message 
+              }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Voucher validation API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
       // Digital Files API endpoints
       if (pathname.startsWith('/api/files')) {
         try {
