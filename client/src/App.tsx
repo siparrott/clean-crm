@@ -110,6 +110,7 @@ function App() {
                 <Route path="/checkout/:id" element={<CheckoutPage />} />
                 <Route path="/checkout/success" element={<OrderCompletePage />} />
                 <Route path="/checkout/mock-success" element={<MockSuccessPage />} />
+                <Route path="/demo-success" element={<MockSuccessPage />} />
                 <Route path="/order-complete/:id" element={<OrderCompletePage />} />                <Route path="/account" element={<AccountPage />} />
                 <Route path="/account/profile" element={<AccountProfilePage />} />
                 <Route path="/cart" element={<CartPage />} />
