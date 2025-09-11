@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { useLanguage } from '../../context/LanguageContext';
-import { supabase } from '../../lib/supabase';
+// Supabase removed - using Neon database API
 import {
   ArrowLeft,
   Mail,
@@ -71,44 +71,28 @@ const ClientProfilePage: React.FC = () => {
     try {
       setLoading(true);
       
-      // Fetch client details
-      const { data: clientData, error: clientError } = await supabase
-        .from('crm_clients')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (clientError) {
-        throw new Error(`Client not found: ${clientError.message}`);
+      // Fetch client details from API
+      const clientResponse = await fetch(`/api/crm/clients/${id}`);
+      if (!clientResponse.ok) {
+        throw new Error(`Client not found: ${clientResponse.statusText}`);
       }
-      
+      const clientData = await clientResponse.json();
       setClient(clientData);
       
-      // Fetch bookings (if bookings table exists)
+      // Fetch invoices from API (if available)
       try {
-        const { data: bookingsData } = await supabase
-          .from('bookings')
-          .select('*')
-          .eq('client_id', id)
-          .order('date', { ascending: false });
-        
-        setBookings(bookingsData || []);
+        const invoicesResponse = await fetch(`/api/crm/clients/${id}/invoices`);
+        if (invoicesResponse.ok) {
+          const invoicesData = await invoicesResponse.json();
+          setInvoices(invoicesData);
+        }
       } catch (err) {
-        // console.log removed
+        // Invoices API may not be available
+        setInvoices([]);
       }
-      
-      // Fetch invoices (if invoices table exists)
-      try {
-        const { data: invoicesData } = await supabase
-          .from('invoices')
-          .select('*')
-          .eq('client_id', id)
-          .order('date', { ascending: false });
-        
-        setInvoices(invoicesData || []);
-      } catch (err) {
-        // console.log removed
-      }
+
+      // Note: Bookings API not implemented yet
+      setBookings([]);
       
     } catch (err: any) {
       // console.error removed
@@ -124,12 +108,11 @@ const ClientProfilePage: React.FC = () => {
     }
     
     try {
-      const { error } = await supabase
-        .from('crm_clients')
-        .delete()
-        .eq('id', client.id);
+      const response = await fetch(`/api/crm/clients/${client.id}`, {
+        method: 'DELETE'
+      });
       
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to delete client');
       
       navigate('/admin/clients');
     } catch (err: any) {

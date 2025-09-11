@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
 import AdvancedBlogPostForm from '../../components/admin/AdvancedBlogPostForm';
-import { supabase } from '../../lib/supabase';
+// Supabase removed - using Neon database API
 import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 
 interface BlogPost {

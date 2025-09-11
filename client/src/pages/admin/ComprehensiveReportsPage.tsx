@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { supabase } from '../../lib/supabase';
+// Supabase removed - using Neon database APIs
 import { 
   Download, 
   Calendar, 
@@ -104,33 +104,36 @@ const ComprehensiveReportsPage: React.FC = () => {
           break;
       }
 
-      // Fetch all data in parallel
+      // Fetch all data from APIs in parallel
       const [
-        invoicesResult,
-        clientsResult,
-        leadsResult,
-        bookingsResult,
-        vouchersResult,
-        blogResult,
-        campaignsResult
+        invoicesResponse,
+        clientsResponse,
+        leadsResponse,
+        vouchersResponse,
+        blogResponse
       ] = await Promise.allSettled([
-        supabase.from('crm_invoices').select('*').gte('created_at', startDate.toISOString()),
-        supabase.from('crm_clients').select('*'),
-        supabase.from('leads').select('*').gte('created_at', startDate.toISOString()),
-        supabase.from('crm_bookings').select('*').gte('created_at', startDate.toISOString()),
-        supabase.from('voucher_sales').select('*').gte('created_at', startDate.toISOString()),
-        supabase.from('blog_posts').select('*'),
-        supabase.from('email_campaigns').select('*')
+        fetch(`/api/crm/invoices?from=${startDate.toISOString()}`),
+        fetch('/api/crm/clients'),
+        fetch(`/api/crm/leads?from=${startDate.toISOString()}`),
+        fetch(`/api/vouchers/sales?from=${startDate.toISOString()}`),
+        fetch('/api/blog/posts')
       ]);
 
-      // Process data
-      const invoices = invoicesResult.status === 'fulfilled' ? invoicesResult.value.data || [] : [];
-      const clients = clientsResult.status === 'fulfilled' ? clientsResult.value.data || [] : [];
-      const leads = leadsResult.status === 'fulfilled' ? leadsResult.value.data || [] : [];
-      const bookings = bookingsResult.status === 'fulfilled' ? bookingsResult.value.data || [] : [];
-      const vouchers = vouchersResult.status === 'fulfilled' ? vouchersResult.value.data || [] : [];
-      const blogPosts = blogResult.status === 'fulfilled' ? blogResult.value.data || [] : [];
-      const campaigns = campaignsResult.status === 'fulfilled' ? campaignsResult.value.data || [] : [];
+      // Process API responses
+      const invoices = invoicesResponse.status === 'fulfilled' && invoicesResponse.value.ok 
+        ? await invoicesResponse.value.json() : [];
+      const clients = clientsResponse.status === 'fulfilled' && clientsResponse.value.ok 
+        ? await clientsResponse.value.json() : [];
+      const leads = leadsResponse.status === 'fulfilled' && leadsResponse.value.ok 
+        ? await leadsResponse.value.json() : [];
+      const vouchers = vouchersResponse.status === 'fulfilled' && vouchersResponse.value.ok 
+        ? await vouchersResponse.value.json() : [];
+      const blogPosts = blogResponse.status === 'fulfilled' && blogResponse.value.ok 
+        ? await blogResponse.value.json() : [];
+      
+      // Note: bookings and email campaigns APIs not yet implemented
+      const bookings = [];
+      const emailCampaigns = [];
 
       // Create comprehensive report data
       const comprehensiveData: ComprehensiveReportData = {
