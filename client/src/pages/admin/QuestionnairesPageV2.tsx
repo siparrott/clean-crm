@@ -46,10 +46,15 @@ const QuestionnairesPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const response = await surveyApi.getSurveys(1, 50, statusFilter === 'all' ? undefined : statusFilter, searchTerm);
-      setSurveys(response.surveys);
+      // Use Neon-based API endpoint
+      const response = await fetch('/api/surveys');
+      if (!response.ok) {
+        throw new Error('Failed to fetch surveys');
+      }
+      const data = await response.json();
+      setSurveys(data.surveys);
     } catch (err) {
-      // console.error removed
+      console.error('Survey fetch error:', err);
       setError('Failed to load surveys. Please try again.');
     } finally {
       setLoading(false);

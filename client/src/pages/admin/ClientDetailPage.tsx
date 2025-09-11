@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { ArrowLeft, Mail, Phone, MapPin, Building, Edit, Trash2, Calendar, Euro, MessageSquare, Plus } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Building, Edit, Trash2, Calendar, Euro, MessageSquare, Plus, FileText } from 'lucide-react';
 import { googleCalendarService } from '../../services/googleCalendarService';
+import SendQuestionnaireModal from '../../components/admin/SendQuestionnaireModal';
 
 interface Client {
   id: string;
@@ -28,6 +29,7 @@ const ClientDetailPage: React.FC = () => {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showQuestionnaireModal, setShowQuestionnaireModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -223,6 +225,13 @@ const ClientDetailPage: React.FC = () => {
               Edit
             </button>
             <button
+              onClick={() => setShowQuestionnaireModal(true)}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center"
+            >
+              <FileText size={16} className="mr-2" />
+              Send Questionnaire
+            </button>
+            <button
               onClick={handleDelete}
               className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center"
             >
@@ -351,6 +360,15 @@ const ClientDetailPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Send Questionnaire Modal */}
+      {client && (
+        <SendQuestionnaireModal
+          isOpen={showQuestionnaireModal}
+          onClose={() => setShowQuestionnaireModal(false)}
+          client={client}
+        />
+      )}
     </AdminLayout>
   );
 };

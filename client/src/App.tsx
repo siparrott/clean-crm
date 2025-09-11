@@ -78,6 +78,7 @@ import { GalleryShopTest } from './pages/GalleryShopTest';
 import DownloadDataPage from './pages/DownloadDataPage';
 import MockSuccessPage from './pages/MockSuccessPage';
 import CommunicationsPage from './pages/CommunicationsPage';
+import QuestionnaireFormPage from './pages/QuestionnaireFormPage';
 
 function App() {
   return (
@@ -120,6 +121,7 @@ function App() {
                 <Route path="/gallery" element={<ProtectedRoute><GalleryPage /></ProtectedRoute>} />
                 <Route path="/survey-demo" element={<SurveySystemDemoPage />} />
                 <Route path="/survey/:id" element={<SurveyTakingPage />} />
+                <Route path="/q/:token" element={<QuestionnaireFormPage />} />
                 <Route path="/download-data" element={<DownloadDataPage />} />
 
                 {/* Admin routes */}

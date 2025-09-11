@@ -6177,6 +6177,157 @@ New Age Fotografie CRM System
     }
   });
 
+  // ==================== QUESTIONNAIRE/SURVEY ROUTES ====================
+  
+  // Get all surveys (questionnaire templates)
+  app.get("/api/surveys", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const surveys = await runSql('SELECT * FROM surveys ORDER BY created_at DESC');
+      res.json({ surveys, total: surveys.length, page: 1, limit: 50 });
+    } catch (error) {
+      console.error("Error fetching surveys:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create questionnaire link for client
+  app.post("/api/admin/create-questionnaire-link", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const { client_id, template_id } = req.body;
+      
+      if (!client_id) {
+        return res.status(400).json({ error: "client_id is required" });
+      }
+
+      // Generate short token (16 hex chars)
+      const token = require('crypto').randomBytes(8).toString('hex');
+      
+      // Set expiration to 30 days from now
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      
+      // Insert questionnaire link
+      await runSql(
+        'INSERT INTO questionnaire_links (token, client_id, template_id, expires_at) VALUES ($1, $2, $3, $4)',
+        [token, client_id, template_id || 'default-questionnaire', expiresAt]
+      );
+      
+      // Generate public URL
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `http://localhost:3001`;
+      const link = `${baseUrl}/q/${token}`;
+      
+      res.json({ token, link });
+    } catch (error) {
+      console.error("Error creating questionnaire link:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get questionnaire by token (public endpoint)
+  app.get("/api/questionnaire/:token", async (req: Request, res: Response) => {
+    try {
+      const { token } = req.params;
+      
+      // Get questionnaire link details
+      const linkResult = await runSql(
+        `SELECT ql.*, c.first_name, c.last_name, c.email 
+         FROM questionnaire_links ql 
+         JOIN crm_clients c ON ql.client_id = c.id 
+         WHERE ql.token = $1 AND (ql.expires_at IS NULL OR ql.expires_at > NOW())`,
+        [token]
+      );
+      
+      if (linkResult.length === 0) {
+        return res.status(404).json({ error: "Questionnaire not found or expired" });
+      }
+      
+      const link = linkResult[0];
+      
+      // Get the questionnaire template
+      const surveyResult = await runSql(
+        'SELECT * FROM surveys WHERE id = $1',
+        [link.template_id || 'default-questionnaire']
+      );
+      
+      if (surveyResult.length === 0) {
+        return res.status(404).json({ error: "Questionnaire template not found" });
+      }
+      
+      const survey = surveyResult[0];
+      
+      res.json({
+        token,
+        clientName: `${link.first_name || ''} ${link.last_name || ''}`.trim(),
+        clientEmail: link.email,
+        isUsed: link.is_used,
+        survey: {
+          title: survey.title,
+          description: survey.description,
+          pages: survey.pages,
+          settings: survey.settings
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching questionnaire:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Submit questionnaire response (public endpoint)
+  app.post("/api/email-questionnaire", async (req: Request, res: Response) => {
+    try {
+      const { token, clientName, clientEmail, answers } = req.body;
+      
+      if (!token || !clientName || !clientEmail || !answers) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      // Verify token and get client info
+      const linkResult = await runSql(
+        `SELECT ql.*, c.first_name, c.last_name 
+         FROM questionnaire_links ql 
+         JOIN crm_clients c ON ql.client_id = c.id 
+         WHERE ql.token = $1 AND (ql.expires_at IS NULL OR ql.expires_at > NOW()) AND ql.is_used = FALSE`,
+        [token]
+      );
+      
+      if (linkResult.length === 0) {
+        return res.status(404).json({ error: "Invalid or expired questionnaire link" });
+      }
+      
+      const link = linkResult[0];
+      
+      // Store response in database
+      await runSql(
+        'INSERT INTO questionnaire_responses (client_id, token, template_slug, answers) VALUES ($1, $2, $3, $4)',
+        [link.client_id, token, link.template_id, JSON.stringify(answers)]
+      );
+      
+      // Mark link as used
+      await runSql('UPDATE questionnaire_links SET is_used = TRUE WHERE token = $1', [token]);
+      
+      // Send studio notification email
+      try {
+        const { sendStudioNotificationEmail, sendClientConfirmationEmail } = await import('./utils/emailService');
+        
+        // Send studio notification
+        await sendStudioNotificationEmail(clientName, clientEmail, answers, link);
+        
+        // Send client confirmation
+        await sendClientConfirmationEmail(clientEmail, clientName);
+        
+      } catch (emailError) {
+        console.error("Email sending error:", emailError);
+        // Don't fail the response if email fails, just log it
+      }
+      
+      res.json({ success: true, message: "Questionnaire submitted successfully" });
+    } catch (error) {
+      console.error("Error submitting questionnaire:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // ==================== OPENAI ASSISTANTS ROUTES ====================
   app.get("/api/openai/assistants", authenticateUser, async (req: Request, res: Response) => {
     try {
