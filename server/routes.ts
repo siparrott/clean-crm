@@ -3,6 +3,8 @@ import { createServer, type Server } from "http";
 import { registerTestRoutes } from "./routes-test";
 import { storage } from "./storage";
 import { db, pool } from "./db";
+// Import Neon database functions
+const neonDb = require("../database.js");
 // Helper to run raw SQL with parameterized values using the pg pool
 async function runSql(query: string, params?: any[]) {
   const result = await pool.query(query, params || []);
@@ -5504,7 +5506,7 @@ New Age Fotografie CRM System
   app.get("/api/vouchers/products", async (req: Request, res: Response) => {
     try {
       const language = req.query.language as string || 'de';
-      let products = await storage.getVoucherProducts();
+      let products = await neonDb.getVoucherProducts();
       
       // Translate content if language is English
       if (language === 'en') {
@@ -5512,7 +5514,7 @@ New Age Fotografie CRM System
           ...product,
           name: translateVoucherToEnglish(product.name),
           description: product.description ? translateVoucherToEnglish(product.description) : null,
-          termsAndConditions: product.termsAndConditions ? translateVoucherToEnglish(product.termsAndConditions) : null
+          termsAndConditions: product.terms_and_conditions ? translateVoucherToEnglish(product.terms_and_conditions) : null
         }));
       }
       
@@ -5526,7 +5528,7 @@ New Age Fotografie CRM System
   // Get single voucher product by ID (public endpoint)
   app.get("/api/vouchers/products/:id", async (req: Request, res: Response) => {
     try {
-      const product = await storage.getVoucherProduct(req.params.id);
+      const product = await neonDb.getVoucherProduct(req.params.id);
       if (!product) {
         return res.status(404).json({ error: "Voucher product not found" });
       }
@@ -5547,7 +5549,7 @@ New Age Fotografie CRM System
       }
 
       // Get voucher details
-      const voucher = await storage.getVoucherProduct(voucherId);
+      const voucher = await neonDb.getVoucherProduct(voucherId);
       if (!voucher) {
         return res.status(404).json({ error: "Voucher not found" });
       }
@@ -5626,7 +5628,7 @@ New Age Fotografie CRM System
   // Admin endpoint for voucher products
   app.get("/api/admin/vouchers/products/:id", authenticateUser, async (req: Request, res: Response) => {
     try {
-      const product = await storage.getVoucherProduct(req.params.id);
+      const product = await neonDb.getVoucherProduct(req.params.id);
       if (!product) {
         return res.status(404).json({ error: "Voucher product not found" });
       }
@@ -5640,7 +5642,7 @@ New Age Fotografie CRM System
   app.post("/api/vouchers/products", authenticateUser, async (req: Request, res: Response) => {
     try {
       const validatedData = insertVoucherProductSchema.parse(req.body);
-      const product = await storage.createVoucherProduct(validatedData);
+      const product = await neonDb.createVoucherProduct(validatedData);
       res.status(201).json(product);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -5653,7 +5655,7 @@ New Age Fotografie CRM System
 
   app.put("/api/vouchers/products/:id", authenticateUser, async (req: Request, res: Response) => {
     try {
-      const product = await storage.updateVoucherProduct(req.params.id, req.body);
+      const product = await neonDb.updateVoucherProduct(req.params.id, req.body);
       res.json(product);
     } catch (error) {
       console.error("Error updating voucher product:", error);
@@ -5663,7 +5665,7 @@ New Age Fotografie CRM System
 
   app.delete("/api/vouchers/products/:id", authenticateUser, async (req: Request, res: Response) => {
     try {
-      await storage.deleteVoucherProduct(req.params.id);
+      await neonDb.deleteVoucherProduct(req.params.id);
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting voucher product:", error);
