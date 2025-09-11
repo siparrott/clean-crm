@@ -1163,6 +1163,63 @@ if (!connectionString) {
           newLeads: 0
         };
       }
+    },
+
+    async getTopClients(orderBy = 'total_sales', limit = 20) {
+      try {
+        let orderColumn = 'total_sales';
+        
+        if (orderBy === 'outstanding_balance') {
+          orderColumn = 'outstanding_balance';
+        } else if (orderBy === 'created_at') {
+          orderColumn = 'created_at';
+        }
+
+        const result = await pool.query(`
+          SELECT 
+            id,
+            client_id,
+            first_name,
+            last_name,
+            email,
+            phone,
+            total_sales,
+            outstanding_balance,
+            created_at,
+            updated_at,
+            COALESCE(total_sales, 0) as revenue,
+            CASE 
+              WHEN COALESCE(total_sales, 0) >= 10000 THEN 'Premium'
+              WHEN COALESCE(total_sales, 0) >= 5000 THEN 'Gold'
+              WHEN COALESCE(total_sales, 0) >= 1000 THEN 'Silver'
+              ELSE 'Bronze'
+            END as tier
+          FROM crm_clients 
+          WHERE COALESCE(total_sales, 0) > 0
+          ORDER BY ${orderColumn} DESC 
+          LIMIT $1
+        `, [limit]);
+
+        // Map database fields to frontend expected format
+        const mappedClients = result.rows.map(client => ({
+          id: client.id,
+          clientId: client.client_id || client.id,
+          firstName: client.first_name || '',
+          lastName: client.last_name || '',
+          email: client.email || '',
+          phone: client.phone || '',
+          revenue: parseFloat(client.total_sales) || 0,
+          outstandingBalance: parseFloat(client.outstanding_balance) || 0,
+          tier: client.tier,
+          createdAt: client.created_at,
+          updatedAt: client.updated_at
+        }));
+
+        return mappedClients;
+      } catch (error) {
+        console.error('❌ Error fetching top clients:', error.message);
+        throw error;
+      }
     }
   };
 }

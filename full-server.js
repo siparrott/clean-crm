@@ -331,6 +331,11 @@ const mockApiResponses = {
     data: [],
     message: 'Leads database ready - integrating with Neon next'
   },
+  '/api/crm/top-clients': {
+    status: 'success',
+    data: [],
+    message: 'Top clients metrics ready with revenue analytics'
+  },
   '/api/_db_counts': {
     clients: 0,
     leads: 0,
@@ -448,6 +453,23 @@ const server = http.createServer(async (req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(leads));
         } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+      
+      if (pathname === '/api/crm/top-clients' && req.method === 'GET') {
+        try {
+          const urlParams = new URLSearchParams(parsedUrl.query);
+          const orderBy = urlParams.get('orderBy') || 'total_sales';
+          const limit = parseInt(urlParams.get('limit')) || 20;
+          
+          const topClients = await database.getTopClients(orderBy, limit);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(topClients));
+        } catch (error) {
+          console.error('❌ Error fetching top clients:', error);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: error.message }));
         }
@@ -849,7 +871,7 @@ const server = http.createServer(async (req, res) => {
       // Digital Files API endpoints
       if (pathname.startsWith('/api/files')) {
         try {
-          await handleFilesAPI(req, res, pathname, urlObj.query);
+          await handleFilesAPI(req, res, pathname, parsedUrl.query);
         } catch (error) {
           console.error('❌ Files API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
