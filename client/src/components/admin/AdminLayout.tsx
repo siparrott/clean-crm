@@ -30,9 +30,9 @@ import {
   Bell,
   BookOpen,
   Bot,
-  TestTube,
-  Sparkles,
-  Search
+  Search,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -41,6 +41,7 @@ interface AdminLayoutProps {
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const { language, setLanguage, t } = useLanguage();
   const [newLeadsCount, setNewLeadsCount] = useState(0);
   const [unreadEmailsCount, setUnreadEmailsCount] = useState(0);
@@ -93,20 +94,30 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { icon: Calendar, label: t('nav.calendar'), path: '/admin/calendar' },
     { icon: FolderOpen, label: t('nav.digitalFiles'), path: '/admin/pro-files' },
     { icon: PenTool, label: t('nav.blogAdmin'), path: '/admin/blog' },
-    { icon: Wand2, label: t('nav.aiAutoblog'), path: '/admin/autoblog' },
     { icon: Mail, label: t('nav.emailCampaigns'), path: '/admin/campaigns' },
     { icon: MessageSquare, label: t('nav.communications'), path: '/admin/communications' },
     { icon: Inbox, label: t('nav.inbox'), path: '/admin/inbox', badge: unreadEmailsCount },
     { icon: ClipboardList, label: t('nav.questionnaires'), path: '/admin/questionnaires' },
     { icon: BarChart3, label: t('nav.reports'), path: '/admin/reports' },
     { icon: Bot, label: t('nav.crmAssistant'), path: '/admin/crm-assistant' },
-    { icon: BookOpen, label: t('nav.knowledgeBase'), path: '/admin/knowledge-base' },
-    { icon: TestTube, label: t('nav.testChat'), path: '/admin/test' },
-    { icon: Settings, label: t('nav.settings'), path: '/admin/settings' },
-    { icon: Palette, label: t('nav.customization'), path: '/admin/customization' },
-    { icon: Palette, label: t('nav.studioTemplates'), path: '/admin/studio-templates' },
-    { icon: Wand2, label: t('nav.websiteWizard'), path: '/admin/website-wizard' },
-    { icon: Search, label: t('nav.websiteAnalyzer'), path: '/admin/website-analyzer' },
+    { 
+      icon: Palette, 
+      label: t('nav.customization'), 
+      path: '/admin/customization',
+      subItems: [
+        { icon: Palette, label: t('nav.studioTemplates'), path: '/admin/studio-templates' },
+        { icon: Wand2, label: t('nav.websiteWizard'), path: '/admin/website-wizard' },
+        { icon: Search, label: t('nav.websiteAnalyzer'), path: '/admin/website-analyzer' },
+      ]
+    },
+    { 
+      icon: Settings, 
+      label: t('nav.settings'), 
+      path: '/admin/settings',
+      subItems: [
+        { icon: BookOpen, label: t('nav.knowledgeBase'), path: '/admin/knowledge-base' },
+      ]
+    },
   ];
 
   const handleSignOut = async () => {
@@ -117,6 +128,35 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'de' : 'en');
   };
+
+  const toggleExpandedItem = (path: string) => {
+    const newExpanded = new Set(expandedItems);
+    if (newExpanded.has(path)) {
+      newExpanded.delete(path);
+    } else {
+      newExpanded.add(path);
+    }
+    setExpandedItems(newExpanded);
+  };
+
+  // Auto-expand parent items if child is active
+  useEffect(() => {
+    sidebarItems.forEach(item => {
+      if (item.subItems) {
+        const hasActiveChild = item.subItems.some(subItem => 
+          location.pathname === subItem.path || 
+          (subItem.path === '/admin/blog' && location.pathname.startsWith('/admin/blog/'))
+        );
+        if (hasActiveChild) {
+          setExpandedItems(prev => {
+            const newSet = new Set(prev);
+            newSet.add(item.path);
+            return newSet;
+          });
+        }
+      }
+    });
+  }, [location.pathname]);
 
   // Persist auth state on navigation
   useEffect(() => {
@@ -211,32 +251,98 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path || 
                               (item.path === '/admin/blog' && location.pathname.startsWith('/admin/blog/'));
+              const isExpanded = expandedItems.has(item.path);
+              const hasActiveChild = item.subItems?.some(subItem => 
+                location.pathname === subItem.path || 
+                (subItem.path === '/admin/blog' && location.pathname.startsWith('/admin/blog/'))
+              );
 
               return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center px-4 py-3 text-sm transition-colors relative ${
-                    isActive
-                      ? 'bg-purple-600 text-white border-r-2 border-purple-400'
-                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                  }`}
-                >
-                  <Icon size={20} className="flex-shrink-0" />
-                  {!sidebarCollapsed && (
-                    <span className="ml-3">{item.label}</span>
+                <div key={item.path}>
+                  {/* Main item */}
+                  {item.subItems ? (
+                    <button
+                      onClick={() => toggleExpandedItem(item.path)}
+                      className={`flex items-center w-full px-4 py-3 text-sm transition-colors relative ${
+                        isActive || hasActiveChild
+                          ? 'bg-purple-600 text-white border-r-2 border-purple-400'
+                          : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                      }`}
+                    >
+                      <Icon size={20} className="flex-shrink-0" />
+                      {!sidebarCollapsed && (
+                        <>
+                          <span className="ml-3 flex-1 text-left">{item.label}</span>
+                          {isExpanded ? (
+                            <ChevronDown size={16} className="flex-shrink-0" />
+                          ) : (
+                            <ChevronRight size={16} className="flex-shrink-0" />
+                          )}
+                        </>
+                      )}
+                      {item.badge && item.badge > 0 && (
+                        <div className={`absolute ${sidebarCollapsed ? 'top-2 right-2' : 'top-3 right-4'} flex items-center justify-center`}>
+                          {!sidebarCollapsed && <Bell size={14} className="mr-1 text-red-400" />}
+                          <span className={`bg-red-500 text-white text-xs font-bold rounded-full ${
+                            sidebarCollapsed ? 'h-4 w-4 text-xs' : 'h-5 w-5 text-xs'
+                          } flex items-center justify-center`}>
+                            {item.badge > 99 ? '99+' : item.badge}
+                          </span>
+                        </div>
+                      )}
+                    </button>
+                  ) : (
+                    <Link
+                      to={item.path}
+                      className={`flex items-center px-4 py-3 text-sm transition-colors relative ${
+                        isActive
+                          ? 'bg-purple-600 text-white border-r-2 border-purple-400'
+                          : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                      }`}
+                    >
+                      <Icon size={20} className="flex-shrink-0" />
+                      {!sidebarCollapsed && (
+                        <span className="ml-3">{item.label}</span>
+                      )}
+                      {item.badge && item.badge > 0 && (
+                        <div className={`absolute ${sidebarCollapsed ? 'top-2 right-2' : 'top-3 right-4'} flex items-center justify-center`}>
+                          {!sidebarCollapsed && <Bell size={14} className="mr-1 text-red-400" />}
+                          <span className={`bg-red-500 text-white text-xs font-bold rounded-full ${
+                            sidebarCollapsed ? 'h-4 w-4 text-xs' : 'h-5 w-5 text-xs'
+                          } flex items-center justify-center`}>
+                            {item.badge > 99 ? '99+' : item.badge}
+                          </span>
+                        </div>
+                      )}
+                    </Link>
                   )}
-                  {item.badge && item.badge > 0 && (
-                    <div className={`absolute ${sidebarCollapsed ? 'top-2 right-2' : 'top-3 right-4'} flex items-center justify-center`}>
-                      {!sidebarCollapsed && <Bell size={14} className="mr-1 text-red-400" />}
-                      <span className={`bg-red-500 text-white text-xs font-bold rounded-full ${
-                        sidebarCollapsed ? 'h-4 w-4 text-xs' : 'h-5 w-5 text-xs'
-                      } flex items-center justify-center`}>
-                        {item.badge > 99 ? '99+' : item.badge}
-                      </span>
+
+                  {/* Sub items */}
+                  {item.subItems && isExpanded && !sidebarCollapsed && (
+                    <div className="bg-gray-800">
+                      {item.subItems.map((subItem) => {
+                        const SubIcon = subItem.icon;
+                        const isSubActive = location.pathname === subItem.path || 
+                                          (subItem.path === '/admin/blog' && location.pathname.startsWith('/admin/blog/'));
+
+                        return (
+                          <Link
+                            key={subItem.path}
+                            to={subItem.path}
+                            className={`flex items-center px-8 py-2 text-sm transition-colors ${
+                              isSubActive
+                                ? 'bg-purple-700 text-white border-r-2 border-purple-400'
+                                : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                            }`}
+                          >
+                            <SubIcon size={16} className="flex-shrink-0" />
+                            <span className="ml-3">{subItem.label}</span>
+                          </Link>
+                        );
+                      })}
                     </div>
                   )}
-                </Link>
+                </div>
               );
             })}
           </div>
@@ -273,10 +379,27 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-semibold text-gray-900">
-              {sidebarItems.find(item => 
-                item.path === location.pathname || 
-                (item.path === '/admin/blog' && location.pathname.startsWith('/admin/blog/'))
-              )?.label || 'Admin'}
+              {(() => {
+                // First check main items
+                const mainItem = sidebarItems.find(item => 
+                  item.path === location.pathname || 
+                  (item.path === '/admin/blog' && location.pathname.startsWith('/admin/blog/'))
+                );
+                if (mainItem) return mainItem.label;
+
+                // Then check sub items
+                for (const item of sidebarItems) {
+                  if (item.subItems) {
+                    const subItem = item.subItems.find(subItem => 
+                      subItem.path === location.pathname || 
+                      (subItem.path === '/admin/blog' && location.pathname.startsWith('/admin/blog/'))
+                    );
+                    if (subItem) return subItem.label;
+                  }
+                }
+
+                return 'Admin';
+              })()}
             </h1>
 
             <div className="flex items-center space-x-4">

@@ -47,6 +47,7 @@ import CampaignsPage from './pages/admin/CampaignsPage';
 import AdminInboxPageV2 from './pages/admin/AdminInboxPageV2';
 import QuestionnairesPageV2 from './pages/admin/QuestionnairesPageV2';
 import ComprehensiveReportsPage from './pages/admin/ComprehensiveReportsPage';
+import SettingsPage from './pages/admin/SettingsPage';
 import CustomizationPage from './pages/admin/CustomizationPage';
 import StudioCustomization from './pages/admin/StudioCustomization';
 import StudioCalendarPage from './pages/admin/StudioCalendarPage';
@@ -59,10 +60,6 @@ import AdminBlogNewPage from './pages/admin/AdminBlogNewPage';
 import AdminBlogEditPage from './pages/admin/AdminBlogEditPage';
 import KnowledgeBasePage from './pages/admin/KnowledgeBasePage';
 import CRMOperationsAssistant from './pages/admin/CRMOperationsAssistant';
-import AdminAutoBlogPage from './pages/admin/AdminAutoBlogPage';
-import AutoBlogGenerator from './pages/admin/AutoBlogGenerator';
-import AutoBlogGeneratorFixed from './pages/admin/AutoBlogGeneratorFixed';
-import TestPage from './pages/admin/TestPage';
 import WebsiteWizard from './pages/admin/WebsiteWizard';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import NeonProtectedRoute from './components/auth/NeonProtectedRoute';
@@ -345,10 +342,10 @@ function App() {
                   }
                 />
                 <Route
-                  path="/admin/test"
+                  path="/admin/settings"
                   element={
                     <NeonProtectedRoute>
-                      <TestPage />
+                      <SettingsPage />
                     </NeonProtectedRoute>
                   }
                 />
@@ -433,46 +430,6 @@ function App() {
                   element={
                     <NeonProtectedRoute>
                       <AdminBlogEditPage />
-                    </NeonProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/autoblog"
-                  element={
-                    <NeonProtectedRoute>
-                      <AutoBlogGeneratorFixed />
-                    </NeonProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/autoblog-generator"
-                  element={
-                    <NeonProtectedRoute>
-                      <AutoBlogGenerator />
-                    </NeonProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/autoblog-generator-fixed"
-                  element={
-                    <NeonProtectedRoute>
-                      <AutoBlogGeneratorFixed />
-                    </NeonProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/autoblog-v3"
-                  element={
-                    <NeonProtectedRoute>
-                      <AutoBlogGeneratorFixed />
-                    </NeonProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/autoblog-v4"
-                  element={
-                    <NeonProtectedRoute>
-                      <AutoBlogGeneratorFixed />
                     </NeonProtectedRoute>
                   }
                 />
