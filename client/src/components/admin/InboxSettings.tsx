@@ -1,4 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { X, Settings, Server, Mail, Eye, EyeOff, TestTube, Save, RefreshCw } from 'lucide-react';
+import { getEmailSettings, saveEmailSettings } from '../../api/email';
+
+interface EmailSettings {
+  provider: 'gmail' | 'outlook' | 'smtp';
+  smtpHost: string;
+  smtpPort: string;
+  username: string;
+  password: string;
+  useTLS: boolean;
+  syncEnabled: boolean;
+  syncInterval: number;
+}
+
+interface InboxSettingsProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (settings: EmailSettings) => void;
+  currentSettings?: EmailSettings;
+}tate } from 'react';
 import { Settings, Mail, Lock, Server, TestTube2, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface EmailSettings {
@@ -112,12 +132,34 @@ const InboxSettings: React.FC<InboxSettingsProps> = ({
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Simulate saving
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Save to backend
+      await saveEmailSettings({
+        smtpHost: settings.smtpHost,
+        smtpPort: settings.smtpPort,
+        smtpUser: settings.username,
+        smtpPass: settings.password,
+        fromEmail: settings.username, // Use username as from email
+        fromName: 'New Age Fotografie'
+      });
+      
+      setTestResult({
+        success: true,
+        message: 'Email settings saved successfully!'
+      });
+      
       onSave(settings);
-      onClose();
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (error) {
-      // console.error removed
+      setTestResult({
+        success: false,
+        message: 'Failed to save email settings. Please try again.'
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
     } finally {
       setSaving(false);
     }

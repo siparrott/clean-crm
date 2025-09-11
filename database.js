@@ -1432,6 +1432,90 @@ if (!connectionString) {
         console.error('❌ Error deleting voucher product:', error.message);
         throw error;
       }
+    },
+
+    // ==================== EMAIL SETTINGS ====================
+    async saveEmailSettings(settings) {
+      try {
+        // Create email_settings table if it doesn't exist
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS email_settings (
+            id SERIAL PRIMARY KEY,
+            smtp_host VARCHAR(255),
+            smtp_port INTEGER DEFAULT 587,
+            smtp_user VARCHAR(255),
+            smtp_pass VARCHAR(255),
+            from_email VARCHAR(255),
+            from_name VARCHAR(255),
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+
+        // Check if settings exist
+        const existingResult = await pool.query('SELECT id FROM email_settings LIMIT 1');
+        
+        if (existingResult.rows.length > 0) {
+          // Update existing settings
+          const result = await pool.query(`
+            UPDATE email_settings 
+            SET smtp_host = $1, smtp_port = $2, smtp_user = $3, smtp_pass = $4, 
+                from_email = $5, from_name = $6, updated_at = NOW()
+            WHERE id = $7
+            RETURNING *
+          `, [
+            settings.smtp_host, settings.smtp_port, settings.smtp_user, 
+            settings.smtp_pass, settings.from_email, settings.from_name,
+            existingResult.rows[0].id
+          ]);
+          return result.rows[0];
+        } else {
+          // Insert new settings
+          const result = await pool.query(`
+            INSERT INTO email_settings (smtp_host, smtp_port, smtp_user, smtp_pass, from_email, from_name)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING *
+          `, [
+            settings.smtp_host, settings.smtp_port, settings.smtp_user, 
+            settings.smtp_pass, settings.from_email, settings.from_name
+          ]);
+          return result.rows[0];
+        }
+      } catch (error) {
+        console.error('❌ Error saving email settings:', error.message);
+        throw error;
+      }
+    },
+
+    async getEmailSettings() {
+      try {
+        const result = await pool.query('SELECT * FROM email_settings ORDER BY updated_at DESC LIMIT 1');
+        
+        if (result.rows.length > 0) {
+          return result.rows[0];
+        } else {
+          // Return default EasyName settings if no custom settings exist
+          return {
+            smtp_host: 'smtp.easyname.com',
+            smtp_port: 587,
+            smtp_user: '30840mail10',
+            smtp_pass: process.env.EMAIL_PASSWORD || 'HoveBN41!',
+            from_email: 'hallo@newagefotografie.com',
+            from_name: 'New Age Fotografie'
+          };
+        }
+      } catch (error) {
+        console.error('❌ Error getting email settings:', error.message);
+        // Return default settings on error
+        return {
+          smtp_host: 'smtp.easyname.com',
+          smtp_port: 587,
+          smtp_user: '30840mail10',
+          smtp_pass: process.env.EMAIL_PASSWORD || 'HoveBN41!',
+          from_email: 'hallo@newagefotografie.com',
+          from_name: 'New Age Fotografie'
+        };
+      }
     }
   };
 }

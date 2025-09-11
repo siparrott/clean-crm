@@ -4,7 +4,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -1023,11 +1023,13 @@ const ProductDialog: React.FC<{
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {product ? 'Edit Voucher Product' : 'Create New Voucher Product'}
-          </DialogTitle>
+      <DialogPortal>
+        <DialogOverlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto bg-white border-2 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {product ? 'Edit Voucher Product' : 'Create New Voucher Product'}
+            </DialogTitle>
           <DialogDescription>
             {product 
               ? 'Update the details of this voucher product including promotional images'
@@ -1204,7 +1206,8 @@ const ProductDialog: React.FC<{
             {product ? 'Update Product' : 'Create Product'}
           </Button>
         </DialogFooter>
-      </DialogContent>
+        </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 };
@@ -1219,11 +1222,13 @@ const CouponDialog: React.FC<{
 }> = ({ open, onOpenChange, coupon, onSubmit, form }) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>
-            {coupon ? 'Edit Discount Coupon' : 'Create New Discount Coupon'}
-          </DialogTitle>
+      <DialogPortal>
+        <DialogOverlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogContent className="sm:max-w-[600px] bg-white border-2 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {coupon ? 'Edit Discount Coupon' : 'Create New Discount Coupon'}
+            </DialogTitle>
           <DialogDescription>
             {coupon 
               ? 'Update the details of this discount coupon'
@@ -1318,7 +1323,8 @@ const CouponDialog: React.FC<{
             {coupon ? 'Update Coupon' : 'Create Coupon'}
           </Button>
         </DialogFooter>
-      </DialogContent>
+        </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 };

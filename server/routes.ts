@@ -4747,6 +4747,52 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
+  // ==================== EMAIL SETTINGS ====================
+  app.post("/api/email/settings/save", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const { smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, fromName } = req.body;
+      
+      console.log('Saving email settings:', { smtpHost, smtpPort, smtpUser, fromEmail, fromName });
+      
+      // Save email settings to database
+      const settingsData = {
+        smtp_host: smtpHost,
+        smtp_port: parseInt(smtpPort) || 587,
+        smtp_user: smtpUser,
+        smtp_pass: smtpPass, // In production, this should be encrypted
+        from_email: fromEmail,
+        from_name: fromName,
+        updated_at: new Date().toISOString()
+      };
+      
+      await storage.saveEmailSettings(settingsData);
+      
+      res.json({ 
+        success: true, 
+        message: 'Email settings saved successfully' 
+      });
+    } catch (error) {
+      console.error('Error saving email settings:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to save email settings: ' + (error as Error).message 
+      });
+    }
+  });
+
+  app.get("/api/email/settings", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const settings = await storage.getEmailSettings();
+      res.json({ success: true, settings });
+    } catch (error) {
+      console.error('Error getting email settings:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to get email settings: ' + (error as Error).message 
+      });
+    }
+  });
+
   // ==================== EMAIL SENDING ====================
   app.post("/api/email/send", authenticateUser, async (req: Request, res: Response) => {
     try {
@@ -4756,14 +4802,29 @@ Bitte versuchen Sie es später noch einmal.`;
       
   // Use nodemailer (imported at top of file)
       
-      // Get email settings - using EasyName business email configuration with STARTTLS
+      // Get email settings - try to load from database first, fallback to EasyName
+      let emailSettings;
+      try {
+        emailSettings = await storage.getEmailSettings();
+      } catch (settingsError) {
+        console.log('Using fallback email settings');
+        emailSettings = {
+          smtp_host: 'smtp.easyname.com',
+          smtp_port: 587,
+          smtp_user: '30840mail10',
+          smtp_pass: process.env.EMAIL_PASSWORD || 'HoveBN41!',
+          from_email: 'hallo@newagefotografie.com',
+          from_name: 'New Age Fotografie'
+        };
+      }
+
       const emailConfig = {
-        host: 'smtp.easyname.com',
-        port: 587, // Better compatibility with STARTTLS
+        host: emailSettings.smtp_host,
+        port: emailSettings.smtp_port,
         secure: false, // Use STARTTLS instead of SSL
         auth: {
-          user: '30840mail10',
-          pass: process.env.EMAIL_PASSWORD || 'HoveBN41!'
+          user: emailSettings.smtp_user,
+          pass: emailSettings.smtp_pass
         },
         tls: {
           rejectUnauthorized: false,
@@ -4788,7 +4849,7 @@ Bitte versuchen Sie es später noch einmal.`;
         : undefined;
 
       const mailOptions = {
-        from: 'hallo@newagefotografie.com',
+        from: `${emailSettings.from_name} <${emailSettings.from_email}>`,
         to,
         subject,
         html: body,
@@ -4805,7 +4866,8 @@ Bitte versuchen Sie es später noch einmal.`;
           senderEmail: 'hallo@newagefotografie.com',
           subject: `[SENT] ${subject}`,
           content: `SENT TO: ${to}\n\n${typeof body === 'string' ? body : ''}`,
-          status: 'archived'
+          status: 'sent', // Changed from 'archived' to 'sent' for proper categorization
+          messageType: 'sent'
         });
         console.log('Sent email saved to database successfully');
       } catch (dbError) {
