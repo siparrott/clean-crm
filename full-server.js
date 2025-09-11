@@ -571,7 +571,7 @@ const server = http.createServer(async (req, res) => {
           req.on('end', async () => {
             try {
               const emailData = JSON.parse(body);
-              console.log('📧 Sending email via communications to:', emailData.to);
+              console.log('📧 Communications: Sending email to:', emailData.to);
               
               const result = await database.sendEmail(emailData);
               
@@ -583,7 +583,7 @@ const server = http.createServer(async (req, res) => {
                 message: 'Email sent successfully'
               }));
             } catch (error) {
-              console.error('❌ Communications email send error:', error.message);
+              console.error('❌ Communications email error:', error.message);
               res.writeHead(500, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ 
                 success: false, 
@@ -592,9 +592,130 @@ const server = http.createServer(async (req, res) => {
             }
           });
         } catch (error) {
-          console.error('❌ Communications email API error:', error.message);
+          console.error('❌ Communications API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Photography Sessions API endpoints
+      if (pathname === '/api/photography/sessions' && req.method === 'GET') {
+        try {
+          const sessions = await database.getPhotographySessions();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(sessions));
+        } catch (error) {
+          console.error('❌ Get photography sessions error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+
+      if (pathname === '/api/photography/sessions' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const sessionData = JSON.parse(body);
+              console.log('📸 Creating photography session:', sessionData.title);
+              
+              const result = await database.createPhotographySession(sessionData);
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                session: result,
+                message: 'Photography session created successfully'
+              }));
+            } catch (error) {
+              console.error('❌ Create photography session error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: false, 
+                error: error.message 
+              }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Photography sessions API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Dashboard stats endpoint for calendar
+      if (pathname === '/api/admin/dashboard-stats' && req.method === 'GET') {
+        try {
+          const stats = await database.getDashboardStats();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(stats));
+        } catch (error) {
+          console.error('❌ Get dashboard stats error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+      
+      // Debug photography sessions endpoint (for development)
+      if (pathname === '/api/debug/photography-sessions' && req.method === 'GET') {
+        try {
+          // Return mock data for development
+          const mockSessions = [
+            {
+              id: '1',
+              title: 'Portrait Session - Anna Schmidt',
+              description: 'Professional headshots for LinkedIn',
+              sessionType: 'portrait',
+              status: 'scheduled',
+              startTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Tomorrow
+              endTime: new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString(),
+              clientName: 'Anna Schmidt',
+              clientEmail: 'anna@example.com',
+              locationName: 'Studio Berlin',
+              basePrice: 150,
+              depositAmount: 75,
+              depositPaid: true,
+              goldenHourOptimized: false,
+              weatherDependent: false,
+              portfolioWorthy: true,
+              equipmentList: ['Camera', 'Lighting Kit', 'Backdrop'],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            },
+            {
+              id: '2',
+              title: 'Wedding Photography - Mueller Wedding',
+              description: 'Full day wedding photography',
+              sessionType: 'wedding',
+              status: 'scheduled',
+              startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Next week
+              endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 8 * 60 * 60 * 1000).toISOString(), // +8 hours
+              clientName: 'Hans & Maria Mueller',
+              clientEmail: 'hans.mueller@example.com',
+              locationName: 'Schloss Charlottenburg',
+              basePrice: 2500,
+              depositAmount: 1000,
+              depositPaid: true,
+              goldenHourOptimized: true,
+              weatherDependent: true,
+              portfolioWorthy: true,
+              equipmentList: ['Camera', 'Lenses', 'Flash', 'Drone'],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }
+          ];
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(mockSessions));
+        } catch (error) {
+          console.error('❌ Debug photography sessions error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
         }
         return;
       }
