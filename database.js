@@ -1167,10 +1167,10 @@ if (!connectionString) {
 
     async getTopClients(orderBy = 'total_sales', limit = 20) {
       try {
-        let orderColumn = 'total_sales';
+        let orderColumn = 'COALESCE(total_sales, 0)';
         
         if (orderBy === 'outstanding_balance') {
-          orderColumn = 'outstanding_balance';
+          orderColumn = 'COALESCE(outstanding_balance, 0)';
         } else if (orderBy === 'created_at') {
           orderColumn = 'created_at';
         }
@@ -1183,11 +1183,10 @@ if (!connectionString) {
             last_name,
             email,
             phone,
-            total_sales,
-            outstanding_balance,
+            COALESCE(total_sales, 0) as total_sales,
+            COALESCE(outstanding_balance, 0) as outstanding_balance,
             created_at,
             updated_at,
-            COALESCE(total_sales, 0) as revenue,
             CASE 
               WHEN COALESCE(total_sales, 0) >= 10000 THEN 'Premium'
               WHEN COALESCE(total_sales, 0) >= 5000 THEN 'Gold'
@@ -1195,7 +1194,6 @@ if (!connectionString) {
               ELSE 'Bronze'
             END as tier
           FROM crm_clients 
-          WHERE COALESCE(total_sales, 0) > 0
           ORDER BY ${orderColumn} DESC 
           LIMIT $1
         `, [limit]);
@@ -1218,6 +1216,46 @@ if (!connectionString) {
         return mappedClients;
       } catch (error) {
         console.error('❌ Error fetching top clients:', error.message);
+        
+        // If columns don't exist, return empty array or try a simpler query
+        if (error.message.includes('column') && error.message.includes('does not exist')) {
+          console.log('📝 Trying simpler query without sales columns...');
+          
+          try {
+            const simpleResult = await pool.query(`
+              SELECT 
+                id,
+                client_id,
+                first_name,
+                last_name,
+                email,
+                phone,
+                created_at
+              FROM crm_clients 
+              ORDER BY created_at DESC 
+              LIMIT $1
+            `, [limit]);
+
+            const mappedClients = simpleResult.rows.map(client => ({
+              id: client.id,
+              clientId: client.client_id || client.id,
+              firstName: client.first_name || '',
+              lastName: client.last_name || '',
+              email: client.email || '',
+              phone: client.phone || '',
+              revenue: 0,
+              outstandingBalance: 0,
+              tier: 'Bronze',
+              createdAt: client.created_at
+            }));
+
+            return mappedClients;
+          } catch (fallbackError) {
+            console.error('❌ Fallback query also failed:', fallbackError.message);
+            return [];
+          }
+        }
+        
         throw error;
       }
     }
