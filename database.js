@@ -215,6 +215,69 @@ if (!connectionString) {
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
       `);
+
+      // Create Voucher Products table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS voucher_products (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          price DECIMAL(10,2) NOT NULL,
+          original_price DECIMAL(10,2),
+          category VARCHAR(100),
+          type VARCHAR(50) DEFAULT 'voucher',
+          sku VARCHAR(100) UNIQUE,
+          is_active BOOLEAN DEFAULT TRUE,
+          features JSONB DEFAULT '[]',
+          terms_and_conditions TEXT,
+          validity_period INTEGER DEFAULT 365,
+          display_order INTEGER DEFAULT 0,
+          image_url TEXT,
+          thumbnail_url TEXT,
+          metadata JSONB DEFAULT '{}',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+
+      // Insert default voucher products if table is empty
+      const voucherCount = await pool.query('SELECT COUNT(*) FROM voucher_products');
+      if (parseInt(voucherCount.rows[0].count) === 0) {
+        console.log('📦 Adding default voucher products...');
+        
+        await pool.query(`
+          INSERT INTO voucher_products (name, description, price, original_price, category, sku, features, terms_and_conditions) VALUES
+          ('Family Basic Shooting', 'Perfect for Small Families - 30 minutes shooting with 1 edited photo', 95.00, 195.00, 'family', 'FAM-BASIC', 
+           '["30 Minuten Shooting", "1 bearbeitete Fotos", "Begrüßungsgetränk", "Outfit-Wechsel möglich"]', 
+           'Gutschein gültig für 1 Jahr ab Kaufdatum. Terminvereinbarung erforderlich.'),
+          
+          ('Family Premium Shooting', 'Ideal for larger families - 45 minutes shooting with 5 edited photos', 195.00, 295.00, 'family', 'FAM-PREMIUM',
+           '["45 Minuten Shooting", "5 bearbeitete Fotos", "Begrüßungsgetränk", "Outfit-Wechsel möglich"]',
+           'Gutschein gültig für 1 Jahr ab Kaufdatum. Terminvereinbarung erforderlich.'),
+           
+          ('Family Deluxe Shooting', 'Complete family experience - 60 minutes shooting with 10 edited photos', 295.00, 395.00, 'family', 'FAM-DELUXE',
+           '["60 Minuten Shooting", "10 bearbeitete Fotos", "Begrüßungsgetränk", "Outfit-Wechsel möglich", "Online Galerie"]',
+           'Gutschein gültig für 1 Jahr ab Kaufdatum. Terminvereinbarung erforderlich.'),
+           
+          ('Newborn Basic', 'First precious moments - 30 minutes newborn shooting', 95.00, 195.00, 'newborn', 'NB-BASIC',
+           '["30min Shooting", "1 bearbeitete Fotos", "2 Setups", "Requisiten inklusive"]',
+           'Beste Zeit: 5-14 Tage nach der Geburt. Terminvereinbarung erforderlich.'),
+           
+          ('Maternity Basic', 'Beautiful pregnancy memories - 30 minutes maternity shooting', 95.00, 195.00, 'maternity', 'MAT-BASIC',
+           '["30 Minuten Shooting", "1 bearbeitete Fotos", "1 Outfit", "Partner-Fotos optional"]',
+           'Gutschein gültig für 1 Jahr ab Kaufdatum. Terminvereinbarung erforderlich.'),
+           
+          ('Business Portrait', 'Professional business portraits', 150.00, 250.00, 'business', 'BUS-PORTRAIT',
+           '["45 Minuten Shooting", "3 bearbeitete Fotos", "Professionelle Ausleuchtung", "LinkedIn optimiert"]',
+           'Perfekt für Business-Profile und Website. Terminvereinbarung erforderlich.'),
+           
+          ('Event Photography', 'Professional event documentation', 350.00, 450.00, 'event', 'EVENT-BASIC',
+           '["2 Stunden Shooting", "25 bearbeitete Fotos", "Online Galerie", "Alle Rechte inklusive"]',
+           'Ideal für Firmenfeiern, Geburtstage und besondere Anlässe.')
+        `);
+        
+        console.log('✅ Default voucher products added');
+      }
       
       console.log('✅ Database schema initialized successfully');
       
@@ -1256,6 +1319,111 @@ if (!connectionString) {
           }
         }
         
+        throw error;
+      }
+    },
+
+    // Voucher Products Functions
+    async getVoucherProducts() {
+      try {
+        const result = await pool.query(`
+          SELECT * FROM voucher_products 
+          WHERE is_active = true 
+          ORDER BY display_order ASC, created_at DESC
+        `);
+        return result.rows;
+      } catch (error) {
+        console.error('❌ Error fetching voucher products:', error.message);
+        throw error;
+      }
+    },
+
+    async getVoucherProduct(id) {
+      try {
+        const result = await pool.query('SELECT * FROM voucher_products WHERE id = $1', [id]);
+        return result.rows[0] || null;
+      } catch (error) {
+        console.error('❌ Error fetching voucher product:', error.message);
+        throw error;
+      }
+    },
+
+    async createVoucherProduct(productData) {
+      try {
+        const {
+          name, description, price, original_price, category, type = 'voucher',
+          sku, is_active = true, features = [], terms_and_conditions,
+          validity_period = 365, display_order = 0, image_url, thumbnail_url, metadata = {}
+        } = productData;
+
+        const result = await pool.query(`
+          INSERT INTO voucher_products (
+            name, description, price, original_price, category, type, sku,
+            is_active, features, terms_and_conditions, validity_period,
+            display_order, image_url, thumbnail_url, metadata
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          RETURNING *
+        `, [
+          name, description, price, original_price, category, type, sku,
+          is_active, JSON.stringify(features), terms_and_conditions, validity_period,
+          display_order, image_url, thumbnail_url, JSON.stringify(metadata)
+        ]);
+
+        return result.rows[0];
+      } catch (error) {
+        console.error('❌ Error creating voucher product:', error.message);
+        throw error;
+      }
+    },
+
+    async updateVoucherProduct(id, productData) {
+      try {
+        const {
+          name, description, price, original_price, category, type,
+          sku, is_active, features, terms_and_conditions,
+          validity_period, display_order, image_url, thumbnail_url, metadata
+        } = productData;
+
+        const result = await pool.query(`
+          UPDATE voucher_products SET
+            name = COALESCE($2, name),
+            description = COALESCE($3, description),
+            price = COALESCE($4, price),
+            original_price = COALESCE($5, original_price),
+            category = COALESCE($6, category),
+            type = COALESCE($7, type),
+            sku = COALESCE($8, sku),
+            is_active = COALESCE($9, is_active),
+            features = COALESCE($10, features),
+            terms_and_conditions = COALESCE($11, terms_and_conditions),
+            validity_period = COALESCE($12, validity_period),
+            display_order = COALESCE($13, display_order),
+            image_url = COALESCE($14, image_url),
+            thumbnail_url = COALESCE($15, thumbnail_url),
+            metadata = COALESCE($16, metadata),
+            updated_at = NOW()
+          WHERE id = $1
+          RETURNING *
+        `, [
+          id, name, description, price, original_price, category, type, sku,
+          is_active, features ? JSON.stringify(features) : null, terms_and_conditions,
+          validity_period, display_order, image_url, thumbnail_url,
+          metadata ? JSON.stringify(metadata) : null
+        ]);
+
+        return result.rows[0];
+      } catch (error) {
+        console.error('❌ Error updating voucher product:', error.message);
+        throw error;
+      }
+    },
+
+    async deleteVoucherProduct(id) {
+      try {
+        const result = await pool.query('DELETE FROM voucher_products WHERE id = $1 RETURNING *', [id]);
+        return result.rows[0];
+      } catch (error) {
+        console.error('❌ Error deleting voucher product:', error.message);
         throw error;
       }
     }
