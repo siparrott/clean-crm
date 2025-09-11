@@ -154,6 +154,67 @@ if (!connectionString) {
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
       `);
+
+      // Create Photography Sessions table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS photography_sessions (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          session_type VARCHAR(50) DEFAULT 'portrait',
+          status VARCHAR(50) DEFAULT 'scheduled',
+          start_time TIMESTAMP WITH TIME ZONE,
+          end_time TIMESTAMP WITH TIME ZONE,
+          client_id TEXT,
+          client_name VARCHAR(255),
+          client_email VARCHAR(255),
+          client_phone VARCHAR(50),
+          attendees JSONB DEFAULT '[]',
+          location_name VARCHAR(255),
+          location_address TEXT,
+          location_coordinates VARCHAR(100),
+          base_price DECIMAL(10,2),
+          deposit_amount DECIMAL(10,2),
+          deposit_paid BOOLEAN DEFAULT FALSE,
+          final_payment DECIMAL(10,2),
+          final_payment_paid BOOLEAN DEFAULT FALSE,
+          payment_status VARCHAR(50) DEFAULT 'pending',
+          equipment_list JSONB DEFAULT '[]',
+          crew_members JSONB DEFAULT '[]',
+          conflict_detected BOOLEAN DEFAULT FALSE,
+          weather_dependent BOOLEAN DEFAULT FALSE,
+          golden_hour_optimized BOOLEAN DEFAULT FALSE,
+          backup_plan TEXT,
+          notes TEXT,
+          portfolio_worthy BOOLEAN DEFAULT FALSE,
+          editing_status VARCHAR(50) DEFAULT 'pending',
+          delivery_status VARCHAR(50) DEFAULT 'pending',
+          delivery_date TIMESTAMP WITH TIME ZONE,
+          is_recurring BOOLEAN DEFAULT FALSE,
+          recurrence_rule VARCHAR(255),
+          parent_event_id TEXT,
+          google_calendar_event_id VARCHAR(255),
+          ical_uid VARCHAR(255),
+          external_calendar_sync BOOLEAN DEFAULT FALSE,
+          reminder_settings JSONB DEFAULT '{}',
+          reminder_sent BOOLEAN DEFAULT FALSE,
+          confirmation_sent BOOLEAN DEFAULT FALSE,
+          follow_up_sent BOOLEAN DEFAULT FALSE,
+          is_online_bookable BOOLEAN DEFAULT FALSE,
+          booking_requirements JSONB DEFAULT '{}',
+          availability_status VARCHAR(50) DEFAULT 'available',
+          color VARCHAR(7),
+          priority VARCHAR(20) DEFAULT 'medium',
+          is_public BOOLEAN DEFAULT FALSE,
+          category VARCHAR(100),
+          gallery_id TEXT,
+          photographer_id TEXT,
+          tags JSONB DEFAULT '[]',
+          custom_fields JSONB DEFAULT '{}',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
       
       console.log('✅ Database schema initialized successfully');
       
@@ -974,6 +1035,133 @@ if (!connectionString) {
       } catch (error) {
         console.error('❌ Error getting folder stats:', error.message);
         throw error;
+      }
+    },
+
+    // Photography Sessions Functions
+    async getPhotographySessions() {
+      try {
+        const result = await pool.query(`
+          SELECT 
+            id, title, description, session_type as "sessionType", status,
+            start_time as "startTime", end_time as "endTime",
+            client_id as "clientId", client_name as "clientName", client_email as "clientEmail", client_phone as "clientPhone",
+            location_name as "locationName", location_address as "locationAddress", location_coordinates as "locationCoordinates",
+            base_price as "basePrice", deposit_amount as "depositAmount", deposit_paid as "depositPaid",
+            final_payment as "finalPayment", final_payment_paid as "finalPaymentPaid", payment_status as "paymentStatus",
+            equipment_list as "equipmentList", crew_members as "crewMembers",
+            conflict_detected as "conflictDetected", weather_dependent as "weatherDependent", 
+            golden_hour_optimized as "goldenHourOptimized", backup_plan as "backupPlan",
+            notes, portfolio_worthy as "portfolioWorthy", editing_status as "editingStatus",
+            delivery_status as "deliveryStatus", delivery_date as "deliveryDate",
+            is_recurring as "isRecurring", recurrence_rule as "recurrenceRule", parent_event_id as "parentEventId",
+            google_calendar_event_id as "googleCalendarEventId", ical_uid as "icalUid", external_calendar_sync as "externalCalendarSync",
+            reminder_settings as "reminderSettings", reminder_sent as "reminderSent", confirmation_sent as "confirmationSent", follow_up_sent as "followUpSent",
+            is_online_bookable as "isOnlineBookable", booking_requirements as "bookingRequirements", availability_status as "availabilityStatus",
+            color, priority, is_public as "isPublic", category, gallery_id as "galleryId", photographer_id as "photographerId",
+            tags, custom_fields as "customFields", created_at as "createdAt", updated_at as "updatedAt"
+          FROM photography_sessions 
+          ORDER BY start_time ASC
+        `);
+        
+        return result.rows.map(session => ({
+          ...session,
+          equipmentList: session.equipmentList || [],
+          crewMembers: session.crewMembers || [],
+          tags: session.tags || [],
+          reminderSettings: session.reminderSettings || {},
+          bookingRequirements: session.bookingRequirements || {},
+          customFields: session.customFields || {}
+        }));
+      } catch (error) {
+        console.error('❌ Error getting photography sessions:', error.message);
+        // Return empty array if table doesn't exist yet
+        return [];
+      }
+    },
+
+    async createPhotographySession(sessionData) {
+      try {
+        const {
+          title, description, sessionType, status = 'scheduled',
+          startTime, endTime, clientId, clientName, clientEmail, clientPhone,
+          locationName, locationAddress, locationCoordinates,
+          basePrice, depositAmount, equipmentList = [],
+          weatherDependent = false, goldenHourOptimized = false, portfolioWorthy = false,
+          notes, color, priority = 'medium'
+        } = sessionData;
+
+        const result = await pool.query(`
+          INSERT INTO photography_sessions (
+            title, description, session_type, status,
+            start_time, end_time, client_id, client_name, client_email, client_phone,
+            location_name, location_address, location_coordinates,
+            base_price, deposit_amount, equipment_list,
+            weather_dependent, golden_hour_optimized, portfolio_worthy,
+            notes, color, priority, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW()
+          ) RETURNING *
+        `, [
+          title, description, sessionType, status,
+          startTime, endTime, clientId, clientName, clientEmail, clientPhone,
+          locationName, locationAddress, locationCoordinates,
+          basePrice, depositAmount, JSON.stringify(equipmentList),
+          weatherDependent, goldenHourOptimized, portfolioWorthy,
+          notes, color, priority
+        ]);
+
+        console.log(`📸 Photography session created: ${title}`);
+        return result.rows[0];
+      } catch (error) {
+        console.error('❌ Error creating photography session:', error.message);
+        throw error;
+      }
+    },
+
+    async getDashboardStats() {
+      try {
+        // Get counts from various tables
+        const sessionStats = await pool.query(`
+          SELECT 
+            COUNT(*) as total_sessions,
+            COUNT(CASE WHEN start_time > NOW() AND start_time <= NOW() + INTERVAL '30 days' THEN 1 END) as upcoming_sessions,
+            COUNT(CASE WHEN status = 'completed' AND DATE_TRUNC('month', start_time) = DATE_TRUNC('month', NOW()) THEN 1 END) as completed_sessions,
+            SUM(CASE WHEN base_price IS NOT NULL THEN base_price ELSE 0 END) as total_revenue,
+            COUNT(CASE WHEN deposit_amount IS NOT NULL AND NOT COALESCE(deposit_paid, false) THEN 1 END) as pending_deposits
+          FROM photography_sessions
+        `);
+
+        const leadStats = await pool.query(`
+          SELECT COUNT(*) as new_leads
+          FROM crm_leads 
+          WHERE created_at >= NOW() - INTERVAL '7 days'
+        `);
+
+        const stats = sessionStats.rows[0] || {};
+        const leads = leadStats.rows[0] || {};
+
+        return {
+          totalSessions: parseInt(stats.total_sessions) || 0,
+          upcomingSessions: parseInt(stats.upcoming_sessions) || 0,
+          completedSessions: parseInt(stats.completed_sessions) || 0,
+          totalRevenue: parseFloat(stats.total_revenue) || 0,
+          pendingDeposits: parseInt(stats.pending_deposits) || 0,
+          equipmentConflicts: 0, // Would need more complex logic
+          newLeads: parseInt(leads.new_leads) || 0
+        };
+      } catch (error) {
+        console.error('❌ Error getting dashboard stats:', error.message);
+        // Return default stats if tables don't exist
+        return {
+          totalSessions: 0,
+          upcomingSessions: 0,
+          completedSessions: 0,
+          totalRevenue: 0,
+          pendingDeposits: 0,
+          equipmentConflicts: 0,
+          newLeads: 0
+        };
       }
     }
   };

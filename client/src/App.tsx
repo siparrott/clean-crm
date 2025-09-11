@@ -48,6 +48,7 @@ import AdminInboxPageV2 from './pages/admin/AdminInboxPageV2';
 import QuestionnairesPageV2 from './pages/admin/QuestionnairesPageV2';
 import ComprehensiveReportsPage from './pages/admin/ComprehensiveReportsPage';
 import SettingsPage from './pages/admin/SettingsPage';
+import CalendarTest from './pages/admin/CalendarTest';
 import CustomizationPage from './pages/admin/CustomizationPage';
 import StudioCustomization from './pages/admin/StudioCustomization';
 import StudioCalendarPage from './pages/admin/StudioCalendarPage';
@@ -394,6 +395,14 @@ function App() {
                   element={
                     <NeonProtectedRoute>
                       <PhotographyCalendarPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/calendar-test"
+                  element={
+                    <NeonProtectedRoute>
+                      <CalendarTest />
                     </NeonProtectedRoute>
                   }
                 />
