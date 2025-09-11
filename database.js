@@ -579,6 +579,273 @@ if (!connectionString) {
         console.error('❌ Error assigning email to client:', error.message);
         throw error;
       }
+    },
+
+    // Digital Files Management Functions
+    
+    // Get digital files with filtering
+    async getDigitalFiles(filters = {}) {
+      try {
+        const { folder_name, file_type, client_id, session_id, search_term, is_public, limit = 20 } = filters;
+        
+        let query = `
+          SELECT id, folder_name, file_name, file_type, file_size, 
+                 client_id, session_id, description, tags, is_public, 
+                 uploaded_at, created_at, updated_at
+          FROM digital_files
+        `;
+        
+        const conditions = [];
+        const values = [];
+        let paramIndex = 1;
+        
+        if (folder_name) {
+          conditions.push(`folder_name ILIKE $${paramIndex}`);
+          values.push(`%${folder_name}%`);
+          paramIndex++;
+        }
+        
+        if (file_type) {
+          conditions.push(`file_type = $${paramIndex}`);
+          values.push(file_type);
+          paramIndex++;
+        }
+        
+        if (client_id) {
+          conditions.push(`client_id = $${paramIndex}`);
+          values.push(client_id);
+          paramIndex++;
+        }
+        
+        if (session_id) {
+          conditions.push(`session_id = $${paramIndex}`);
+          values.push(session_id);
+          paramIndex++;
+        }
+        
+        if (search_term) {
+          conditions.push(`file_name ILIKE $${paramIndex}`);
+          values.push(`%${search_term}%`);
+          paramIndex++;
+        }
+        
+        if (is_public !== undefined) {
+          conditions.push(`is_public = $${paramIndex}`);
+          values.push(is_public);
+          paramIndex++;
+        }
+        
+        if (conditions.length > 0) {
+          query += ' WHERE ' + conditions.join(' AND ');
+        }
+        
+        query += ` ORDER BY uploaded_at DESC LIMIT $${paramIndex}`;
+        values.push(parseInt(limit));
+        
+        const result = await pool.query(query, values);
+        return result.rows;
+      } catch (error) {
+        console.error('❌ Error fetching digital files:', error.message);
+        throw error;
+      }
+    },
+
+    // Create digital file record
+    async createDigitalFile(fileData) {
+      try {
+        const {
+          id,
+          folder_name,
+          file_name,
+          file_type,
+          file_size,
+          client_id,
+          session_id,
+          description = '',
+          tags = [],
+          is_public = false,
+          file_path,
+          original_filename,
+          mime_type,
+          category,
+          uploaded_by,
+          location
+        } = fileData;
+
+        // Create table if it doesn't exist
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS digital_files (
+            id TEXT PRIMARY KEY,
+            folder_name TEXT,
+            file_name TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            file_size INTEGER DEFAULT 0,
+            client_id TEXT,
+            session_id TEXT,
+            description TEXT,
+            tags TEXT,
+            is_public BOOLEAN DEFAULT FALSE,
+            uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            file_path TEXT,
+            original_filename TEXT,
+            mime_type TEXT,
+            category TEXT,
+            uploaded_by TEXT,
+            location TEXT
+          )
+        `);
+
+        const fileId = id || require('crypto').randomUUID();
+        
+        const result = await pool.query(`
+          INSERT INTO digital_files (
+            id, folder_name, file_name, file_type, file_size, 
+            client_id, session_id, description, tags, is_public, 
+            uploaded_at, created_at, updated_at, file_path,
+            original_filename, mime_type, category, uploaded_by, location
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
+            NOW(), NOW(), NOW(), $11, $12, $13, $14, $15, $16
+          ) RETURNING *
+        `, [
+          fileId, folder_name, file_name, file_type, file_size,
+          client_id || null, session_id || null, description, 
+          JSON.stringify(tags), is_public, file_path,
+          original_filename, mime_type, category, uploaded_by, location
+        ]);
+
+        return result.rows[0];
+      } catch (error) {
+        console.error('❌ Error creating digital file:', error.message);
+        throw error;
+      }
+    },
+
+    // Update digital file metadata
+    async updateDigitalFile(fileId, updateData) {
+      try {
+        // Remove ID from update data
+        const { id, ...cleanData } = updateData;
+        
+        // Convert tags to JSON string if provided
+        if (cleanData.tags && Array.isArray(cleanData.tags)) {
+          cleanData.tags = JSON.stringify(cleanData.tags);
+        }
+        
+        // Build update query dynamically
+        const updateFields = [];
+        const values = [];
+        let paramIndex = 1;
+        
+        for (const [key, value] of Object.entries(cleanData)) {
+          updateFields.push(`${key} = $${paramIndex}`);
+          values.push(value);
+          paramIndex++;
+        }
+        
+        if (updateFields.length === 0) {
+          throw new Error('No fields to update');
+        }
+        
+        updateFields.push(`updated_at = NOW()`);
+        values.push(fileId);
+        
+        const result = await pool.query(`
+          UPDATE digital_files 
+          SET ${updateFields.join(', ')}
+          WHERE id = $${paramIndex}
+          RETURNING *
+        `, values);
+
+        if (result.rows.length === 0) {
+          throw new Error('File not found');
+        }
+
+        return result.rows[0];
+      } catch (error) {
+        console.error('❌ Error updating digital file:', error.message);
+        throw error;
+      }
+    },
+
+    // Delete digital file
+    async deleteDigitalFile(fileId) {
+      try {
+        const result = await pool.query(
+          'DELETE FROM digital_files WHERE id = $1 RETURNING *',
+          [fileId]
+        );
+
+        if (result.rows.length === 0) {
+          throw new Error('File not found');
+        }
+
+        return result.rows[0];
+      } catch (error) {
+        console.error('❌ Error deleting digital file:', error.message);
+        throw error;
+      }
+    },
+
+    // Get folder statistics
+    async getDigitalFilesFolderStats(folderName = null) {
+      try {
+        let folderStatsQuery = `
+          SELECT 
+            folder_name,
+            COUNT(*) as file_count,
+            SUM(file_size) as total_size,
+            COUNT(CASE WHEN file_type = 'image' THEN 1 END) as image_count,
+            COUNT(CASE WHEN file_type = 'document' THEN 1 END) as document_count,
+            COUNT(CASE WHEN file_type = 'video' THEN 1 END) as video_count,
+            MAX(uploaded_at) as last_uploaded
+          FROM digital_files
+        `;
+
+        const values = [];
+        if (folderName) {
+          folderStatsQuery += ` WHERE folder_name = $1`;
+          values.push(folderName);
+        }
+
+        folderStatsQuery += ` GROUP BY folder_name ORDER BY file_count DESC`;
+
+        const folders = await pool.query(folderStatsQuery, values);
+
+        // Get recent files
+        const recentFiles = await pool.query(`
+          SELECT folder_name, file_name, file_type, uploaded_at
+          FROM digital_files
+          ORDER BY uploaded_at DESC
+          LIMIT 10
+        `);
+
+        return {
+          total_folders: folders.rows.length,
+          folders: folders.rows.map(folder => ({
+            name: folder.folder_name,
+            file_count: parseInt(folder.file_count),
+            total_size: `${(parseInt(folder.total_size) / 1024 / 1024).toFixed(2)} MB`,
+            breakdown: {
+              images: parseInt(folder.image_count),
+              documents: parseInt(folder.document_count),
+              videos: parseInt(folder.video_count)
+            },
+            last_uploaded: folder.last_uploaded
+          })),
+          recent_files: recentFiles.rows.map(file => ({
+            folder: file.folder_name,
+            name: file.file_name,
+            type: file.file_type,
+            uploaded: file.uploaded_at
+          }))
+        };
+      } catch (error) {
+        console.error('❌ Error getting folder stats:', error.message);
+        throw error;
+      }
     }
   };
 }

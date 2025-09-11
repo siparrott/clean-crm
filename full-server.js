@@ -3,11 +3,311 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const crypto = require('crypto');
 
 // Import database functions
 const database = require('./database.js');
 
 console.log('🚀 Starting PRODUCTION server with Neon database...');
+
+// Files API handler function
+async function handleFilesAPI(req, res, pathname, query) {
+  const { neon } = await import('@neondatabase/serverless');
+  const sql = neon(process.env.DATABASE_URL);
+  
+  // Parse the pathname to get the specific endpoint
+  const pathParts = pathname.split('/');
+  const fileEndpoint = pathParts.slice(3).join('/'); // Remove '/api/files'
+  
+  if (req.method === 'GET' && fileEndpoint === '') {
+    // GET /api/files - Retrieve digital files with filters
+    try {
+      const { 
+        folder_name, 
+        file_type, 
+        client_id, 
+        session_id,
+        search_term,
+        is_public,
+        limit = '20'
+      } = query || {};
+
+      let queryStr = `
+        SELECT id, folder_name, file_name, file_type, file_size, 
+               client_id, session_id, description, tags, is_public, 
+               uploaded_at, created_at, updated_at
+        FROM digital_files
+      `;
+      
+      const conditions = [];
+      const values = [];
+      let paramIndex = 1;
+      
+      if (folder_name) {
+        conditions.push(`folder_name ILIKE $${paramIndex}`);
+        values.push(`%${folder_name}%`);
+        paramIndex++;
+      }
+      
+      if (file_type) {
+        conditions.push(`file_type = $${paramIndex}`);
+        values.push(file_type);
+        paramIndex++;
+      }
+      
+      if (client_id) {
+        conditions.push(`client_id = $${paramIndex}`);
+        values.push(client_id);
+        paramIndex++;
+      }
+      
+      if (session_id) {
+        conditions.push(`session_id = $${paramIndex}`);
+        values.push(session_id);
+        paramIndex++;
+      }
+      
+      if (search_term) {
+        conditions.push(`file_name ILIKE $${paramIndex}`);
+        values.push(`%${search_term}%`);
+        paramIndex++;
+      }
+      
+      if (is_public !== undefined) {
+        conditions.push(`is_public = $${paramIndex}`);
+        values.push(is_public === 'true');
+        paramIndex++;
+      }
+      
+      if (conditions.length > 0) {
+        queryStr += ' WHERE ' + conditions.join(' AND ');
+      }
+      
+      queryStr += ` ORDER BY uploaded_at DESC LIMIT $${paramIndex}`;
+      values.push(parseInt(limit));
+      
+      const files = await sql(queryStr, values);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(files));
+    } catch (error) {
+      console.error('Failed to fetch digital files:', error);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Failed to fetch digital files' }));
+    }
+    return;
+  }
+  
+  if (req.method === 'POST' && fileEndpoint === '') {
+    // POST /api/files - Upload new file
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', async () => {
+      try {
+        const {
+          folder_name,
+          file_name,
+          file_type,
+          file_size,
+          client_id,
+          session_id,
+          description = '',
+          tags = [],
+          is_public = false
+        } = JSON.parse(body);
+
+        // Validate required fields
+        if (!folder_name || !file_name || !file_type || !file_size) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ 
+            error: 'Missing required fields: folder_name, file_name, file_type, file_size' 
+          }));
+          return;
+        }
+
+        const fileId = crypto.randomUUID();
+        
+        const result = await sql`
+          INSERT INTO digital_files (
+            id, folder_name, file_name, file_type, file_size, 
+            client_id, session_id, description, tags, is_public, 
+            uploaded_at, created_at, updated_at
+          ) VALUES (
+            ${fileId}, ${folder_name}, ${file_name}, ${file_type}, ${file_size},
+            ${client_id || null}, ${session_id || null}, ${description}, 
+            ${JSON.stringify(tags)}, ${is_public}, NOW(), NOW(), NOW()
+          ) RETURNING *
+        `;
+
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result[0]));
+      } catch (error) {
+        console.error('Failed to upload file:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to upload file' }));
+      }
+    });
+    return;
+  }
+  
+  if (req.method === 'GET' && fileEndpoint === 'folders') {
+    // GET /api/files/folders - Get folder organization and statistics
+    try {
+      const { folder_name } = query || {};
+
+      let folderStatsQuery = `
+        SELECT 
+          folder_name,
+          COUNT(*) as file_count,
+          SUM(file_size) as total_size,
+          COUNT(CASE WHEN file_type = 'image' THEN 1 END) as image_count,
+          COUNT(CASE WHEN file_type = 'document' THEN 1 END) as document_count,
+          COUNT(CASE WHEN file_type = 'video' THEN 1 END) as video_count,
+          MAX(uploaded_at) as last_uploaded
+        FROM digital_files
+      `;
+
+      const values = [];
+      if (folder_name) {
+        folderStatsQuery += ` WHERE folder_name = $1`;
+        values.push(folder_name);
+      }
+
+      folderStatsQuery += ` GROUP BY folder_name ORDER BY file_count DESC`;
+
+      const folders = await sql(folderStatsQuery, values);
+
+      // Get recent files
+      const recentFiles = await sql`
+        SELECT folder_name, file_name, file_type, uploaded_at
+        FROM digital_files
+        ORDER BY uploaded_at DESC
+        LIMIT 10
+      `;
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        total_folders: folders.length,
+        folders: folders.map(folder => ({
+          name: folder.folder_name,
+          file_count: folder.file_count,
+          total_size: `${(folder.total_size / 1024 / 1024).toFixed(2)} MB`,
+          breakdown: {
+            images: folder.image_count,
+            documents: folder.document_count,
+            videos: folder.video_count
+          },
+          last_uploaded: folder.last_uploaded
+        })),
+        recent_files: recentFiles.map(file => ({
+          folder: file.folder_name,
+          name: file.file_name,
+          type: file.file_type,
+          uploaded: file.uploaded_at
+        }))
+      }));
+    } catch (error) {
+      console.error('Failed to get folder organization:', error);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Failed to get folder organization' }));
+    }
+    return;
+  }
+  
+  // Handle file ID-specific operations
+  const fileId = pathParts[3];
+  if (fileId && req.method === 'PUT') {
+    // PUT /api/files/:id - Update file metadata
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', async () => {
+      try {
+        const updateData = JSON.parse(body);
+        
+        // Remove ID from update data
+        delete updateData.id;
+        
+        // Convert tags to JSON string if provided
+        if (updateData.tags && Array.isArray(updateData.tags)) {
+          updateData.tags = JSON.stringify(updateData.tags);
+        }
+        
+        // Build update query dynamically
+        const updateFields = [];
+        const values = [];
+        let paramIndex = 1;
+        
+        for (const [key, value] of Object.entries(updateData)) {
+          updateFields.push(`${key} = $${paramIndex}`);
+          values.push(value);
+          paramIndex++;
+        }
+        
+        if (updateFields.length === 0) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'No fields to update' }));
+          return;
+        }
+        
+        updateFields.push(`updated_at = NOW()`);
+        values.push(fileId);
+        
+        const result = await sql(`
+          UPDATE digital_files 
+          SET ${updateFields.join(', ')}
+          WHERE id = $${paramIndex}
+          RETURNING *
+        `, values);
+
+        if (result.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'File not found' }));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result[0]));
+      } catch (error) {
+        console.error('Failed to update file:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to update file' }));
+      }
+    });
+    return;
+  }
+  
+  if (fileId && req.method === 'DELETE') {
+    // DELETE /api/files/:id - Delete file
+    try {
+      const result = await sql`
+        DELETE FROM digital_files 
+        WHERE id = ${fileId}
+        RETURNING *
+      `;
+
+      if (result.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'File not found' }));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        message: 'File deleted successfully', 
+        file: result[0] 
+      }));
+    } catch (error) {
+      console.error('Failed to delete file:', error);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Failed to delete file' }));
+    }
+    return;
+  }
+  
+  // If no matching endpoint found
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Files API endpoint not found' }));
+}
 
 const port = process.env.PORT || 3000;
 
@@ -416,6 +716,18 @@ const server = http.createServer(async (req, res) => {
           });
         } catch (error) {
           console.error('❌ Email assignment API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Digital Files API endpoints
+      if (pathname.startsWith('/api/files')) {
+        try {
+          await handleFilesAPI(req, res, pathname, urlObj.query);
+        } catch (error) {
+          console.error('❌ Files API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
         }
