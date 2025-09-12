@@ -803,11 +803,12 @@ const server = http.createServer(async (req, res) => {
             // Store the questionnaire link in database
             try {
               // Store the questionnaire link using the existing schema
+              const tpl = template_id || 'default-questionnaire';
               await sql`
                 INSERT INTO questionnaire_links (
                   token, client_id, template_id, expires_at, created_at
                 ) VALUES (
-                  ${token}, ${client_id}, 'default-questionnaire',
+                  ${token}, ${client_id}, ${tpl},
                   ${expiresAt}, NOW()
                 )
               `;
@@ -1458,7 +1459,18 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
       if (pathname.startsWith('/api/surveys')) {
         try {
           if (pathname === '/api/surveys' && req.method === 'GET') {
-            // Return mock surveys for questionnaires page
+            try {
+              if (sql) {
+                const rows = await sql`SELECT * FROM surveys ORDER BY created_at DESC`;
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(rows));
+                return;
+              }
+            } catch (dbErr) {
+              console.error('❌ Error fetching surveys from DB:', dbErr.message || dbErr);
+            }
+
+            // Fallback to mock surveys
             const mockSurveys = [
               {
                 id: '1',
@@ -1499,16 +1511,31 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
               try {
                 const surveyData = JSON.parse(body);
                 console.log('📋 Creating new survey:', surveyData.title);
-                
-                const newSurvey = {
-                  id: Date.now().toString(),
-                  ...surveyData,
-                  created_at: new Date().toISOString(),
-                  responses_count: 0
-                };
-                
-                res.writeHead(201, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, survey: newSurvey }));
+
+                if (sql) {
+                  // Persist survey to DB
+                  const pagesJson = JSON.stringify(surveyData.pages || []);
+                  const settingsJson = JSON.stringify(surveyData.settings || {});
+                  const result = await sql`
+                    INSERT INTO surveys (title, description, status, pages, settings, created_by, created_at, updated_at)
+                    VALUES (
+                      ${surveyData.title}, ${surveyData.description || null}, ${surveyData.status || 'active'},
+                      ${pagesJson}, ${settingsJson}, ${surveyData.created_by || null}, NOW(), NOW()
+                    ) RETURNING *
+                  `;
+                  const created = result[0] || result;
+                  res.writeHead(201, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({ success: true, survey: created }));
+                } else {
+                  const newSurvey = {
+                    id: Date.now().toString(),
+                    ...surveyData,
+                    created_at: new Date().toISOString(),
+                    responses_count: 0
+                  };
+                  res.writeHead(201, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({ success: true, survey: newSurvey }));
+                }
               } catch (error) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: 'Invalid survey data' }));
@@ -1529,15 +1556,27 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
               try {
                 const updates = JSON.parse(body);
                 console.log('📝 Updating survey:', surveyId);
-                
-                const updatedSurvey = {
-                  id: surveyId,
-                  ...updates,
-                  updated_at: new Date().toISOString()
-                };
-                
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, survey: updatedSurvey }));
+
+                if (sql) {
+                  const pagesJson = JSON.stringify(updates.pages || []);
+                  const settingsJson = JSON.stringify(updates.settings || {});
+                  const result = await sql`
+                    UPDATE surveys SET title = ${updates.title}, description = ${updates.description || null}, pages = ${pagesJson}, settings = ${settingsJson}, updated_at = NOW()
+                    WHERE id = ${surveyId}
+                    RETURNING *
+                  `;
+                  const updatedSurvey = result[0] || result;
+                  res.writeHead(200, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({ success: true, survey: updatedSurvey }));
+                } else {
+                  const updatedSurvey = {
+                    id: surveyId,
+                    ...updates,
+                    updated_at: new Date().toISOString()
+                  };
+                  res.writeHead(200, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({ success: true, survey: updatedSurvey }));
+                }
               } catch (error) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: 'Invalid update data' }));
@@ -1645,6 +1684,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
             const surveyId = duplicateMatch[1];
             console.log('📄 Duplicating survey:', surveyId);
             
+            // Server-side duplication could be implemented here. For now return mock duplicate
             const duplicatedSurvey = {
               id: Date.now().toString(),
               title: 'Copy of Questionnaire',
