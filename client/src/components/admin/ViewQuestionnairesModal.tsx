@@ -42,35 +42,11 @@ const ViewQuestionnairesModal: React.FC<ViewQuestionnairesModalProps> = ({
         const data = await response.json();
         setQuestionnaires(data);
       } else {
-        // Mock data for now if API not implemented
-        const mockQuestionnaires: QuestionnaireResponse[] = [
-          {
-            id: '1',
-            questionnaireName: 'Photography Preferences Survey',
-            sentDate: '2024-01-15T10:30:00Z',
-            responseDate: '2024-01-16T14:20:00Z',
-            status: 'responded',
-            responses: {
-              question1: 'Wedding Photography',
-              question2: 'Indoor',
-              question3: '2-3 hours',
-              question4: 'Classic and elegant',
-              question5: 'Yes, please provide information'
-            }
-          },
-          {
-            id: '2',
-            questionnaireName: 'Event Details Questionnaire',
-            sentDate: '2024-01-20T09:15:00Z',
-            status: 'sent',
-            link: 'https://yoursite.com/questionnaire/abc123'
-          }
-        ];
-        setQuestionnaires(mockQuestionnaires);
+        console.error('Failed to fetch questionnaires:', response.statusText);
+        setQuestionnaires([]);
       }
     } catch (error) {
       console.error('Failed to fetch questionnaires:', error);
-      // Mock data fallback
       setQuestionnaires([]);
     } finally {
       setLoading(false);

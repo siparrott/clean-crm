@@ -782,15 +782,23 @@ const server = http.createServer(async (req, res) => {
               }
             ];
             
-            // Store the questionnaire link in database (simplified for now)
-            const questionnaireLink = {
-              token,
-              client_id,
-              survey_id: 'default-survey',
-              created_at: new Date().toISOString(),
-              expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
-              status: 'active'
-            };
+            // Store the questionnaire link in database
+            try {
+              // Store the questionnaire link using the existing schema
+              await sql`
+                INSERT INTO questionnaire_links (
+                  token, client_id, template_id, expires_at, created_at
+                ) VALUES (
+                  ${token}, ${client_id}, 'default-questionnaire',
+                  NOW() + INTERVAL '30 days', NOW()
+                )
+              `;
+              
+              console.log('💾 Questionnaire link stored for client:', client_id);
+            } catch (dbError) {
+              console.error('❌ Database storage error:', dbError.message);
+              // Continue even if database fails
+            }
             
             // Create the public link
             const link = `${req.headers.origin || 'https://newagefotografie.com'}/q/${token}`;
@@ -930,24 +938,67 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
 
             // Send email to hallo@newagefotografie.com
             try {
-              // For now, log the email content (in production, you'd use a real email service)
-              console.log('📧 Questionnaire email would be sent to hallo@newagefotografie.com:');
-              console.log(emailContent);
+              const emailData = {
+                to: 'hallo@newagefotografie.com',
+                subject: `New Questionnaire Response: ${clientName}`,
+                html: `
+                  <h2>New Questionnaire Response</h2>
+                  <p><strong>Client:</strong> ${clientName}</p>
+                  <p><strong>Submitted:</strong> ${new Date().toLocaleString('de-DE')}</p>
+                  
+                  <h3>Responses:</h3>
+                  <ul>
+                    ${Object.entries(responses).map(([questionId, answer]) => {
+                      const questionMap = {
+                        'q1': 'What type of photography session are you interested in?',
+                        'q2': 'Preferred session duration?',
+                        'q3': 'What style do you prefer?',
+                        'q4': 'Preferred location type?',
+                        'q5': 'How comfortable are you in front of the camera?'
+                      };
+                      return `<li><strong>${questionMap[questionId] || questionId}:</strong> ${answer}</li>`;
+                    }).join('')}
+                  </ul>
+                  
+                  <p><em>This questionnaire was submitted via the New Age Fotografie CRM system.</em></p>
+                `,
+                text: emailContent
+              };
               
-              // TODO: Implement actual email sending
-              // await sendEmail({
-              //   to: 'hallo@newagefotografie.com',
-              //   subject: `New Questionnaire: ${clientName}`,
-              //   text: emailContent
-              // });
+              await database.sendEmail(emailData);
+              console.log('📧 Questionnaire notification email sent successfully');
             } catch (emailError) {
               console.error('❌ Email sending error:', emailError.message);
               // Don't fail the request if email fails
             }
 
             // Store the response in the database
-            // TODO: Implement database storage for questionnaire responses
-            console.log('💾 Questionnaire response stored for client:', clientName);
+            try {
+              // Store the questionnaire response using existing schema
+              await sql`
+                INSERT INTO questionnaire_responses (
+                  client_id, token, template_slug, answers, submitted_at
+                ) VALUES (
+                  (SELECT client_id FROM questionnaire_links WHERE token = ${token}),
+                  ${token},
+                  'default-questionnaire',
+                  ${JSON.stringify(responses)},
+                  NOW()
+                )
+              `;
+              
+              // Mark the questionnaire link as used
+              await sql`
+                UPDATE questionnaire_links 
+                SET is_used = true
+                WHERE token = ${token}
+              `;
+              
+              console.log('💾 Questionnaire response stored for client:', clientName);
+            } catch (dbError) {
+              console.error('❌ Database storage error:', dbError.message);
+              // Continue even if database fails
+            }
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ 
@@ -960,6 +1011,54 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
             res.end(JSON.stringify({ error: error.message }));
           }
         });
+        return;
+      }
+      
+      // Get client questionnaire responses endpoint
+      if (pathname.startsWith('/api/admin/client-questionnaires/') && req.method === 'GET') {
+        try {
+          const clientId = pathname.split('/').pop();
+          
+          // Get questionnaire links and responses for this client using existing schema
+          const questionnaires = await sql`
+            SELECT 
+              ql.token,
+              ql.client_id,
+              ql.template_id,
+              ql.is_used,
+              ql.created_at as sent_at,
+              ql.expires_at,
+              qr.id as response_id,
+              qr.answers,
+              qr.submitted_at,
+              c.first_name,
+              c.last_name,
+              c.email
+            FROM questionnaire_links ql
+            LEFT JOIN questionnaire_responses qr ON ql.token = qr.token
+            LEFT JOIN crm_clients c ON ql.client_id = c.id
+            WHERE ql.client_id = ${clientId}
+            ORDER BY ql.created_at DESC
+          `;
+          
+          // Transform the data for the frontend
+          const formattedQuestionnaires = questionnaires.map(q => ({
+            id: q.response_id || q.token,
+            questionnaireName: 'Photography Preferences Survey',
+            sentDate: q.sent_at,
+            responseDate: q.submitted_at,
+            status: q.is_used ? 'responded' : (new Date() > new Date(q.expires_at) ? 'expired' : 'sent'),
+            responses: q.answers,
+            link: q.is_used ? null : `${req.headers.host}/questionnaire/${q.token}`
+          }));
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(formattedQuestionnaires));
+        } catch (error) {
+          console.error('❌ Get client questionnaires error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
         return;
       }
       

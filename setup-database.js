@@ -160,6 +160,25 @@ async function setupDatabaseSchema() {
     `;
     console.log('✅ Gallery Images table ready');
     
+    // Questionnaire Responses table
+    await sql`
+      CREATE TABLE IF NOT EXISTS questionnaire_responses (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        client_id TEXT,
+        client_name VARCHAR(255),
+        client_email VARCHAR(255),
+        questionnaire_token TEXT,
+        questionnaire_title VARCHAR(255) DEFAULT 'Photography Preferences Survey',
+        responses JSONB,
+        submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        sent_at TIMESTAMP WITH TIME ZONE,
+        status VARCHAR(50) DEFAULT 'sent',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        FOREIGN KEY (client_id) REFERENCES crm_clients(id) ON DELETE CASCADE
+      )
+    `;
+    console.log('✅ Questionnaire Responses table ready');
+    
     // Insert some sample data if tables are empty
     const clientCount = await sql`SELECT COUNT(*) FROM crm_clients`;
     if (parseInt(clientCount[0].count) === 0) {
