@@ -49,6 +49,9 @@ const QuestionnaireFormPage: React.FC = () => {
   useEffect(() => {
     if (token) {
       fetchQuestionnaire();
+    } else {
+      setError('Invalid questionnaire link');
+      setLoading(false);
     }
   }, [token]);
 
@@ -93,6 +96,7 @@ const QuestionnaireFormPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     
     if (!questionnaire) return;
     
@@ -130,12 +134,16 @@ const QuestionnaireFormPage: React.FC = () => {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to submit questionnaire');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to submit questionnaire' }));
+        throw new Error(errorData.error || 'Failed to submit questionnaire');
       }
       
+      const result = await response.json();
+      console.log('✅ Questionnaire submitted successfully:', result);
       setSubmitted(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit questionnaire');
+      console.error('❌ Questionnaire submission error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to submit questionnaire. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -235,12 +243,14 @@ const QuestionnaireFormPage: React.FC = () => {
             {questionnaire?.survey.settings.thankYouMessage || 
              'Your questionnaire has been submitted successfully. We will be in touch soon!'}
           </p>
-          <button
-            onClick={() => navigate('/')}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Return to Home
-          </button>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              Your response has been recorded and we will contact you shortly.
+            </p>
+            <p className="text-xs text-gray-400">
+              You can safely close this page.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -253,14 +263,19 @@ const QuestionnaireFormPage: React.FC = () => {
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">Error</h2>
           <p className="text-gray-600 mb-6">
-            {error || 'Questionnaire not found'}
+            {error || 'Questionnaire not found or has expired'}
           </p>
-          <button
-            onClick={() => navigate('/')}
-            className="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 transition-colors"
-          >
-            Return to Home
-          </button>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              Please contact us if you continue to experience issues.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -283,7 +298,7 @@ const QuestionnaireFormPage: React.FC = () => {
             )}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
             {/* Client Information */}
             <div className="bg-gray-50 p-6 rounded-lg">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Information</h3>
