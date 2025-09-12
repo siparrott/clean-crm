@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { supabase } from '../../lib/supabase';
 import { useLanguage } from '../../context/LanguageContext';
 import { 
   Plus, 
@@ -113,20 +112,17 @@ const ProDigitalFilesPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const { data, error } = await supabase
-        .from('digital_files')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        // console.error removed
-        throw new Error(`Database error: ${error.message}. Please ensure the 'digital_files' table exists.`);
+      // Use our API endpoint instead of Supabase
+      const response = await fetch('/api/files');
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
       }
       
+      const data = await response.json();
       setFiles(data || []);
     } catch (err: any) {
-      // console.error removed
-      setError(err.message || 'Failed to load files. Please check database setup.');
+      console.error('Files fetch error:', err);
+      setError(err.message || 'Failed to load files. Please check API connection.');
     } finally {
       setLoading(false);
     }

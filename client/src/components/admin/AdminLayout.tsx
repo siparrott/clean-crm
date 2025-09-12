@@ -92,7 +92,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { icon: Image, label: t('nav.galleriesAdmin'), path: '/admin/galleries' },
     { icon: FileText, label: t('nav.invoices'), path: '/admin/invoices' },
     { icon: Calendar, label: t('nav.calendar'), path: '/admin/calendar' },
-    { icon: FolderOpen, label: t('nav.digitalFiles'), path: '/admin/pro-files' },
+    { icon: FolderOpen, label: t('nav.digitalFiles'), path: '/admin/digital-files' },
     { icon: PenTool, label: t('nav.blogAdmin'), path: '/admin/blog' },
     { icon: Mail, label: t('nav.emailCampaigns'), path: '/admin/campaigns' },
     { icon: MessageSquare, label: t('nav.communications'), path: '/admin/communications' },

@@ -52,7 +52,7 @@ const QuestionnairesPage: React.FC = () => {
         throw new Error('Failed to fetch surveys');
       }
       const data = await response.json();
-      setSurveys(data.surveys);
+      setSurveys(data); // API returns surveys directly, not nested in data.surveys
     } catch (err) {
       console.error('Survey fetch error:', err);
       setError('Failed to load surveys. Please try again.');

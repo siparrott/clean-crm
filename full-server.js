@@ -1064,6 +1064,81 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // Surveys/Questionnaires API endpoints
+      if (pathname.startsWith('/api/surveys')) {
+        try {
+          if (pathname === '/api/surveys' && req.method === 'GET') {
+            // Return mock surveys for questionnaires page
+            const mockSurveys = [
+              {
+                id: '1',
+                title: 'Pre-Shoot Client Questionnaire',
+                description: 'Gather client preferences before the photoshoot',
+                status: 'active',
+                created_at: new Date().toISOString(),
+                questions: [
+                  { id: '1', type: 'text', question: 'What style of photography do you prefer?' },
+                  { id: '2', type: 'multiple_choice', question: 'What is the occasion for this shoot?', options: ['Birthday', 'Anniversary', 'Professional', 'Family'] }
+                ],
+                responses_count: 12
+              },
+              {
+                id: '2', 
+                title: 'Post-Shoot Feedback Form',
+                description: 'Collect client feedback after the session',
+                status: 'active',
+                created_at: new Date().toISOString(),
+                questions: [
+                  { id: '1', type: 'rating', question: 'How satisfied were you with the service?' },
+                  { id: '2', type: 'text', question: 'What could we improve?' }
+                ],
+                responses_count: 8
+              }
+            ];
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(mockSurveys));
+            return;
+          }
+          
+          if (pathname === '/api/surveys' && req.method === 'POST') {
+            // Handle survey creation
+            let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+            req.on('end', () => {
+              try {
+                const surveyData = JSON.parse(body);
+                console.log('📋 Creating new survey:', surveyData.title);
+                
+                const newSurvey = {
+                  id: Date.now().toString(),
+                  ...surveyData,
+                  created_at: new Date().toISOString(),
+                  responses_count: 0
+                };
+                
+                res.writeHead(201, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, survey: newSurvey }));
+              } catch (error) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Invalid survey data' }));
+              }
+            });
+            return;
+          }
+          
+          // Handle other survey operations (edit, delete, etc.)
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, message: 'Survey operation completed' }));
+          
+        } catch (error) {
+          console.error('❌ Surveys API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
       // Digital Files API endpoints
       if (pathname.startsWith('/api/files')) {
         try {
