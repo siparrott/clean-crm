@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 const SurveyTakingPage: React.FC = () => {
-  const { surveyId } = useParams<{ surveyId: string }>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
   const [survey, setSurvey] = useState<Survey | null>(null);
@@ -25,21 +25,21 @@ const SurveyTakingPage: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
-    if (surveyId) {
+    if (id) {
       fetchSurvey();
     }
-  }, [surveyId]);
+  }, [id]);
 
   const fetchSurvey = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      if (!surveyId) {
+      if (!id) {
         throw new Error('Survey ID is required');
       }
       
-      const surveyData = await surveyApi.getSurvey(surveyId);
+      const surveyData = await surveyApi.getSurvey(id);
       
       if (surveyData.status !== 'active') {
         throw new Error('This survey is not currently active');
@@ -97,7 +97,7 @@ const SurveyTakingPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!survey || !surveyId) return;
+    if (!survey || !id) return;
     
     if (!validateCurrentPage()) {
       alert('Please answer all required questions before submitting.');
@@ -107,7 +107,7 @@ const SurveyTakingPage: React.FC = () => {
     try {
       setSubmitting(true);
         const responseData: Omit<SurveyResponse, 'id' | 'startedAt'> = {
-        surveyId,
+        surveyId: id,
         respondentId: undefined, // Anonymous response
         status: 'completed',
         completedAt: new Date().toISOString(),

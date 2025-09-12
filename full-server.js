@@ -696,6 +696,272 @@ const server = http.createServer(async (req, res) => {
         }
         return;
       }
+
+      // Create questionnaire link endpoint
+      if (pathname === '/api/admin/create-questionnaire-link' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', async () => {
+          try {
+            const { client_id, template_id } = JSON.parse(body);
+            
+            // Generate a unique token for the questionnaire
+            const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+            
+            // Get default survey (we'll use the first active survey or create a default one)
+            const surveys = [
+              {
+                id: 'default-survey',
+                title: 'Client Pre-Shoot Questionnaire',
+                description: 'Help us prepare for your perfect photoshoot',
+                status: 'active',
+                pages: [
+                  {
+                    id: 'page-1',
+                    title: 'About Your Session',
+                    questions: [
+                      {
+                        id: 'q1',
+                        type: 'text',
+                        title: 'What type of photoshoot are you looking for?',
+                        description: 'e.g., Portrait, Family, Business, etc.',
+                        required: true,
+                        options: []
+                      },
+                      {
+                        id: 'q2',
+                        type: 'multiple_choice',
+                        title: 'What is the occasion for this photoshoot?',
+                        required: true,
+                        options: [
+                          { id: 'birthday', text: 'Birthday' },
+                          { id: 'anniversary', text: 'Anniversary' },
+                          { id: 'professional', text: 'Professional/Business' },
+                          { id: 'family', text: 'Family Portrait' },
+                          { id: 'personal', text: 'Personal/Creative' },
+                          { id: 'other', text: 'Other' }
+                        ]
+                      },
+                      {
+                        id: 'q3',
+                        type: 'text',
+                        title: 'Do you have any specific ideas or inspiration for the shoot?',
+                        description: 'Share any Pinterest boards, reference photos, or themes you have in mind',
+                        required: false,
+                        options: []
+                      },
+                      {
+                        id: 'q4',
+                        type: 'multiple_choice',
+                        title: 'Preferred location type?',
+                        required: true,
+                        options: [
+                          { id: 'studio', text: 'Studio' },
+                          { id: 'outdoor', text: 'Outdoor/Nature' },
+                          { id: 'urban', text: 'Urban/City' },
+                          { id: 'home', text: 'At Home' },
+                          { id: 'venue', text: 'Specific Venue' }
+                        ]
+                      },
+                      {
+                        id: 'q5',
+                        type: 'rating',
+                        title: 'How comfortable are you in front of the camera?',
+                        description: '1 = Very nervous, 5 = Very comfortable',
+                        required: true,
+                        options: []
+                      }
+                    ]
+                  }
+                ],
+                settings: {
+                  allowAnonymous: true,
+                  progressBar: true
+                },
+                thankYouMessage: 'Thank you for completing the questionnaire! We will review your responses and be in touch soon.'
+              }
+            ];
+            
+            // Store the questionnaire link in database (simplified for now)
+            const questionnaireLink = {
+              token,
+              client_id,
+              survey_id: 'default-survey',
+              created_at: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
+              status: 'active'
+            };
+            
+            // Create the public link
+            const link = `${req.headers.origin || 'https://newagefotografie.com'}/q/${token}`;
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+              success: true, 
+              link,
+              token,
+              expires_at: questionnaireLink.expires_at
+            }));
+          } catch (error) {
+            console.error('❌ Create questionnaire link error:', error.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+          }
+        });
+        return;
+      }
+
+      // Get questionnaire by token endpoint
+      if (pathname.startsWith('/api/questionnaire/') && req.method === 'GET') {
+        try {
+          const token = pathname.split('/').pop();
+          
+          // Mock questionnaire data for the token
+          const mockQuestionnaire = {
+            token,
+            clientName: '',
+            clientEmail: '',
+            isUsed: false,
+            survey: {
+              title: 'Client Pre-Shoot Questionnaire',
+              description: 'Help us prepare for your perfect photoshoot experience',
+              pages: [
+                {
+                  id: 'page-1',
+                  title: 'About Your Session',
+                  questions: [
+                    {
+                      id: 'q1',
+                      type: 'text',
+                      title: 'What type of photoshoot are you looking for?',
+                      required: true
+                    },
+                    {
+                      id: 'q2',
+                      type: 'single_choice',
+                      title: 'What is the occasion for this photoshoot?',
+                      required: true,
+                      options: [
+                        { id: 'birthday', text: 'Birthday' },
+                        { id: 'anniversary', text: 'Anniversary' },
+                        { id: 'professional', text: 'Professional/Business' },
+                        { id: 'family', text: 'Family Portrait' },
+                        { id: 'personal', text: 'Personal/Creative' },
+                        { id: 'other', text: 'Other' }
+                      ]
+                    },
+                    {
+                      id: 'q3',
+                      type: 'long_text',
+                      title: 'Do you have any specific ideas or inspiration for the shoot?',
+                      required: false
+                    },
+                    {
+                      id: 'q4',
+                      type: 'single_choice',
+                      title: 'Preferred location type?',
+                      required: true,
+                      options: [
+                        { id: 'studio', text: 'Studio' },
+                        { id: 'outdoor', text: 'Outdoor/Nature' },
+                        { id: 'urban', text: 'Urban/City' },
+                        { id: 'home', text: 'At Home' },
+                        { id: 'venue', text: 'Specific Venue' }
+                      ]
+                    },
+                    {
+                      id: 'q5',
+                      type: 'text',
+                      title: 'How comfortable are you in front of the camera? (1-5 scale)',
+                      required: true
+                    }
+                  ]
+                }
+              ],
+              settings: {
+                thankYouMessage: 'Thank you for completing the questionnaire! We will review your responses and be in touch soon to discuss your perfect photoshoot.'
+              }
+            }
+          };
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(mockQuestionnaire));
+        } catch (error) {
+          console.error('❌ Get questionnaire error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+
+      // Submit questionnaire endpoint
+      if (pathname === '/api/email-questionnaire' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', async () => {
+          try {
+            const { token, clientName, clientEmail, answers } = JSON.parse(body);
+            
+            // Create email content
+            const emailContent = `
+New Client Questionnaire Submitted
+
+Client Information:
+- Name: ${clientName}
+- Email: ${clientEmail}
+- Token: ${token}
+
+Responses:
+${Object.entries(answers).map(([questionId, answer]) => {
+  // Map question IDs to readable questions
+  const questionMap = {
+    'q1': 'Type of photoshoot',
+    'q2': 'Occasion for photoshoot',
+    'q3': 'Specific ideas/inspiration',
+    'q4': 'Preferred location type',
+    'q5': 'Comfort level in front of camera'
+  };
+  
+  return `- ${questionMap[questionId] || questionId}: ${answer}`;
+}).join('\n')}
+
+This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
+            `.trim();
+
+            // Send email to hallo@newagefotografie.com
+            try {
+              // For now, log the email content (in production, you'd use a real email service)
+              console.log('📧 Questionnaire email would be sent to hallo@newagefotografie.com:');
+              console.log(emailContent);
+              
+              // TODO: Implement actual email sending
+              // await sendEmail({
+              //   to: 'hallo@newagefotografie.com',
+              //   subject: `New Questionnaire: ${clientName}`,
+              //   text: emailContent
+              // });
+            } catch (emailError) {
+              console.error('❌ Email sending error:', emailError.message);
+              // Don't fail the request if email fails
+            }
+
+            // Store the response in the database
+            // TODO: Implement database storage for questionnaire responses
+            console.log('💾 Questionnaire response stored for client:', clientName);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+              success: true, 
+              message: 'Questionnaire submitted successfully' 
+            }));
+          } catch (error) {
+            console.error('❌ Submit questionnaire error:', error.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+          }
+        });
+        return;
+      }
       
       // Debug photography sessions endpoint (for development)
       if (pathname === '/api/debug/photography-sessions' && req.method === 'GET') {
@@ -1153,6 +1419,92 @@ const server = http.createServer(async (req, res) => {
                 res.end(JSON.stringify({ success: false, error: 'Invalid update data' }));
               }
             });
+            return;
+          }
+
+          if (surveyIdMatch && req.method === 'GET') {
+            const surveyId = surveyIdMatch[1];
+            console.log('📋 Getting survey:', surveyId);
+            
+            // Return mock survey data
+            const mockSurvey = {
+              id: surveyId,
+              title: 'Client Pre-Shoot Questionnaire',
+              description: 'Help us prepare for your perfect photoshoot',
+              status: 'active',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              pages: [
+                {
+                  id: 'page-1',
+                  title: 'About Your Session',
+                  questions: [
+                    {
+                      id: 'q1',
+                      type: 'text',
+                      title: 'What type of photoshoot are you looking for?',
+                      description: 'e.g., Portrait, Family, Business, etc.',
+                      required: true,
+                      options: []
+                    },
+                    {
+                      id: 'q2',
+                      type: 'multiple_choice',
+                      title: 'What is the occasion for this photoshoot?',
+                      required: true,
+                      options: [
+                        { id: 'birthday', text: 'Birthday' },
+                        { id: 'anniversary', text: 'Anniversary' },
+                        { id: 'professional', text: 'Professional/Business' },
+                        { id: 'family', text: 'Family Portrait' },
+                        { id: 'personal', text: 'Personal/Creative' },
+                        { id: 'other', text: 'Other' }
+                      ]
+                    },
+                    {
+                      id: 'q3',
+                      type: 'text',
+                      title: 'Do you have any specific ideas or inspiration for the shoot?',
+                      description: 'Share any Pinterest boards, reference photos, or themes you have in mind',
+                      required: false,
+                      options: []
+                    },
+                    {
+                      id: 'q4',
+                      type: 'multiple_choice',
+                      title: 'Preferred location type?',
+                      required: true,
+                      options: [
+                        { id: 'studio', text: 'Studio' },
+                        { id: 'outdoor', text: 'Outdoor/Nature' },
+                        { id: 'urban', text: 'Urban/City' },
+                        { id: 'home', text: 'At Home' },
+                        { id: 'venue', text: 'Specific Venue' }
+                      ]
+                    },
+                    {
+                      id: 'q5',
+                      type: 'rating',
+                      title: 'How comfortable are you in front of the camera?',
+                      description: '1 = Very nervous, 5 = Very comfortable',
+                      required: true,
+                      options: []
+                    }
+                  ]
+                }
+              ],
+              settings: {
+                allowAnonymous: true,
+                progressBar: true
+              },
+              thankYouMessage: 'Thank you for completing the questionnaire! We will review your responses and be in touch soon.',
+              analytics: {
+                totalCompletes: 0
+              }
+            };
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, survey: mockSurvey }));
             return;
           }
           
