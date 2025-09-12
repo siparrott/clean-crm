@@ -994,6 +994,13 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
             // Store the response in the database
             try {
               // Store the questionnaire response using existing schema
+              console.log('💾 Storing questionnaire response:', {
+                token,
+                clientName,
+                clientEmail,
+                answersCount: Object.keys(answers).length
+              });
+              
               await sql`
                 INSERT INTO questionnaire_responses (
                   client_id, token, template_slug, answers, submitted_at
@@ -1013,10 +1020,11 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
                 WHERE token = ${token}
               `;
               
-              console.log('💾 Questionnaire response stored for client:', clientName);
+              console.log('✅ Questionnaire response stored successfully for client:', clientName);
               console.log('🔔 New questionnaire notification available for admin dashboard');
             } catch (dbError) {
               console.error('❌ Database storage error:', dbError.message);
+              console.error('❌ Full error details:', dbError);
               // Continue even if database fails
             }
 
@@ -1039,6 +1047,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
         try {
           const clientId = pathname.split('/').pop();
           const clientIdParam = String(clientId);
+          console.log('📊 Fetching questionnaire responses for client:', clientIdParam);
 
           // Get questionnaire links and responses for this client using existing schema
           let questionnaires = [];
@@ -1063,11 +1072,23 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
               WHERE ql.client_id::text = ${clientIdParam}::text
               ORDER BY ql.created_at DESC
             `;
+            console.log('✅ Primary query successful, found questionnaires:', questionnaires.length);
+            questionnaires.forEach((q, i) => {
+              console.log(`📝 Questionnaire ${i + 1}:`, {
+                token: q.token,
+                client_id: q.client_id,
+                is_used: q.is_used,
+                has_response: !!q.response_id,
+                submitted_at: q.submitted_at,
+                answers: q.answers ? Object.keys(JSON.parse(q.answers || '{}')).length + ' answers' : 'no answers'
+              });
+            });
           } catch (sqlErr) {
             console.error('❌ Client questionnaires SQL error:', sqlErr.message || sqlErr);
             
             // Fallback: Try to get responses directly from questionnaire_responses table
             try {
+              console.log('🔄 Trying fallback query...');
               const responseResults = await sql`
                 SELECT 
                   token,
@@ -1080,6 +1101,8 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
                 WHERE client_id = ${clientIdParam}
                 ORDER BY submitted_at DESC
               `;
+              
+              console.log('✅ Fallback query found responses:', responseResults.length);
               
               questionnaires = responseResults.map(r => ({
                 token: r.token,
@@ -1109,10 +1132,22 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
             questionnaireName: 'Photography Preferences Survey',
             sentDate: q.sent_at,
             responseDate: q.submitted_at,
+            submitted_at: q.submitted_at, // Add this field for frontend compatibility
             status: q.is_used ? 'responded' : (new Date() > new Date(q.expires_at) ? 'expired' : 'sent'),
             responses: q.answers,
             link: q.is_used ? null : `${req.headers.host}/questionnaire/${q.token}`
           }));
+          
+          console.log('📤 Returning formatted questionnaire data:', {
+            total: formattedQuestionnaires.length,
+            responded: formattedQuestionnaires.filter(q => q.status === 'responded').length,
+            samples: formattedQuestionnaires.slice(0, 2).map(q => ({
+              id: q.id,
+              status: q.status,
+              has_responses: !!q.responses,
+              submitted_at: q.submitted_at
+            }))
+          });
           
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(formattedQuestionnaires));
