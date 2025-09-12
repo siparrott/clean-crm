@@ -16,6 +16,22 @@ try {
   console.log('⚠️ Database module not available, API will use fallback responses');
 }
 
+// Initialize global Neon SQL client (used across handlers)
+let sql = null;
+try {
+  const neonModule = require('@neondatabase/serverless');
+  const neon = neonModule.neon;
+  if (process.env.DATABASE_URL) {
+    sql = neon(process.env.DATABASE_URL);
+    console.log('✅ Neon SQL client initialized');
+  } else {
+    console.log('⚠️ DATABASE_URL not set; SQL client not initialized');
+  }
+} catch (err) {
+  console.warn('⚠️ Could not initialize Neon SQL client:', err.message);
+  sql = null;
+}
+
 console.log('🚀 Starting PRODUCTION server with Neon database...');
 
 // Files API handler function
@@ -707,6 +723,8 @@ const server = http.createServer(async (req, res) => {
             
             // Generate a unique token for the questionnaire
             const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+            // Compute expiry for the link (30 days)
+            const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
             
             // Get default survey (we'll use the first active survey or create a default one)
             const surveys = [
@@ -790,7 +808,7 @@ const server = http.createServer(async (req, res) => {
                   token, client_id, template_id, expires_at, created_at
                 ) VALUES (
                   ${token}, ${client_id}, 'default-questionnaire',
-                  NOW() + INTERVAL '30 days', NOW()
+                  ${expiresAt}, NOW()
                 )
               `;
               
@@ -808,7 +826,7 @@ const server = http.createServer(async (req, res) => {
               success: true, 
               link,
               token,
-              expires_at: questionnaireLink.expires_at
+              expires_at: expiresAt
             }));
           } catch (error) {
             console.error('❌ Create questionnaire link error:', error.message);
@@ -1018,29 +1036,36 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
       if (pathname.startsWith('/api/admin/client-questionnaires/') && req.method === 'GET') {
         try {
           const clientId = pathname.split('/').pop();
-          
+          const clientIdParam = String(clientId);
+
           // Get questionnaire links and responses for this client using existing schema
-          const questionnaires = await sql`
-            SELECT 
-              ql.token,
-              ql.client_id,
-              ql.template_id,
-              ql.is_used,
-              ql.created_at as sent_at,
-              ql.expires_at,
-              qr.id as response_id,
-              qr.answers,
-              qr.submitted_at,
-              c.first_name,
-              c.last_name,
-              c.email
-            FROM questionnaire_links ql
-            LEFT JOIN questionnaire_responses qr ON ql.token = qr.token
-            LEFT JOIN crm_clients c ON ql.client_id = c.id
-            WHERE ql.client_id = ${clientId}
-            ORDER BY ql.created_at DESC
-          `;
-          
+          let questionnaires = [];
+          try {
+            questionnaires = await sql`
+              SELECT 
+                ql.token,
+                ql.client_id,
+                ql.template_id,
+                ql.is_used,
+                ql.created_at as sent_at,
+                ql.expires_at,
+                qr.id as response_id,
+                qr.answers,
+                qr.submitted_at,
+                c.first_name,
+                c.last_name,
+                c.email
+              FROM questionnaire_links ql
+              LEFT JOIN questionnaire_responses qr ON ql.token = qr.token
+              LEFT JOIN crm_clients c ON ql.client_id = c.id
+              WHERE ql.client_id::text = ${clientIdParam}
+              ORDER BY ql.created_at DESC
+            `;
+          } catch (sqlErr) {
+            console.error('❌ Client questionnaires SQL error:', sqlErr.message || sqlErr);
+            throw sqlErr;
+          }
+
           // Transform the data for the frontend
           const formattedQuestionnaires = questionnaires.map(q => ({
             id: q.response_id || q.token,

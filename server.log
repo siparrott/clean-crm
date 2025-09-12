@@ -1,0 +1,19 @@
+[dotenv@17.2.2] injecting env (2) from .env -- tip: ­ƒôí auto-backup env with Radar: https://dotenvx.com/radar
+­ƒöî Connecting to Neon database...
+Ô£à DATABASE_URL found, creating connection pool...
+Ô£à Neon SQL client initialized
+­ƒÜÇ Starting PRODUCTION server with Neon database...
+Ô£à PRODUCTION server with database support running on port 3001
+­ƒîÉ Website: http://localhost:3001
+­ƒöî API: http://localhost:3001/api/status
+­ƒôè Health: http://localhost:3001/healthz
+Ô£à Database connected successfully
+­ƒö¿ Initializing database schema...
+Ô£à Database schema initialized successfully
+Request: GET /healthz
+Request: POST /api/admin/create-questionnaire-link
+­ƒÆ¥ Questionnaire link stored for client: test-client-123
+Request: GET /api/questionnaire/rmxqrbo95smmfgzm1ip
+Request: GET /api/admin/client-questionnaires/test-client-123
+ÔØî Client questionnaires SQL error: operator does not exist: text = uuid
+ÔØî Get client questionnaires error: operator does not exist: text = uuid
