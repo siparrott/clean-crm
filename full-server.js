@@ -1437,8 +1437,8 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
             const mockSurveys = [
               {
                 id: '1',
-                title: 'Pre-Shoot Client Questionnaire',
-                description: 'Gather client preferences before the photoshoot',
+                title: 'Client Photography Questionnaire',
+                description: 'Photography session preferences and details',
                 status: 'active',
                 created_at: new Date().toISOString(),
                 questions: [
