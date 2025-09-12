@@ -52,22 +52,37 @@ const QuestionnairesPage: React.FC = () => {
         throw new Error('Failed to fetch surveys');
       }
       const data = await response.json();
-      setSurveys(data); // API returns surveys directly, not nested in data.surveys
+      
+      // Ensure each survey has the proper structure
+      const normalizedSurveys = Array.isArray(data) ? data.map(survey => ({
+        ...survey,
+        pages: survey.pages || [],
+        settings: survey.settings || { allowAnonymous: true, progressBar: true },
+        analytics: survey.analytics || { totalCompletes: 0 }
+      })) : [];
+      
+      setSurveys(normalizedSurveys);
     } catch (err) {
       console.error('Survey fetch error:', err);
       setError('Failed to load surveys. Please try again.');
+      setSurveys([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
   };
 
   const filterSurveys = () => {
+    if (!Array.isArray(surveys)) {
+      setFilteredSurveys([]);
+      return;
+    }
+    
     let filtered = [...surveys];
     
     // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(survey => 
-        survey.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (survey.title && survey.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (survey.description && survey.description.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
@@ -183,8 +198,17 @@ const QuestionnairesPage: React.FC = () => {
   };
 
   const getTotalQuestions = (survey: Survey): number => {
-    return survey.pages.reduce((total, page) => total + page.questions.length, 0);
+    if (!survey.pages || !Array.isArray(survey.pages)) {
+      return 0;
+    }
+    return survey.pages.reduce((total, page) => {
+      if (!page.questions || !Array.isArray(page.questions)) {
+        return total;
+      }
+      return total + page.questions.length;
+    }, 0);
   };
+  
   const getResponseCount = (survey: Survey): number => {
     return survey.analytics?.totalCompletes || 0;
   };
