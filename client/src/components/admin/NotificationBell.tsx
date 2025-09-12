@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, X, Mail } from 'lucide-react';
 
 interface Notification {
@@ -11,6 +12,7 @@ interface Notification {
 }
 
 const NotificationBell: React.FC = () => {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -52,6 +54,17 @@ const NotificationBell: React.FC = () => {
 
   const clearNotification = (notificationId: string) => {
     setNotifications(prev => prev.filter(n => n.id !== notificationId));
+  };
+
+  const handleNotificationClick = (notification: Notification) => {
+    // Mark as read when clicked
+    markAsRead(notification.id);
+    
+    // Navigate to questionnaire responses page
+    if (notification.type === 'questionnaire') {
+      navigate('/admin/questionnaires');
+      setShowDropdown(false); // Close the dropdown
+    }
   };
 
   const getNotificationIcon = (type: string) => {
@@ -109,7 +122,8 @@ const NotificationBell: React.FC = () => {
               notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                  onClick={() => handleNotificationClick(notification)}
+                  className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${
                     !notification.read ? 'bg-blue-50' : ''
                   }`}
                 >
@@ -122,7 +136,10 @@ const NotificationBell: React.FC = () => {
                             {notification.title}
                           </p>
                           <button
-                            onClick={() => clearNotification(notification.id)}
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent triggering the notification click
+                              clearNotification(notification.id);
+                            }}
                             className="text-gray-400 hover:text-gray-600 transition-colors"
                           >
                             <X size={14} />
@@ -139,7 +156,10 @@ const NotificationBell: React.FC = () => {
                   </div>
                   {!notification.read && (
                     <button
-                      onClick={() => markAsRead(notification.id)}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent triggering the notification click
+                        markAsRead(notification.id);
+                      }}
                       className="text-xs text-blue-600 hover:text-blue-800 mt-2"
                     >
                       Mark as read
