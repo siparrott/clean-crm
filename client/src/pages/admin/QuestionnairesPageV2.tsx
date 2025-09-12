@@ -11,6 +11,9 @@ const QuestionnairesPageV2: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
+  // Builder-specific state
+  const [logoUrl, setLogoUrl] = useState('');
+  const [questions, setQuestions] = useState<string[]>([]);
 
   const handleCreateQuestionnaireLink = async () => {
     try {
@@ -87,6 +90,8 @@ const QuestionnairesPageV2: React.FC = () => {
     setEditingId(null);
     setFormTitle('New Questionnaire');
     setFormDescription('');
+    setLogoUrl('');
+    setQuestions(['']);
   };
 
   const handleCancel = () => {
@@ -94,12 +99,24 @@ const QuestionnairesPageV2: React.FC = () => {
     setEditingId(null);
     setFormTitle('');
     setFormDescription('');
+    setLogoUrl('');
+    setQuestions([]);
   };
 
   const handleSaveNew = async () => {
     try {
       setLoading(true);
-      const body = { title: formTitle, description: formDescription };
+      // Build survey payload with pages and settings
+      const pages = [
+        {
+          id: 'page-1',
+          title: formTitle,
+          questions: questions.map((q, idx) => ({ id: `q${idx+1}`, type: 'text', title: q }))
+        }
+      ];
+
+      const settings = { logo: logoUrl };
+      const body = { title: formTitle, description: formDescription, pages, settings };
       const res = await fetch('/api/surveys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error('Failed to create survey');
       const result = await res.json();
@@ -119,13 +136,30 @@ const QuestionnairesPageV2: React.FC = () => {
     setIsAdding(false);
     setFormTitle(survey.title || '');
     setFormDescription(survey.description || '');
+    // Load existing builder state if available
+    try {
+      const pages = survey.pages || (survey.survey && survey.survey.pages) || [];
+      const first = pages[0] || { questions: [] };
+      setQuestions((first.questions || []).map((qq: any) => qq.title || qq.text || ''));
+    } catch (e) {
+      setQuestions([]);
+    }
+    setLogoUrl((survey.settings && survey.settings.logo) || '');
   };
 
   const handleSaveEdit = async () => {
     if (!editingId) return;
     try {
       setLoading(true);
-      const body = { title: formTitle, description: formDescription };
+      const pages = [
+        {
+          id: 'page-1',
+          title: formTitle,
+          questions: questions.map((q, idx) => ({ id: `q${idx+1}`, type: 'text', title: q }))
+        }
+      ];
+      const settings = { logo: logoUrl };
+      const body = { title: formTitle, description: formDescription, pages, settings };
       const res = await fetch(`/api/surveys/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error('Failed to update survey');
       const result = await res.json();
@@ -232,6 +266,26 @@ const QuestionnairesPageV2: React.FC = () => {
                 <input value={formTitle} onChange={e => setFormTitle(e.target.value)} className="mt-1 block w-full border rounded px-2 py-1" />
                 <label className="block text-sm font-medium text-gray-700 mt-3">Description</label>
                 <textarea value={formDescription} onChange={e => setFormDescription(e.target.value)} className="mt-1 block w-full border rounded px-2 py-1" rows={3} />
+                <label className="block text-sm font-medium text-gray-700 mt-3">Company Logo URL</label>
+                <input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://example.com/logo.png" className="mt-1 block w-full border rounded px-2 py-1" />
+
+                <div className="mt-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700">Questions</label>
+                    <button onClick={() => setQuestions(prev => [...prev, ''])} className="inline-flex items-center px-2 py-1 bg-blue-500 text-white rounded text-sm">Add Question</button>
+                  </div>
+                  <div className="space-y-2 mt-2">
+                    {questions.map((q, idx) => (
+                      <div key={idx} className="flex items-start space-x-2">
+                        <textarea value={q} onChange={e => setQuestions(prev => prev.map((x,i) => i===idx?e.target.value:x))} className="flex-1 border rounded px-2 py-1" rows={2} />
+                        <div className="flex flex-col space-y-2">
+                          <button onClick={() => setQuestions(prev => prev.filter((_,i)=>i!==idx))} className="inline-flex items-center px-2 py-1 bg-red-500 text-white rounded text-sm">Remove</button>
+                          <button onClick={() => setQuestions(prev => { const arr=[...prev]; arr.splice(idx,1,prev[idx]+' '); return arr; })} className="inline-flex items-center px-2 py-1 bg-gray-200 text-gray-700 rounded text-sm">Duplicate</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
