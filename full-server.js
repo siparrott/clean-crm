@@ -1507,7 +1507,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
             // Handle survey creation
             let body = '';
             req.on('data', chunk => { body += chunk.toString(); });
-            req.on('end', () => {
+            req.on('end', async () => {
               try {
                 const surveyData = JSON.parse(body);
                 console.log('📋 Creating new survey:', surveyData.title);
@@ -1552,7 +1552,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
             const surveyId = surveyIdMatch[1];
             let body = '';
             req.on('data', chunk => { body += chunk.toString(); });
-            req.on('end', () => {
+            req.on('end', async () => {
               try {
                 const updates = JSON.parse(body);
                 console.log('📝 Updating survey:', surveyId);
