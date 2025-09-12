@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -6,6 +6,11 @@ const QuestionnairesPageV2: React.FC = () => {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [surveys, setSurveys] = useState<any[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formTitle, setFormTitle] = useState('');
+  const [formDescription, setFormDescription] = useState('');
 
   const handleCreateQuestionnaireLink = async () => {
     try {
@@ -53,6 +58,98 @@ const QuestionnairesPageV2: React.FC = () => {
     } catch (err) {
       console.error('Error fetching responses:', err);
       setError('Failed to fetch questionnaire responses.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load available questionnaires (surveys)
+  const fetchSurveys = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/surveys');
+      if (!res.ok) throw new Error('Failed to load surveys');
+      const data = await res.json();
+      setSurveys(Array.isArray(data) ? data : (data.surveys || []));
+    } catch (err) {
+      console.error('Error loading surveys:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSurveys();
+  }, []);
+
+  const handleAddClick = () => {
+    setIsAdding(true);
+    setEditingId(null);
+    setFormTitle('New Questionnaire');
+    setFormDescription('');
+  };
+
+  const handleCancel = () => {
+    setIsAdding(false);
+    setEditingId(null);
+    setFormTitle('');
+    setFormDescription('');
+  };
+
+  const handleSaveNew = async () => {
+    try {
+      setLoading(true);
+      const body = { title: formTitle, description: formDescription };
+      const res = await fetch('/api/surveys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error('Failed to create survey');
+      const result = await res.json();
+      const newSurvey = result.survey || result;
+      setSurveys(prev => [newSurvey, ...prev]);
+      handleCancel();
+    } catch (err) {
+      console.error('Error creating survey:', err);
+      alert('Failed to create questionnaire.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditClick = (survey: any) => {
+    setEditingId(survey.id);
+    setIsAdding(false);
+    setFormTitle(survey.title || '');
+    setFormDescription(survey.description || '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    try {
+      setLoading(true);
+      const body = { title: formTitle, description: formDescription };
+      const res = await fetch(`/api/surveys/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error('Failed to update survey');
+      const result = await res.json();
+      const updated = result.survey || result;
+      setSurveys(prev => prev.map(s => s.id === editingId ? { ...s, ...updated } : s));
+      handleCancel();
+    } catch (err) {
+      console.error('Error updating survey:', err);
+      alert('Failed to save questionnaire changes.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (surveyId: string) => {
+    if (!confirm('Are you sure you want to delete this questionnaire?')) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/surveys/${surveyId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete survey');
+      setSurveys(prev => prev.filter(s => s.id !== surveyId));
+    } catch (err) {
+      console.error('Error deleting survey:', err);
+      alert('Failed to delete questionnaire.');
     } finally {
       setLoading(false);
     }
@@ -118,20 +215,40 @@ const QuestionnairesPageV2: React.FC = () => {
 
         <div className="bg-gray-50 rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-3">Available Questionnaires:</h3>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between p-3 bg-white rounded border">
-              <div>
-                <p className="font-medium">Photography Session Preferences</p>
-                <p className="text-sm text-gray-500">Photography session preferences and details</p>
-              </div>
-              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Active</span>
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <button onClick={handleAddClick} className="mr-2 inline-flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Add Questionnaire</button>
+              {(isAdding || editingId) && (
+                <>
+                  <button onClick={() => { if (editingId) { handleSaveEdit(); } else { handleSaveNew(); } }} disabled={loading} className="mr-2 inline-flex items-center px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700">{editingId ? 'Save' : 'Save'}</button>
+                  <button onClick={handleCancel} className="inline-flex items-center px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">Cancel</button>
+                </>
+              )}
             </div>
-            <div className="flex items-center justify-between p-3 bg-white rounded border">
-              <div>
-                <p className="font-medium">Client Satisfaction Survey</p>
-                <p className="text-sm text-gray-500">Post-session feedback and satisfaction measurement</p>
+
+            {(isAdding || editingId) && (
+              <div className="p-4 bg-white border rounded">
+                <label className="block text-sm font-medium text-gray-700">Title</label>
+                <input value={formTitle} onChange={e => setFormTitle(e.target.value)} className="mt-1 block w-full border rounded px-2 py-1" />
+                <label className="block text-sm font-medium text-gray-700 mt-3">Description</label>
+                <textarea value={formDescription} onChange={e => setFormDescription(e.target.value)} className="mt-1 block w-full border rounded px-2 py-1" rows={3} />
               </div>
-              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Active</span>
+            )}
+
+            <div className="space-y-2">
+              {surveys.map(s => (
+                <div key={s.id} className="flex items-center justify-between p-3 bg-white rounded border">
+                  <div>
+                    <p className="font-medium">{s.title}</p>
+                    <p className="text-sm text-gray-500">{s.description}</p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button onClick={() => handleEditClick(s)} className="inline-flex items-center px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600">Edit</button>
+                    <button onClick={() => handleDelete(s.id)} className="inline-flex items-center px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">Delete</button>
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">{s.status || 'Active'}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
