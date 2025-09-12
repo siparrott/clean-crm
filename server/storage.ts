@@ -834,7 +834,7 @@ export class DatabaseStorage implements IStorage {
     // Check if settings exist
     const existing = await db.execute(sql`SELECT id FROM email_settings LIMIT 1`);
     
-    if (existing.length > 0) {
+    if (existing && existing.length > 0) {
       // Update existing settings
       const result = await db.execute(sql`
         UPDATE email_settings 
@@ -864,7 +864,7 @@ export class DatabaseStorage implements IStorage {
     try {
       const result = await db.execute(sql`SELECT * FROM email_settings ORDER BY updated_at DESC LIMIT 1`);
       
-      if (result.length > 0) {
+      if (result && result.length > 0) {
         return result[0];
       } else {
         // Return default EasyName settings if no custom settings exist

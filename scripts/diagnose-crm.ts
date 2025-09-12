@@ -47,7 +47,7 @@ import { db } from '../server/db';
     if (report.tables.includes('crm_clients')) {
       try {
         const sample = await db.execute(sql`SELECT id, first_name, last_name, email, created_at FROM crm_clients LIMIT 1`);
-        report.sampleClient = sample?.[0] || null;
+        report.sampleClient = (sample && sample.length > 0) ? sample[0] : null;
       } catch {/* ignore */}
     }
   } catch (error: any) {
