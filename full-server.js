@@ -966,7 +966,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
                   
                   <h3>Responses:</h3>
                   <ul>
-                    ${Object.entries(responses).map(([questionId, answer]) => {
+                    ${Object.entries(answers).map(([questionId, answer]) => {
                       const questionMap = {
                         'q1': 'What type of photography session are you interested in?',
                         'q2': 'Preferred session duration?',
@@ -1000,7 +1000,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
                   (SELECT client_id FROM questionnaire_links WHERE token = ${token}),
                   ${token},
                   'default-questionnaire',
-                  ${JSON.stringify(responses)},
+                  ${JSON.stringify(answers)},
                   NOW()
                 )
               `;
@@ -1057,8 +1057,8 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
                 c.email
               FROM questionnaire_links ql
               LEFT JOIN questionnaire_responses qr ON ql.token = qr.token
-              LEFT JOIN crm_clients c ON ql.client_id = c.id
-              WHERE ql.client_id::text = ${clientIdParam}
+              LEFT JOIN crm_clients c ON ql.client_id = c.client_id
+              WHERE ql.client_id::text = ${clientIdParam}::text OR c.id::text = ${clientIdParam}::text
               ORDER BY ql.created_at DESC
             `;
           } catch (sqlErr) {

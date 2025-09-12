@@ -1,0 +1,13 @@
+[dotenv@17.2.2] injecting env (2) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+🔌 Connecting to Neon database...
+✅ DATABASE_URL found, creating connection pool...
+✅ Neon SQL client initialized
+🚀 Starting PRODUCTION server with Neon database...
+✅ PRODUCTION server with database support running on port 3001
+🌐 Website: http://localhost:3001
+🔌 API: http://localhost:3001/api/status
+📊 Health: http://localhost:3001/healthz
+✅ Database connected successfully
+🔨 Initializing database schema...
+✅ Database schema initialized successfully
+Request: GET /api/admin/client-questionnaires/test-client-123
