@@ -1,188 +1,344 @@
-import { supabase } from './supabase';
-import { 
-  Survey, 
-  SurveyQuestion, 
-  SurveyResponse, 
-  SurveyTemplate, 
-  SurveyAnalytics,
-  SurveyListResponse,
-  SurveyAnalyticsResponse,
-  QuestionType,
-  QuestionTypeDefinition,
-  SurveyExportOptions
-} from '../types/survey';
+import { import { 
 
-// Helper function to convert between camelCase and snake_case for database operations
-const toSnakeCase = (obj: any): any => {
-  if (obj === null || obj === undefined || typeof obj !== 'object') {
-    return obj;
-  }
-  
-  if (Array.isArray(obj)) {
-    return obj.map(toSnakeCase);
-  }
-  
-  const converted: any = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-    converted[snakeKey] = toSnakeCase(value);
-  }
-  return converted;
-};
+  Survey,   Survey, 
 
-const toCamelCase = (obj: any): any => {
-  if (obj === null || obj === undefined || typeof obj !== 'object') {
-    return obj;
-  }
-  
-  if (Array.isArray(obj)) {
-    return obj.map(toCamelCase);
-  }
-  
-  const converted: any = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-    converted[camelKey] = toCamelCase(value);
-  }
-  return converted;
-};
+  SurveyQuestion,   SurveyQuestion, 
 
-// Survey Management
-export const surveyApi = {
-  // Get all surveys
-  async getSurveys(page = 1, limit = 10, status?: string, search?: string): Promise<SurveyListResponse> {
-    let query = supabase
-      .from('surveys')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false });
+  SurveyResponse,   SurveyResponse, 
 
-    if (status && status !== 'all') {
-      query = query.eq('status', status);
-    }
+  SurveyTemplate,   SurveyTemplate, 
 
-    if (search) {
-      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
-    }
+  SurveyAnalytics,  SurveyAnalytics,
 
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+  SurveyListResponse,  SurveyListResponse,
 
-    const { data, error, count } = await query.range(from, to);
+  SurveyAnalyticsResponse,  SurveyAnalyticsResponse,
 
-    if (error) {
-      // console.error removed
-      throw error;
-    }
+  QuestionType,  QuestionType,
 
-    return {
-      surveys: (data || []).map(toCamelCase),
-      total: count || 0,
-      page,
-      limit
-    };
-  },
+  QuestionTypeDefinition,  QuestionTypeDefinition,
 
-  // Get survey by ID
-  async getSurvey(id: string): Promise<Survey> {
-    const { data, error } = await supabase
-      .from('surveys')
-      .select('*')
-      .eq('id', id)
-      .single();
+  SurveyExportOptions  SurveyExportOptions
 
-    if (error) {
-      // console.error removed
-      throw error;
-    }
-    
-    return toCamelCase(data);
-  },
+} from '../types/survey';} from '../types/survey';
 
-  // Create new survey
-  async createSurvey(survey: Omit<Survey, 'id' | 'createdAt' | 'updatedAt'>): Promise<Survey> {
-    // Convert to snake_case for database
-    const surveyData = toSnakeCase(survey);
-    
-    // Ensure required defaults
-    const surveyToInsert = {
-      ...surveyData,
-      pages: surveyData.pages || [],
-      settings: surveyData.settings || { allowAnonymous: true, progressBar: true },
-      branding: surveyData.branding || {},
-      analytics: surveyData.analytics || { totalViews: 0, totalStarts: 0, totalCompletes: 0, completionRate: 0, averageTime: 0 },
-      created_by: surveyData.created_by || null, // Will be set by RLS policy
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
 
-    const { data, error } = await supabase
-      .from('surveys')
-      .insert([surveyToInsert])
-      .select()
-      .single();
 
-    if (error) {
-      // console.error removed
-      throw error;
-    }
-    
-    return toCamelCase(data);
-  },
+// Survey Management - API-based implementation// Survey Management - API-based implementation
 
-  // Update survey
-  async updateSurvey(id: string, updates: Partial<Survey>): Promise<Survey> {
-    // Convert to snake_case for database
-    const updateData = toSnakeCase(updates);
-    updateData.updated_at = new Date().toISOString();
+export const surveyApi = {export const surveyApi = {
 
-    const { data, error } = await supabase
-      .from('surveys')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
+  // Get all surveys  // Get all surveys
 
-    if (error) {
-      // console.error removed
-      throw error;
-    }
-    
-    return toCamelCase(data);
-  },
+  async getSurveys(): Promise<Survey[]> {  async getSurveys(): Promise<Survey[]> {
 
-  // Delete survey
-  async deleteSurvey(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('surveys')
-      .delete()
-      .eq('id', id);
+    try {    try {
 
-    if (error) {
-      // console.error removed
-      throw error;
-    }
-  },
+      const response = await fetch('/api/surveys');      const response = await fetch('/api/surveys');
 
-  // Duplicate survey
-  async duplicateSurvey(id: string, title?: string): Promise<Survey> {
-    try {
-      const original = await this.getSurvey(id);
-      
-      const duplicate = {
-        ...original,
-        title: title || `${original.title} (Copy)`,
-        status: 'draft' as const,
-        analytics: {
-          totalViews: 0,
-          totalStarts: 0,
-          totalCompletes: 0,
-          completionRate: 0,
-          averageTime: 0
-        }
-      };
+      if (!response.ok) {      if (!response.ok) {
 
-      // Remove fields that should be auto-generated
-      delete (duplicate as any).id;
+        throw new Error(`Failed to fetch surveys: ${response.status}`);        throw new Error(`Failed to fetch surveys: ${response.status}`);
+
+      }      }
+
+      const data = await response.json();      const data = await response.json();
+
+      return data;      return data;
+
+    } catch (error) {    } catch (error) {
+
+      console.error('Error fetching surveys:', error);      console.error('Error fetching surveys:', error);
+
+      throw error;      throw error;
+
+    }    }
+
+  },  },
+
+
+
+  // Get survey by ID  // Get survey by ID
+
+  async getSurvey(id: string): Promise<Survey> {  async getSurvey(id: string): Promise<Survey> {
+
+    try {    try {
+
+      const response = await fetch(`/api/surveys/${id}`);      const response = await fetch(`/api/surveys/${id}`);
+
+      if (!response.ok) {      if (!response.ok) {
+
+        throw new Error(`Failed to fetch survey: ${response.status}`);        throw new Error(`Failed to fetch survey: ${response.status}`);
+
+      }      }
+
+      const data = await response.json();      const data = await response.json();
+
+      return data.survey;      return data.survey;
+
+    } catch (error) {    } catch (error) {
+
+      console.error('Error fetching survey:', error);      console.error('Error fetching survey:', error);
+
+      throw error;      throw error;
+
+    }    }
+
+  },  },
+
+
+
+  // Create a new survey  // Create a new survey
+
+  async createSurvey(survey: Omit<Survey, 'id' | 'createdAt' | 'updatedAt'>): Promise<Survey> {  async createSurvey(survey: Omit<Survey, 'id' | 'createdAt' | 'updatedAt'>): Promise<Survey> {
+
+    try {    try {
+
+      const response = await fetch('/api/surveys', {      const response = await fetch('/api/surveys', {
+
+        method: 'POST',        method: 'POST',
+
+        headers: {        headers: {
+
+          'Content-Type': 'application/json',          'Content-Type': 'application/json',
+
+        },        },
+
+        body: JSON.stringify(survey),        body: JSON.stringify(survey),
+
+      });      });
+
+            
+
+      if (!response.ok) {      if (!response.ok) {
+
+        throw new Error(`Failed to create survey: ${response.status}`);        throw new Error(`Failed to create survey: ${response.status}`);
+
+      }      }
+
+            
+
+      const result = await response.json();      const result = await response.json();
+
+      return result.survey;      return result.survey;
+
+    } catch (error) {    } catch (error) {
+
+      console.error('Error creating survey:', error);      console.error('Error creating survey:', error);
+
+      throw error;      throw error;
+
+    }    }
+
+  },  },
+
+
+
+  // Update an existing survey  // Update an existing survey
+
+  async updateSurvey(id: string, updates: Partial<Survey>): Promise<Survey> {  async updateSurvey(id: string, updates: Partial<Survey>): Promise<Survey> {
+
+    try {    try {
+
+      const response = await fetch(`/api/surveys/${id}`, {      const response = await fetch(`/api/surveys/${id}`, {
+
+        method: 'PUT',        method: 'PUT',
+
+        headers: {        headers: {
+
+          'Content-Type': 'application/json',          'Content-Type': 'application/json',
+
+        },        },
+
+        body: JSON.stringify(updates),        body: JSON.stringify(updates),
+
+      });      });
+
+            
+
+      if (!response.ok) {      if (!response.ok) {
+
+        throw new Error(`Failed to update survey: ${response.status}`);        throw new Error(`Failed to update survey: ${response.status}`);
+
+      }      }
+
+            
+
+      const result = await response.json();      const result = await response.json();
+
+      return result.survey;      return result.survey;
+
+    } catch (error) {    } catch (error) {
+
+      console.error('Error updating survey:', error);      console.error('Error updating survey:', error);
+
+      throw error;      throw error;
+
+    }    }
+
+  },  },
+
+
+
+  // Delete a survey  // Delete a survey
+
+  async deleteSurvey(id: string): Promise<void> {  async deleteSurvey(id: string): Promise<void> {
+
+    try {    try {
+
+      const response = await fetch(`/api/surveys/${id}`, {      const response = await fetch(`/api/surveys/${id}`, {
+
+        method: 'DELETE',        method: 'DELETE',
+
+      });      });
+
+            
+
+      if (!response.ok) {      if (!response.ok) {
+
+        throw new Error(`Failed to delete survey: ${response.status}`);        throw new Error(`Failed to delete survey: ${response.status}`);
+
+      }      }
+
+    } catch (error) {    } catch (error) {
+
+      console.error('Error deleting survey:', error);      console.error('Error deleting survey:', error);
+
+      throw error;      throw error;
+
+    }    }
+
+  },  },
+
+
+
+  // Duplicate a survey  // Duplicate a survey
+
+  async duplicateSurvey(id: string): Promise<Survey> {  async duplicateSurvey(id: string): Promise<Survey> {
+
+    try {    try {
+
+      const response = await fetch(`/api/surveys/${id}/duplicate`, {      const response = await fetch(`/api/surveys/${id}/duplicate`, {
+
+        method: 'POST',        method: 'POST',
+
+      });      });
+
+            
+
+      if (!response.ok) {      if (!response.ok) {
+
+        throw new Error(`Failed to duplicate survey: ${response.status}`);        throw new Error(`Failed to duplicate survey: ${response.status}`);
+
+      }      }
+
+            
+
+      const result = await response.json();      const result = await response.json();
+
+      return result.survey;      return result.survey;
+
+    } catch (error) {    } catch (error) {
+
+      console.error('Error duplicating survey:', error);      console.error('Error duplicating survey:', error);
+
+      throw error;      throw error;
+
+    }    }
+
+  },  },
+
+
+
+  // Publish survey  // Publish survey
+
+  async publishSurvey(id: string): Promise<Survey> {  async publishSurvey(id: string): Promise<Survey> {
+
+    return this.updateSurvey(id, { status: 'active' });    return this.updateSurvey(id, { status: 'active' });
+
+  },  },
+
+
+
+  // Pause survey  // Pause survey
+
+  async pauseSurvey(id: string): Promise<Survey> {  async pauseSurvey(id: string): Promise<Survey> {
+
+    return this.updateSurvey(id, { status: 'paused' });    return this.updateSurvey(id, { status: 'paused' });
+
+  },  },
+
+
+
+  // Archive survey  // Archive survey
+
+  async archiveSurvey(id: string): Promise<Survey> {  async archiveSurvey(id: string): Promise<Survey> {
+
+    return this.updateSurvey(id, { status: 'archived' });    return this.updateSurvey(id, { status: 'archived' });
+
+  },  },
+
+
+
+  // Get survey responses  // Get survey responses
+
+  async getSurveyResponses(surveyId: string): Promise<SurveyResponse[]> {  async getSurveyResponses(surveyId: string): Promise<SurveyResponse[]> {
+
+    try {    try {
+
+      const response = await fetch(`/api/surveys/${surveyId}/responses`);      const response = await fetch(`/api/surveys/${surveyId}/responses`);
+
+      if (!response.ok) {      if (!response.ok) {
+
+        throw new Error(`Failed to fetch responses: ${response.status}`);        throw new Error(`Failed to fetch responses: ${response.status}`);
+
+      }      }
+
+      const data = await response.json();      const data = await response.json();
+
+      return data;      return data;
+
+    } catch (error) {    } catch (error) {
+
+      console.error('Error fetching survey responses:', error);      console.error('Error fetching survey responses:', error);
+
+      throw error;      throw error;
+
+    }    }
+
+  },  },
+
+
+
+  // Get survey analytics  // Get survey analytics
+
+  async getSurveyAnalytics(surveyId: string): Promise<SurveyAnalytics> {  async getSurveyAnalytics(surveyId: string): Promise<SurveyAnalytics> {
+
+    try {    try {
+
+      const response = await fetch(`/api/surveys/${surveyId}/analytics`);      const response = await fetch(`/api/surveys/${surveyId}/analytics`);
+
+      if (!response.ok) {      if (!response.ok) {
+
+        throw new Error(`Failed to fetch analytics: ${response.status}`);        throw new Error(`Failed to fetch analytics: ${response.status}`);
+
+      }      }
+
+      const data = await response.json();      const data = await response.json();
+
+      return data;      return data;
+
+    } catch (error) {    } catch (error) {
+
+      console.error('Error fetching survey analytics:', error);      console.error('Error fetching survey analytics:', error);
+
+      throw error;      throw error;
+
+    }    }
+
+  }  }
+
+};};
       delete (duplicate as any).createdAt;
       delete (duplicate as any).updatedAt;
       delete (duplicate as any).publishedAt;

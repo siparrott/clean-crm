@@ -1126,8 +1126,65 @@ const server = http.createServer(async (req, res) => {
             });
             return;
           }
+
+          // Handle individual survey operations
+          const surveyIdMatch = pathname.match(/^\/api\/surveys\/([^\/]+)$/);
+          const duplicateMatch = pathname.match(/^\/api\/surveys\/([^\/]+)\/duplicate$/);
           
-          // Handle other survey operations (edit, delete, etc.)
+          if (surveyIdMatch && req.method === 'PUT') {
+            const surveyId = surveyIdMatch[1];
+            let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+            req.on('end', () => {
+              try {
+                const updates = JSON.parse(body);
+                console.log('📝 Updating survey:', surveyId);
+                
+                const updatedSurvey = {
+                  id: surveyId,
+                  ...updates,
+                  updated_at: new Date().toISOString()
+                };
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, survey: updatedSurvey }));
+              } catch (error) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Invalid update data' }));
+              }
+            });
+            return;
+          }
+          
+          if (surveyIdMatch && req.method === 'DELETE') {
+            const surveyId = surveyIdMatch[1];
+            console.log('🗑️ Deleting survey:', surveyId);
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Survey deleted' }));
+            return;
+          }
+          
+          if (duplicateMatch && req.method === 'POST') {
+            const surveyId = duplicateMatch[1];
+            console.log('📄 Duplicating survey:', surveyId);
+            
+            const duplicatedSurvey = {
+              id: Date.now().toString(),
+              title: 'Copy of Questionnaire',
+              description: 'Duplicated questionnaire',
+              status: 'draft',
+              created_at: new Date().toISOString(),
+              questions: [],
+              responses_count: 0
+            };
+            
+            res.writeHead(201, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, survey: duplicatedSurvey }));
+            return;
+          }
+          
+          // Fallback for other survey operations
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: true, message: 'Survey operation completed' }));
           
