@@ -4,8 +4,9 @@ import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 interface Question {
   id: string;
-  type: string;
+  type: 'text' | 'long_text' | 'single_choice' | 'multiple_choice' | 'rating';
   title: string;
+  description?: string;
   required: boolean;
   options?: { id: string; text: string }[];
 }
@@ -145,6 +146,7 @@ const QuestionnaireFormPage: React.FC = () => {
     
     switch (question.type) {
       case 'single_choice':
+      case 'multiple_choice':
         return (
           <div className="space-y-2">
             {question.options?.map(option => (
@@ -172,6 +174,30 @@ const QuestionnaireFormPage: React.FC = () => {
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Your answer..."
           />
+        );
+      
+      case 'rating':
+        return (
+          <div className="space-y-2">
+            <div className="flex space-x-4 items-center">
+              {[1, 2, 3, 4, 5].map(rating => (
+                <label key={rating} className="flex items-center space-x-1 cursor-pointer">
+                  <input
+                    type="radio"
+                    name={question.id}
+                    value={rating.toString()}
+                    checked={value === rating.toString()}
+                    onChange={(e) => handleInputChange(question.id, e.target.value)}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium">{rating}</span>
+                </label>
+              ))}
+            </div>
+            {question.description && (
+              <p className="text-xs text-gray-500">{question.description}</p>
+            )}
+          </div>
         );
       
       case 'text':
