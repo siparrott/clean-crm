@@ -11,3 +11,4 @@
 🔨 Initializing database schema...
 ✅ Database schema initialized successfully
 Request: GET /api/admin/client-questionnaires/test-client-123
+Request: GET /healthz
