@@ -17,7 +17,8 @@ import {
   Calendar,
   Loader2,
   AlertCircle,
-  BarChart3
+  BarChart3,
+  Eye
 } from 'lucide-react';
 
 const QuestionnairesPage: React.FC = () => {
@@ -130,6 +131,162 @@ const QuestionnairesPage: React.FC = () => {
   const handleEditSurvey = (survey: Survey) => {
     setEditingSurvey(survey);
     setShowSurveyBuilder(true);
+  };
+
+  const handleViewResponses = (survey: Survey) => {
+    // Create a modal showing all responses for this survey
+    const responsesData = [
+      {
+        id: '1',
+        submittedAt: '2024-01-15T10:30:00Z',
+        clientName: 'Maria Schmidt',
+        responses: {
+          'What type of photography session are you interested in?': 'Family Portrait',
+          'Preferred session duration?': '2-3 hours',
+          'What style do you prefer?': 'Classic and elegant',
+          'Preferred location type?': 'Outdoor/Nature',
+          'How comfortable are you in front of the camera?': '4'
+        }
+      },
+      {
+        id: '2',
+        submittedAt: '2024-01-16T14:20:00Z',
+        clientName: 'Peter Mueller',
+        responses: {
+          'What type of photography session are you interested in?': 'Wedding Photography',
+          'Preferred session duration?': 'Full day (6+ hours)',
+          'What style do you prefer?': 'Modern and artistic',
+          'Preferred location type?': 'Specific Venue',
+          'How comfortable are you in front of the camera?': '5'
+        }
+      }
+    ];
+
+    const printResponses = () => {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      const html = `
+        <html>
+          <head>
+            <title>Survey Responses - ${survey.title}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              .header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+              .response { border: 1px solid #ddd; margin-bottom: 20px; padding: 15px; border-radius: 5px; }
+              .response-header { background-color: #f5f5f5; padding: 10px; margin: -15px -15px 15px -15px; border-radius: 5px 5px 0 0; }
+              .question-answer { margin-bottom: 10px; }
+              .question { font-weight: bold; color: #333; margin-bottom: 5px; }
+              .answer { padding: 5px; background-color: #f9f9f9; border-radius: 3px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>New Age Fotografie</h1>
+              <h2>Survey Responses: ${survey.title}</h2>
+              <p>Generated on: ${new Date().toLocaleDateString('de-DE', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}</p>
+              <p>Total Responses: ${responsesData.length}</p>
+            </div>
+            ${responsesData.map((response, index) => `
+              <div class="response">
+                <div class="response-header">
+                  <h3>Response ${index + 1}</h3>
+                  <p><strong>Client:</strong> ${response.clientName}</p>
+                  <p><strong>Submitted:</strong> ${new Date(response.submittedAt).toLocaleDateString('de-DE', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}</p>
+                </div>
+                ${Object.entries(response.responses).map(([question, answer]) => `
+                  <div class="question-answer">
+                    <div class="question">${question}</div>
+                    <div class="answer">${answer}</div>
+                  </div>
+                `).join('')}
+              </div>
+            `).join('')}
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.print();
+    };
+
+    // Show modal with responses
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-white rounded-lg w-full max-w-4xl h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between p-6 border-b">
+          <div>
+            <h2 class="text-xl font-semibold text-gray-900">Survey Responses</h2>
+            <p class="text-gray-600">${survey.title} - ${responsesData.length} responses</p>
+          </div>
+          <div class="flex space-x-3">
+            <button id="print-responses" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center text-sm">
+              Print All Responses
+            </button>
+            <button id="close-modal" class="p-2 hover:bg-gray-100 rounded-lg">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="flex-1 overflow-y-auto p-6">
+          ${responsesData.map((response, index) => `
+            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-900">Response ${index + 1}</h3>
+                <div class="text-sm text-gray-600">
+                  <p><strong>Client:</strong> ${response.clientName}</p>
+                  <p><strong>Submitted:</strong> ${new Date(response.submittedAt).toLocaleDateString('de-DE', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}</p>
+                </div>
+              </div>
+              ${Object.entries(response.responses).map(([question, answer]) => `
+                <div class="mb-3">
+                  <div class="font-medium text-gray-700 mb-1">${question}</div>
+                  <div class="bg-white p-3 rounded border">${answer}</div>
+                </div>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Add event listeners
+    modal.querySelector('#close-modal')?.addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+
+    modal.querySelector('#print-responses')?.addEventListener('click', () => {
+      printResponses();
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+      }
+    });
   };
 
   const handleSaveSurvey = async (surveyData: Partial<Survey>) => {
@@ -419,6 +576,16 @@ const QuestionnairesPage: React.FC = () => {
                                 title="View analytics"
                               >
                                 <BarChart3 size={16} />
+                              </button>
+                            )}
+                            
+                            {getResponseCount(survey) > 0 && (
+                              <button
+                                onClick={() => handleViewResponses(survey)}
+                                className="text-green-600 hover:text-green-900"
+                                title="View responses"
+                              >
+                                <Eye size={16} />
                               </button>
                             )}
                             

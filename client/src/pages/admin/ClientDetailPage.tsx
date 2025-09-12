@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { ArrowLeft, Mail, Phone, MapPin, Building, Edit, Trash2, Calendar, Euro, MessageSquare, Plus, FileText } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Building, Edit, Trash2, Calendar, Euro, MessageSquare, Plus, FileText, Inbox, ClipboardList, Eye } from 'lucide-react';
 import { googleCalendarService } from '../../services/googleCalendarService';
 import SendQuestionnaireModal from '../../components/admin/SendQuestionnaireModal';
+import ViewEmailsModal from '../../components/admin/ViewEmailsModal';
+import ViewQuestionnairesModal from '../../components/admin/ViewQuestionnairesModal';
 
 interface Client {
   id: string;
@@ -30,6 +32,8 @@ const ClientDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showQuestionnaireModal, setShowQuestionnaireModal] = useState(false);
+  const [showEmailsModal, setShowEmailsModal] = useState(false);
+  const [showSurveysModal, setShowSurveysModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -161,6 +165,14 @@ const ClientDetailPage: React.FC = () => {
     }
   };
 
+  const handleViewEmails = () => {
+    setShowEmailsModal(true);
+  };
+
+  const handleViewQuestionnaires = () => {
+    setShowSurveysModal(true);
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       active: { bg: 'bg-green-100', text: 'text-green-800', label: 'Active' },
@@ -230,6 +242,20 @@ const ClientDetailPage: React.FC = () => {
             >
               <FileText size={16} className="mr-2" />
               Send Questionnaire
+            </button>
+            <button
+              onClick={handleViewEmails}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center"
+            >
+              <Inbox size={16} className="mr-2" />
+              View Emails
+            </button>
+            <button
+              onClick={handleViewQuestionnaires}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center"
+            >
+              <ClipboardList size={16} className="mr-2" />
+              View Questionnaires
             </button>
             <button
               onClick={handleDelete}
@@ -367,6 +393,26 @@ const ClientDetailPage: React.FC = () => {
           isOpen={showQuestionnaireModal}
           onClose={() => setShowQuestionnaireModal(false)}
           client={client}
+        />
+      )}
+
+      {/* View Emails Modal */}
+      {client && (
+        <ViewEmailsModal
+          isOpen={showEmailsModal}
+          onClose={() => setShowEmailsModal(false)}
+          clientId={client.id}
+          clientName={`${client.firstName} ${client.lastName}`}
+        />
+      )}
+
+      {/* View Questionnaires Modal */}
+      {client && (
+        <ViewQuestionnairesModal
+          isOpen={showSurveysModal}
+          onClose={() => setShowSurveysModal(false)}
+          clientId={client.id}
+          clientName={`${client.firstName} ${client.lastName}`}
         />
       )}
     </AdminLayout>
