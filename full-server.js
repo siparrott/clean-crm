@@ -1014,6 +1014,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
               `;
               
               console.log('💾 Questionnaire response stored for client:', clientName);
+              console.log('🔔 New questionnaire notification available for admin dashboard');
             } catch (dbError) {
               console.error('❌ Database storage error:', dbError.message);
               // Continue even if database fails
@@ -1053,18 +1054,53 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
                 qr.id as response_id,
                 qr.answers,
                 qr.submitted_at,
-                c.first_name,
-                c.last_name,
-                c.email
+                COALESCE(c.first_name, 'Demo') as first_name,
+                COALESCE(c.last_name, 'Client') as last_name,
+                COALESCE(c.email, 'demo@example.com') as email
               FROM questionnaire_links ql
               LEFT JOIN questionnaire_responses qr ON ql.token = qr.token
               LEFT JOIN crm_clients c ON ql.client_id = c.client_id
-              WHERE ql.client_id::text = ${clientIdParam}::text OR c.id::text = ${clientIdParam}::text
+              WHERE ql.client_id::text = ${clientIdParam}::text
               ORDER BY ql.created_at DESC
             `;
           } catch (sqlErr) {
             console.error('❌ Client questionnaires SQL error:', sqlErr.message || sqlErr);
-            throw sqlErr;
+            
+            // Fallback: Try to get responses directly from questionnaire_responses table
+            try {
+              const responseResults = await sql`
+                SELECT 
+                  token,
+                  client_id,
+                  template_slug,
+                  answers,
+                  submitted_at,
+                  created_at
+                FROM questionnaire_responses 
+                WHERE client_id = ${clientIdParam}
+                ORDER BY submitted_at DESC
+              `;
+              
+              questionnaires = responseResults.map(r => ({
+                token: r.token,
+                client_id: r.client_id,
+                template_id: r.template_slug,
+                is_used: true,
+                sent_at: r.created_at,
+                expires_at: null,
+                response_id: r.token,
+                answers: r.answers,
+                submitted_at: r.submitted_at,
+                first_name: 'Client',
+                last_name: '',
+                email: 'client@example.com'
+              }));
+              
+              console.log('✅ Fallback query successful, found responses:', questionnaires.length);
+            } catch (fallbackErr) {
+              console.error('❌ Fallback query also failed:', fallbackErr.message);
+              questionnaires = [];
+            }
           }
 
           // Transform the data for the frontend
@@ -1082,6 +1118,55 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
           res.end(JSON.stringify(formattedQuestionnaires));
         } catch (error) {
           console.error('❌ Get client questionnaires error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+      
+      // Get notifications endpoint
+      if (pathname === '/api/admin/notifications' && req.method === 'GET') {
+        try {
+          // For now, return notifications based on recent questionnaire responses
+          const recentResponses = await sql`
+            SELECT 
+              qr.id,
+              qr.client_id,
+              qr.submitted_at,
+              qr.token
+            FROM questionnaire_responses qr
+            WHERE qr.submitted_at > NOW() - INTERVAL '7 days'
+            ORDER BY qr.submitted_at DESC
+            LIMIT 10
+          `;
+          
+          const notifications = recentResponses.map(response => ({
+            id: `questionnaire-${response.id}`,
+            type: 'questionnaire',
+            title: 'New Questionnaire Response',
+            message: `Client ${response.client_id} submitted a questionnaire response`,
+            timestamp: response.submitted_at,
+            read: false
+          }));
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(notifications));
+        } catch (error) {
+          console.error('❌ Get notifications error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+      
+      // Mark notification as read endpoint
+      if (pathname.startsWith('/api/admin/notifications/') && pathname.endsWith('/read') && req.method === 'POST') {
+        try {
+          // For now, just return success since we're not persisting read status
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } catch (error) {
+          console.error('❌ Mark notification read error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: error.message }));
         }

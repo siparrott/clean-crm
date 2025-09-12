@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import NotificationBell from './NotificationBell';
 import {
   LayoutDashboard,
   UserPlus,
@@ -403,6 +404,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             </h1>
 
             <div className="flex items-center space-x-4">
+              {/* Notification Bell */}
+              <NotificationBell />
+
               {/* Language Switcher */}
               <button
                 onClick={toggleLanguage}
