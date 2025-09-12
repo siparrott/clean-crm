@@ -7,6 +7,7 @@ const QuestionnairesPageV2: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [surveys, setSurveys] = useState<any[]>([]);
+  const [selectedSurveyId, setSelectedSurveyId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formTitle, setFormTitle] = useState('');
@@ -20,10 +21,11 @@ const QuestionnairesPageV2: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      const template = selectedSurveyId || 'default-questionnaire';
       const response = await fetch('/api/admin/create-questionnaire-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: 'demo-client', template_id: 'photography-preferences' }),
+        body: JSON.stringify({ client_id: 'demo-client', template_id: template }),
       });
 
       if (!response.ok) throw new Error('Failed to create questionnaire link');
@@ -73,7 +75,9 @@ const QuestionnairesPageV2: React.FC = () => {
       const res = await fetch('/api/surveys');
       if (!res.ok) throw new Error('Failed to load surveys');
       const data = await res.json();
-      setSurveys(Array.isArray(data) ? data : (data.surveys || []));
+      const list = Array.isArray(data) ? data : (data.surveys || []);
+      setSurveys(list);
+      if (list.length > 0 && !selectedSurveyId) setSelectedSurveyId(list[0].id);
     } catch (err) {
       console.error('Error loading surveys:', err);
     } finally {
@@ -214,8 +218,13 @@ const QuestionnairesPageV2: React.FC = () => {
                 </svg>
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Create Questionnaire Link</h3>
-              <p className="text-gray-500 mb-4">Generate a shareable link for clients to complete questionnaires</p>
-              <button onClick={handleCreateQuestionnaireLink} disabled={loading} className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+              <p className="text-gray-500 mb-2">Select a questionnaire and generate a shareable link for clients</p>
+              <div className="mb-3">
+                <select value={selectedSurveyId || ''} onChange={e => setSelectedSurveyId(e.target.value)} className="border rounded px-2 py-1">
+                  {surveys.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                </select>
+              </div>
+              <button onClick={handleCreateQuestionnaireLink} disabled={loading || !selectedSurveyId} className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
                 {loading ? 'Creating...' : 'Create Link'}
               </button>
             </div>
