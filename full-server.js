@@ -1674,7 +1674,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
               c.city as client_city,
               c.country as client_country
             FROM crm_invoices i
-            LEFT JOIN crm_clients c ON i.client_id = c.client_id
+            LEFT JOIN crm_clients c ON i.client_id = c.id
             ORDER BY i.created_at DESC
           `;
           
@@ -1702,7 +1702,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
               c.city as client_city,
               c.country as client_country
             FROM crm_invoices i
-            LEFT JOIN crm_clients c ON i.client_id = c.client_id
+            LEFT JOIN crm_clients c ON i.client_id = c.id
             WHERE i.id = ${invoiceId}
           `;
           
@@ -1864,7 +1864,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
                   c.name as client_name,
                   c.email as client_email
                 FROM crm_invoices i
-                LEFT JOIN crm_clients c ON i.client_id = c.client_id
+                LEFT JOIN crm_clients c ON i.client_id = c.id
                 WHERE i.id = ${invoice_id}
               `;
               
