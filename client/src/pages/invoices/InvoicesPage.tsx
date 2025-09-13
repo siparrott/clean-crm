@@ -42,6 +42,8 @@ export default function InvoicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPriceListModal, setShowPriceListModal] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsAppPhone, setWhatsAppPhone] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'preview'>('list');
 
@@ -158,9 +160,54 @@ export default function InvoicesPage() {
   };
 
   const handleSendWhatsApp = (invoice: Invoice) => {
-    const message = `New Invoice from New Age Fotografie\n\nInvoice #${invoice.invoice_number}\nAmount: €${invoice.total_amount}\n\nView your invoice: ${window.location.origin}/invoice/${invoice.id}`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
+    setSelectedInvoice(invoice);
+    setShowWhatsAppModal(true);
+    // Pre-populate phone number if available
+    setWhatsAppPhone('');
+  };
+
+  const handleConfirmWhatsAppSend = async () => {
+    if (!selectedInvoice || !whatsAppPhone.trim()) {
+      alert('Please enter a valid phone number');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/invoices/share-whatsapp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          invoice_id: selectedInvoice.id,
+          phone_number: whatsAppPhone.replace(/\D/g, '') // Remove non-digits
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Open WhatsApp with the prepared message
+        window.open(result.whatsapp_url, '_blank');
+        
+        // Update invoice status to 'sent' if it was draft
+        if (selectedInvoice.status === 'draft') {
+          await handleStatusUpdate(selectedInvoice.id, 'sent');
+        }
+        
+        setShowWhatsAppModal(false);
+        setWhatsAppPhone('');
+        setSelectedInvoice(null);
+        
+        // Refresh invoices to show updated status
+        fetchInvoices();
+      } else {
+        alert('Failed to create WhatsApp message: ' + result.error);
+      }
+    } catch (error) {
+      console.error('WhatsApp send error:', error);
+      alert('Failed to send WhatsApp message');
+    }
   };
 
   const calculateInvoiceTotals = () => {
@@ -515,6 +562,69 @@ export default function InvoicesPage() {
           onClose={() => setShowPriceListModal(false)}
           onSelectItem={handleAddItemFromPriceList}
         />
+      )}
+
+      {/* WhatsApp Share Modal */}
+      {showWhatsAppModal && selectedInvoice && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Send Invoice via WhatsApp
+              </h3>
+              
+              <div className="mb-4 p-3 bg-gray-50 rounded">
+                <p className="text-sm text-gray-600">
+                  Invoice: <span className="font-medium">#{selectedInvoice.invoice_number}</span>
+                </p>
+                <p className="text-sm text-gray-600">
+                  Amount: <span className="font-medium">€{selectedInvoice.total_amount.toFixed(2)}</span>
+                </p>
+                <p className="text-sm text-gray-600">
+                  Client: <span className="font-medium">{selectedInvoice.client?.name || selectedInvoice.client_id}</span>
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="whatsapp-phone" className="block text-sm font-medium text-gray-700 mb-2">
+                  WhatsApp Phone Number (with country code)
+                </label>
+                <input
+                  type="tel"
+                  id="whatsapp-phone"
+                  value={whatsAppPhone}
+                  onChange={(e) => setWhatsAppPhone(e.target.value)}
+                  placeholder="e.g., +436641234567"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Include country code (e.g., +43 for Austria, +49 for Germany)
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowWhatsAppModal(false);
+                    setWhatsAppPhone('');
+                    setSelectedInvoice(null);
+                  }}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmWhatsAppSend}
+                  disabled={!whatsAppPhone.trim()}
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Send via WhatsApp</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -32,6 +32,22 @@ try {
   sql = null;
 }
 
+// Initialize Stripe
+let stripe = null;
+try {
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (stripeKey) {
+    const Stripe = require('stripe');
+    stripe = Stripe(stripeKey);
+    console.log('✅ Stripe initialized with live key');
+  } else {
+    console.log('⚠️ STRIPE_SECRET_KEY not set; payments will be in demo mode');
+  }
+} catch (err) {
+  console.warn('⚠️ Could not initialize Stripe:', err.message);
+  stripe = null;
+}
+
 console.log('🚀 Starting PRODUCTION server with Neon database...');
 
 // Files API handler function
@@ -1831,6 +1847,95 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
         return;
       }
 
+      // WhatsApp Invoice Sharing API endpoint
+      if (pathname === '/api/invoices/share-whatsapp' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { invoice_id, phone_number } = JSON.parse(body);
+              console.log('📱 Creating WhatsApp share link for invoice:', invoice_id);
+              
+              // Get invoice details
+              const invoices = await sql`
+                SELECT 
+                  i.*,
+                  c.name as client_name,
+                  c.email as client_email
+                FROM crm_invoices i
+                LEFT JOIN crm_clients c ON i.client_id = c.client_id
+                WHERE i.id = ${invoice_id}
+              `;
+              
+              if (invoices.length === 0) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invoice not found' }));
+                return;
+              }
+              
+              const invoice = invoices[0];
+              const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
+              const invoiceUrl = `${baseUrl}/invoice/public/${invoice_id}`;
+              
+              // Create WhatsApp message
+              const message = `Hallo ${invoice.client_name || 'Kunde'},
+
+hier ist Ihre Rechnung von New Age Fotografie:
+
+📄 Rechnungsnummer: ${invoice.invoice_number}
+💰 Betrag: €${parseFloat(invoice.total_amount).toFixed(2)}
+📅 Fälligkeitsdatum: ${new Date(invoice.due_date).toLocaleDateString('de-DE')}
+
+🔗 Rechnung online ansehen: ${invoiceUrl}
+
+Bei Fragen stehe ich Ihnen gerne zur Verfügung!
+
+Mit freundlichen Grüßen,
+New Age Fotografie Team`;
+
+              // Create WhatsApp URL
+              const encodedMessage = encodeURIComponent(message);
+              const whatsappUrl = `https://wa.me/${phone_number}?text=${encodedMessage}`;
+              
+              // Log WhatsApp share activity
+              await sql`
+                INSERT INTO crm_client_activity_log (
+                  client_id, activity_type, description, metadata, created_at
+                ) VALUES (
+                  ${invoice.client_id}, 'invoice_shared_whatsapp', 
+                  ${`Invoice ${invoice.invoice_number} shared via WhatsApp to ${phone_number}`},
+                  ${JSON.stringify({ 
+                    invoice_id: invoice_id, 
+                    phone_number: phone_number,
+                    whatsapp_url: whatsappUrl,
+                    invoice_url: invoiceUrl
+                  })},
+                  NOW()
+                )
+              `;
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                whatsapp_url: whatsappUrl,
+                invoice_url: invoiceUrl,
+                message: 'WhatsApp share link created successfully'
+              }));
+            } catch (error) {
+              console.error('❌ WhatsApp share error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ WhatsApp API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
       // Stripe Checkout API endpoints
       if (pathname === '/api/checkout/create-session' && req.method === 'POST') {
         try {
@@ -1841,19 +1946,57 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
               const checkoutData = JSON.parse(body);
               console.log('💳 Creating Stripe checkout session:', checkoutData);
               
-              // For demo purposes without full Stripe setup, create a mock success response
-              const mockSessionId = `mock_session_${Date.now()}`;
+              // Check if we have Stripe configured
+              if (!stripe) {
+                console.log('⚠️ Stripe not configured, using demo mode');
+                const mockSessionId = `mock_session_${Date.now()}`;
+                const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
+                const mockSuccessUrl = `${baseUrl}/checkout/mock-success?session_id=${mockSessionId}`;
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                  success: true,
+                  sessionId: mockSessionId,
+                  url: mockSuccessUrl,
+                  message: 'Demo checkout session created - Stripe not configured'
+                }));
+                return;
+              }
+
+              // Create real Stripe checkout session
               const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
-              const mockSuccessUrl = `${baseUrl}/checkout/mock-success?session_id=${mockSessionId}`;
               
-              console.log('🎭 Demo mode: Redirecting to mock success page:', mockSuccessUrl);
+              const session = await stripe.checkout.sessions.create({
+                payment_method_types: ['card'],
+                line_items: checkoutData.line_items || [{
+                  price_data: {
+                    currency: checkoutData.currency || 'eur',
+                    product_data: {
+                      name: checkoutData.product_name || 'Photography Service',
+                      description: checkoutData.description || 'Professional photography service',
+                    },
+                    unit_amount: Math.round((checkoutData.amount || 0) * 100), // Convert to cents
+                  },
+                  quantity: 1,
+                }],
+                mode: 'payment',
+                success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+                cancel_url: `${baseUrl}/checkout/cancel`,
+                metadata: {
+                  client_id: checkoutData.client_id || '',
+                  invoice_id: checkoutData.invoice_id || '',
+                  order_type: checkoutData.order_type || 'photography_service'
+                }
+              });
+
+              console.log('✅ Stripe session created:', session.id);
               
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
                 success: true,
-                sessionId: mockSessionId,
-                url: mockSuccessUrl,
-                message: 'Demo checkout session created'
+                sessionId: session.id,
+                url: session.url,
+                message: 'Stripe checkout session created successfully'
               }));
             } catch (error) {
               console.error('❌ Checkout creation error:', error.message);
