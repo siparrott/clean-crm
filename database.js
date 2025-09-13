@@ -94,6 +94,91 @@ if (!connectionString) {
         )
       `);
       
+      // Create CRM Invoices table (comprehensive invoice system)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS crm_invoices (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          invoice_number VARCHAR(50) UNIQUE NOT NULL,
+          client_id TEXT,
+          amount DECIMAL(10,2) DEFAULT 0,
+          tax_amount DECIMAL(10,2) DEFAULT 0,
+          total_amount DECIMAL(10,2) DEFAULT 0,
+          subtotal_amount DECIMAL(10,2) DEFAULT 0,
+          discount_amount DECIMAL(10,2) DEFAULT 0,
+          currency VARCHAR(3) DEFAULT 'EUR',
+          status VARCHAR(50) DEFAULT 'draft',
+          due_date DATE,
+          paid_date TIMESTAMP WITH TIME ZONE,
+          sent_date TIMESTAMP WITH TIME ZONE,
+          payment_terms VARCHAR(100) DEFAULT '30 days',
+          notes TEXT,
+          pdf_url TEXT,
+          template_id TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_by TEXT
+        )
+      `);
+      
+      // Create CRM Invoice Items table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS crm_invoice_items (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          invoice_id TEXT,
+          description TEXT NOT NULL,
+          quantity INTEGER DEFAULT 1,
+          unit_price DECIMAL(10,2) DEFAULT 0,
+          tax_rate DECIMAL(5,2) DEFAULT 19.00,
+          tax_amount DECIMAL(10,2) DEFAULT 0,
+          line_total DECIMAL(10,2) DEFAULT 0,
+          sort_order INTEGER DEFAULT 0,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+      
+      // Create CRM Invoice Payments table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS crm_invoice_payments (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          invoice_id TEXT,
+          amount DECIMAL(10,2) NOT NULL,
+          payment_method VARCHAR(50) DEFAULT 'bank_transfer',
+          payment_reference TEXT,
+          payment_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          notes TEXT,
+          created_by TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+      
+      // Create CRM Client Activity Log table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS crm_client_activity_log (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          client_id TEXT,
+          activity_type VARCHAR(100) NOT NULL,
+          description TEXT,
+          metadata JSONB,
+          user_id TEXT,
+          user_email TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+      
+      // Create CRM Invoice Audit Log table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS crm_invoice_audit_log (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          invoice_id TEXT,
+          action VARCHAR(50) NOT NULL,
+          old_values JSONB,
+          new_values JSONB,
+          user_id TEXT,
+          user_email TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+
       // Create Digital Files table
       await pool.query(`
         CREATE TABLE IF NOT EXISTS digital_files (
