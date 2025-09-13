@@ -73,6 +73,7 @@ import EventFotoshootingPage from './pages/fotoshootings/EventFotoshootingPage';
 import WeddingFotoshootingPage from './pages/fotoshootings/WeddingFotoshootingPage';
 import GalleryPage from './pages/GalleryPage';
 import PublicGalleriesPage from './pages/PublicGalleriesPage';
+import PublicInvoicePage from './pages/PublicInvoicePage';
 import ChatBot from './components/chat/ChatBot';
 import { GalleryShopTest } from './pages/GalleryShopTest';
 import DownloadDataPage from './pages/DownloadDataPage';
@@ -122,6 +123,7 @@ function App() {
                 <Route path="/survey-demo" element={<SurveySystemDemoPage />} />
                 <Route path="/survey/:id" element={<SurveyTakingPage />} />
                 <Route path="/q/:token" element={<QuestionnaireFormPage />} />
+                <Route path="/invoice/:invoiceId" element={<PublicInvoicePage />} />
                 <Route path="/download-data" element={<DownloadDataPage />} />
 
                 {/* Admin routes */}

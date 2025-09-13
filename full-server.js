@@ -1393,27 +1393,215 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
         return;
       }
 
-      // CRM Price List API endpoint (returns voucher products for invoice creation)
+      // CRM Price List API endpoint (returns photography price guide for invoice creation)
       if (pathname === '/api/crm/price-list' && req.method === 'GET') {
         try {
-          console.log('📋 Fetching price list (voucher products) for invoice creation...');
-          const products = await database.getVoucherProducts();
+          console.log('📋 Fetching price list (photography price guide) for invoice creation...');
           
-          // Transform voucher products to price list format expected by frontend
-          const priceListItems = products.map(product => ({
-            id: product.id,
-            name: product.name,
-            description: product.description,
-            price: parseFloat(product.price),
-            category: product.category,
-            type: product.type || 'service',
-            unit: 'session', // Default unit for photography services
-            taxRate: 19, // Default German VAT rate
-            isActive: product.is_active
-          }));
+          // Photography price guide data (replacing voucher products)
+          const priceGuide = [
+            {
+              id: 'portrait-basic',
+              name: 'Portrait Session - Basic',
+              description: 'Basic portrait session with 10 edited photos',
+              price: 150,
+              category: 'Portrait',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'portrait-premium',
+              name: 'Portrait Session - Premium',
+              description: 'Premium portrait session with 20 edited photos and styling consultation',
+              price: 250,
+              category: 'Portrait',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'family-outdoor',
+              name: 'Family Outdoor Shooting',
+              description: 'Family photography session in outdoor location with 15 edited photos',
+              price: 200,
+              category: 'Family',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'family-studio',
+              name: 'Family Studio Session',
+              description: 'Professional family photos in our studio with 12 edited photos',
+              price: 180,
+              category: 'Family',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'couple-engagement',
+              name: 'Couple & Engagement',
+              description: 'Romantic couple or engagement session with 25 edited photos',
+              price: 300,
+              category: 'Couple',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'wedding-basic',
+              name: 'Wedding Photography - Basic',
+              description: 'Wedding coverage (4 hours) with 100+ edited photos',
+              price: 800,
+              category: 'Wedding',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'wedding-premium',
+              name: 'Wedding Photography - Premium',
+              description: 'Full day wedding coverage (8 hours) with 200+ photos and album',
+              price: 1200,
+              category: 'Wedding',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'business-headshots',
+              name: 'Business Headshots',
+              description: 'Professional headshots for business use with 5 edited photos',
+              price: 120,
+              category: 'Business',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'business-team',
+              name: 'Business Team Photography',
+              description: 'Team photography session for corporate use',
+              price: 350,
+              category: 'Business',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'maternity-session',
+              name: 'Maternity Photography',
+              description: 'Beautiful maternity session with 15 edited photos',
+              price: 220,
+              category: 'Maternity',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'newborn-session',
+              name: 'Newborn Photography',
+              description: 'Gentle newborn session with props and 20 edited photos',
+              price: 280,
+              category: 'Newborn',
+              type: 'service',
+              unit: 'session',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'event-coverage',
+              name: 'Event Photography',
+              description: 'Event coverage with unlimited photos (price per hour)',
+              price: 80,
+              category: 'Events',
+              type: 'service',
+              unit: 'hour',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'photo-album',
+              name: 'Premium Photo Album',
+              description: 'High-quality photo album (30 pages)',
+              price: 150,
+              category: 'Products',
+              type: 'product',
+              unit: 'piece',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'usb-drive',
+              name: 'USB Drive with Photos',
+              description: 'Custom USB drive with all high-resolution photos',
+              price: 50,
+              category: 'Products',
+              type: 'product',
+              unit: 'piece',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'prints-package',
+              name: 'Print Package',
+              description: 'Professional prints package (10x 20x30cm)',
+              price: 80,
+              category: 'Products',
+              type: 'product',
+              unit: 'package',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'extra-editing',
+              name: 'Extra Photo Editing',
+              description: 'Additional photo editing and retouching',
+              price: 25,
+              category: 'Services',
+              type: 'service',
+              unit: 'photo',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'travel-fee',
+              name: 'Travel Fee',
+              description: 'Travel fee for locations outside Vienna',
+              price: 50,
+              category: 'Services',
+              type: 'service',
+              unit: 'trip',
+              taxRate: 19,
+              isActive: true
+            },
+            {
+              id: 'rush-delivery',
+              name: 'Rush Delivery',
+              description: 'Express photo delivery within 48 hours',
+              price: 100,
+              category: 'Services',
+              type: 'service',
+              unit: 'service',
+              taxRate: 19,
+              isActive: true
+            }
+          ];
           
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(priceListItems));
+          res.end(JSON.stringify(priceGuide));
         } catch (error) {
           console.error('❌ Price list API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -1451,6 +1639,192 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
           res.end(JSON.stringify(product));
         } catch (error) {
           console.error('❌ Voucher product API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Invoice API endpoints
+      if (pathname === '/api/invoices' && req.method === 'GET') {
+        try {
+          console.log('📄 Fetching invoices...');
+          const invoices = await sql`
+            SELECT 
+              i.*,
+              c.name as client_name,
+              c.email as client_email,
+              c.address1 as client_address1,
+              c.city as client_city,
+              c.country as client_country
+            FROM crm_invoices i
+            LEFT JOIN crm_clients c ON i.client_id = c.client_id
+            ORDER BY i.created_at DESC
+          `;
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(invoices));
+        } catch (error) {
+          console.error('❌ Invoices API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      if (pathname.startsWith('/api/invoices/public/') && req.method === 'GET') {
+        try {
+          const invoiceId = pathname.split('/').pop();
+          console.log('📄 Fetching public invoice:', invoiceId);
+          
+          const invoices = await sql`
+            SELECT 
+              i.*,
+              c.name as client_name,
+              c.email as client_email,
+              c.address1 as client_address1,
+              c.city as client_city,
+              c.country as client_country
+            FROM crm_invoices i
+            LEFT JOIN crm_clients c ON i.client_id = c.client_id
+            WHERE i.id = ${invoiceId}
+          `;
+          
+          if (invoices.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invoice not found' }));
+            return;
+          }
+          
+          const invoice = invoices[0];
+          
+          // Get invoice items
+          const items = await sql`
+            SELECT * FROM crm_invoice_items 
+            WHERE invoice_id = ${invoiceId}
+            ORDER BY sort_order
+          `;
+          
+          // Format the response
+          const formattedInvoice = {
+            id: invoice.id,
+            invoice_number: invoice.invoice_number,
+            client_id: invoice.client_id,
+            amount: parseFloat(invoice.amount) || 0,
+            tax_amount: parseFloat(invoice.tax_amount) || 0,
+            total_amount: parseFloat(invoice.total_amount) || 0,
+            subtotal_amount: parseFloat(invoice.subtotal_amount) || 0,
+            discount_amount: parseFloat(invoice.discount_amount) || 0,
+            currency: invoice.currency || 'EUR',
+            status: invoice.status,
+            due_date: invoice.due_date,
+            payment_terms: invoice.payment_terms,
+            notes: invoice.notes,
+            created_at: invoice.created_at,
+            client: {
+              name: invoice.client_name,
+              email: invoice.client_email,
+              address1: invoice.client_address1,
+              city: invoice.client_city,
+              country: invoice.client_country
+            },
+            items: items.map(item => ({
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: parseFloat(item.unit_price),
+              tax_rate: parseFloat(item.tax_rate),
+              line_total: parseFloat(item.line_total)
+            }))
+          };
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(formattedInvoice));
+        } catch (error) {
+          console.error('❌ Public invoice API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      if (pathname === '/api/invoices' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const invoiceData = JSON.parse(body);
+              console.log('📄 Creating invoice for client:', invoiceData.client_id);
+              
+              // Generate invoice number
+              const invoiceNumber = `INV-${Date.now()}`;
+              
+              // Calculate totals
+              const subtotal = invoiceData.items.reduce((sum, item) => 
+                sum + (item.quantity * item.unit_price), 0
+              );
+              const discountAmount = (subtotal * (invoiceData.discount_amount || 0)) / 100;
+              const afterDiscount = subtotal - discountAmount;
+              const taxAmount = afterDiscount * 0.19; // 19% VAT
+              const total = afterDiscount + taxAmount;
+              
+              // Create invoice record
+              const invoiceResult = await sql`
+                INSERT INTO crm_invoices (
+                  invoice_number, client_id, amount, tax_amount, total_amount,
+                  subtotal_amount, discount_amount, currency, status, due_date,
+                  payment_terms, notes, created_at, updated_at
+                ) VALUES (
+                  ${invoiceNumber}, ${invoiceData.client_id}, ${subtotal}, ${taxAmount}, ${total},
+                  ${subtotal}, ${discountAmount}, ${invoiceData.currency || 'EUR'}, 'draft', ${invoiceData.due_date},
+                  ${invoiceData.payment_terms}, ${invoiceData.notes || ''}, NOW(), NOW()
+                ) RETURNING *
+              `;
+              
+              const invoice = invoiceResult[0];
+              
+              // Create invoice items
+              for (const [index, item] of invoiceData.items.entries()) {
+                const lineTotal = item.quantity * item.unit_price;
+                const taxAmount = lineTotal * (item.tax_rate / 100);
+                
+                await sql`
+                  INSERT INTO crm_invoice_items (
+                    invoice_id, description, quantity, unit_price, tax_rate,
+                    tax_amount, line_total, sort_order, created_at
+                  ) VALUES (
+                    ${invoice.id}, ${item.description}, ${item.quantity}, ${item.unit_price}, ${item.tax_rate},
+                    ${taxAmount}, ${lineTotal}, ${index}, NOW()
+                  )
+                `;
+              }
+              
+              // Log invoice creation in client record
+              await sql`
+                INSERT INTO crm_client_activity_log (
+                  client_id, activity_type, description, metadata, created_at
+                ) VALUES (
+                  ${invoiceData.client_id}, 'invoice_created', 
+                  ${`Invoice ${invoiceNumber} created for €${total.toFixed(2)}`},
+                  ${JSON.stringify({ invoice_id: invoice.id, amount: total })},
+                  NOW()
+                )
+              `;
+              
+              res.writeHead(201, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: true, 
+                invoice: invoice,
+                message: 'Invoice created successfully'
+              }));
+            } catch (error) {
+              console.error('❌ Invoice creation error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Invoice API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
         }

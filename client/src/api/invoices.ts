@@ -64,16 +64,12 @@ export interface CreateInvoiceData {
 }
 
 export async function listInvoices() {
-  const { data, error } = await supabase
-    .from('crm_invoices')
-    .select(`
-      *,
-      crm_clients(name, email)
-    `)
-    .order('created_at', { ascending: false });
-  
-  if (error) throw error;
-  return data;
+  // Use our full-server.js API endpoint
+  const response = await fetch('/api/invoices');
+  if (!response.ok) {
+    throw new Error('Failed to fetch invoices');
+  }
+  return response.json();
 }
 
 export async function getInvoice(id: string) {
@@ -93,64 +89,20 @@ export async function getInvoice(id: string) {
 }
 
 export async function createInvoice(payload: CreateInvoiceData) {
-  // Start transaction
-  const { data: user } = await supabase.auth.getUser();
-  
-  try {
-    // Create the invoice
-    const { data: invoice, error: invoiceError } = await supabase
-      .from('crm_invoices')
-      .insert([{
-        client_id: payload.client_id,
-        due_date: payload.due_date,
-        payment_terms: payload.payment_terms,
-        currency: payload.currency,
-        notes: payload.notes,
-        discount_amount: payload.discount_amount || 0,
-        status: 'draft',
-        created_by: user.user?.id
-      }])
-      .select()
-      .single();
+  const response = await fetch('/api/invoices', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
 
-    if (invoiceError) throw invoiceError;
-
-    // Create line items
-    const itemsToInsert = payload.items.map((item, index) => ({
-      invoice_id: invoice.id,
-      description: item.description,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      tax_rate: item.tax_rate,
-      sort_order: index
-    }));
-
-    const { error: itemsError } = await supabase
-      .from('crm_invoice_items')
-      .insert(itemsToInsert);
-
-    if (itemsError) throw itemsError;
-
-    // Create audit log entry
-    await supabase
-      .from('crm_invoice_audit_log')
-      .insert([{
-        invoice_id: invoice.id,
-        action: 'created',
-        new_values: {
-          invoice_number: invoice.invoice_number,
-          client_id: payload.client_id,
-          status: 'draft'
-        },
-        user_id: user.user?.id,
-        user_email: user.user?.email
-      }]);
-
-    return invoice;
-  } catch (error) {
-    // console.error removed
-    throw error;
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to create invoice');
   }
+
+  return response.json();
 }
 
 export async function updateInvoiceStatus(id: string, status: string) {
