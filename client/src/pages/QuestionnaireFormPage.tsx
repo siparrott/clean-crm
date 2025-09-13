@@ -92,6 +92,11 @@ const QuestionnaireFormPage: React.FC = () => {
         [questionId]: value
       }
     }));
+    
+    // Clear error if user starts filling the form
+    if (error) {
+      setError(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -105,8 +110,14 @@ const QuestionnaireFormPage: React.FC = () => {
     const requiredQuestions = allQuestions.filter(q => q.required);
     
     for (const question of requiredQuestions) {
-      if (!formData.answers[question.id]) {
+      const answer = formData.answers[question.id];
+      if (!answer || answer.trim() === '') {
         setError(`Please answer: ${question.title}`);
+        // Scroll to the first unanswered required question
+        const questionElement = document.getElementById(`question-${question.id}`);
+        if (questionElement) {
+          questionElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
         return;
       }
     }
@@ -151,12 +162,13 @@ const QuestionnaireFormPage: React.FC = () => {
 
   const renderQuestion = (question: Question) => {
     const value = formData.answers[question.id] || '';
+    const hasError = question.required && (!value || value.trim() === '') && error?.includes(question.title);
     
     switch (question.type) {
       case 'single_choice':
       case 'multiple_choice':
         return (
-          <div className="space-y-2">
+          <div className={`space-y-2 ${hasError ? 'p-3 border-2 border-red-300 rounded-lg bg-red-50' : ''}`}>
             {question.options?.map(option => (
               <label key={option.id} className="flex items-center space-x-2 cursor-pointer">
                 <input
@@ -179,14 +191,16 @@ const QuestionnaireFormPage: React.FC = () => {
             value={value}
             onChange={(e) => handleInputChange(question.id, e.target.value)}
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+            }`}
             placeholder="Your answer..."
           />
         );
       
       case 'rating':
         return (
-          <div className="space-y-2">
+          <div className={`space-y-2 ${hasError ? 'p-3 border-2 border-red-300 rounded-lg bg-red-50' : ''}`}>
             <div className="flex space-x-4 items-center">
               {[1, 2, 3, 4, 5].map(rating => (
                 <label key={rating} className="flex items-center space-x-1 cursor-pointer">
@@ -215,7 +229,9 @@ const QuestionnaireFormPage: React.FC = () => {
             type="text"
             value={value}
             onChange={(e) => handleInputChange(question.id, e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+            }`}
             placeholder="Your answer..."
           />
         );
@@ -340,7 +356,7 @@ const QuestionnaireFormPage: React.FC = () => {
                 </h3>
                 
                 {page.questions.map(question => (
-                  <div key={question.id} className="space-y-2">
+                  <div key={question.id} id={`question-${question.id}`} className="space-y-2">
                     <label className="block text-sm font-medium text-gray-700">
                       {question.title}
                       {question.required && <span className="text-red-500 ml-1">*</span>}

@@ -28,6 +28,7 @@ const PriceListModal: React.FC<PriceListModalProps> = ({ onClose, onSelectItem }
 
   // Photography price guide data (replacing voucher system)
   const defaultPriceGuide: PriceListItem[] = [
+    // Photography Services
     {
       id: 'portrait-basic',
       name: 'Portrait Session - Basic',
@@ -161,38 +162,224 @@ const PriceListModal: React.FC<PriceListModalProps> = ({ onClose, onSelectItem }
       isActive: true
     },
     {
-      id: 'photo-album',
-      name: 'Premium Photo Album',
-      description: 'High-quality photo album (30 pages)',
-      price: 150,
-      category: 'Products',
+      id: 'shooting-without-voucher',
+      name: 'Shooting ohne Gutschein',
+      description: 'Photography session without voucher',
+      price: 95,
+      category: 'Services',
+      type: 'service',
+      unit: 'session',
+      taxRate: 19,
+      isActive: true
+    },
+
+    // Digital Packages
+    {
+      id: 'digital-1-photo',
+      name: '1 Digital Photo',
+      description: 'Single high-resolution digital photo',
+      price: 35,
+      category: 'Digital',
       type: 'product',
-      unit: 'piece',
+      unit: 'photo',
       taxRate: 19,
       isActive: true
     },
     {
-      id: 'usb-drive',
-      name: 'USB Drive with Photos',
-      description: 'Custom USB drive with all high-resolution photos',
-      price: 50,
-      category: 'Products',
-      type: 'product',
-      unit: 'piece',
-      taxRate: 19,
-      isActive: true
-    },
-    {
-      id: 'prints-package',
-      name: 'Print Package',
-      description: 'Professional prints package (10x 20x30cm)',
-      price: 80,
-      category: 'Products',
+      id: 'digital-10-pack',
+      name: '10x Digital Photos Package',
+      description: 'Package of 10 high-resolution digital photos',
+      price: 295,
+      category: 'Digital',
       type: 'product',
       unit: 'package',
       taxRate: 19,
       isActive: true
     },
+    {
+      id: 'digital-15-pack',
+      name: '15x Digital Photos Package',
+      description: 'Package of 15 high-resolution digital photos',
+      price: 365,
+      category: 'Digital',
+      type: 'product',
+      unit: 'package',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'digital-20-pack',
+      name: '20x Digital Photos Package',
+      description: 'Package of 20 high-resolution digital photos (Leinwände Format A2 & 70x50cm 1 + 1 gratis)',
+      price: 395,
+      category: 'Digital',
+      type: 'product',
+      unit: 'package',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'digital-25-pack',
+      name: '25x Digital Photos Package',
+      description: 'Package of 25 high-resolution digital photos (Leinwände Format A2 & 70x50cm 1 + 1 gratis)',
+      price: 445,
+      category: 'Digital',
+      type: 'product',
+      unit: 'package',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'digital-30-pack',
+      name: '30x Digital Photos Package',
+      description: 'Package of 30 high-resolution digital photos (Leinwände Format A2 & 70x50cm 1 + 1 gratis)',
+      price: 490,
+      category: 'Digital',
+      type: 'product',
+      unit: 'package',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'digital-35-pack',
+      name: '35x Digital Photos Package',
+      description: 'Package of 35 high-resolution digital photos (Leinwände Format A2 & 70x50cm 1 + 1 gratis)',
+      price: 525,
+      category: 'Digital',
+      type: 'product',
+      unit: 'package',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'digital-all-portraits',
+      name: 'All Portraits Package',
+      description: 'Complete collection of all portrait photos from the session (Leinwände Format A2 & 70x50cm 1 + 1 gratis)',
+      price: 595,
+      category: 'Digital',
+      type: 'product',
+      unit: 'package',
+      taxRate: 19,
+      isActive: true
+    },
+
+    // Canvas & Leinwand Products
+    {
+      id: 'canvas-30x20-a4',
+      name: 'Canvas 30 x 20cm (A4)',
+      description: 'High-quality canvas print in A4 format',
+      price: 75,
+      category: 'Canvas',
+      type: 'product',
+      unit: 'piece',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'canvas-40x30-a3',
+      name: 'Canvas 40 x 30cm (A3)',
+      description: 'High-quality canvas print in A3 format',
+      price: 105,
+      category: 'Canvas',
+      type: 'product',
+      unit: 'piece',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'canvas-60x40-a2',
+      name: 'Canvas 60 x 40cm (A2)',
+      description: 'High-quality canvas print in A2 format',
+      price: 145,
+      category: 'Canvas',
+      type: 'product',
+      unit: 'piece',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'canvas-70x50',
+      name: 'Canvas 70 x 50cm',
+      description: 'High-quality large canvas print',
+      price: 185,
+      category: 'Canvas',
+      type: 'product',
+      unit: 'piece',
+      taxRate: 19,
+      isActive: true
+    },
+
+    // Luxury Frames
+    {
+      id: 'luxury-frame-a2-black',
+      name: 'A2 Canvas in Black Wood Frame',
+      description: 'A2 (60 x 40cm) canvas in elegant black wooden frame',
+      price: 199,
+      category: 'Luxury Frames',
+      type: 'product',
+      unit: 'piece',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'luxury-frame-40x40',
+      name: '40 x 40cm Picture Frame',
+      description: 'Premium picture frame 40 x 40cm',
+      price: 145,
+      category: 'Luxury Frames',
+      type: 'product',
+      unit: 'piece',
+      taxRate: 19,
+      isActive: true
+    },
+
+    // Print Products
+    {
+      id: 'print-15x10',
+      name: 'Print 15 x 10cm',
+      description: 'Professional photo print 15 x 10cm',
+      price: 35,
+      category: 'Prints',
+      type: 'product',
+      unit: 'piece',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'print-15x10-10pack-giftbox',
+      name: '10x Prints 15 x 10cm + Gift Box',
+      description: '10 professional prints 15 x 10cm with elegant gift box',
+      price: 300,
+      category: 'Prints',
+      type: 'product',
+      unit: 'package',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'print-20x30-a4',
+      name: 'Print 20 x 30cm (A4)',
+      description: 'Professional photo print 20 x 30cm A4 format',
+      price: 59,
+      category: 'Prints',
+      type: 'product',
+      unit: 'piece',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'print-30x40-a3',
+      name: 'Print 30 x 40cm (A3)',
+      description: 'Professional photo print 30 x 40cm A3 format',
+      price: 79,
+      category: 'Prints',
+      type: 'product',
+      unit: 'piece',
+      taxRate: 19,
+      isActive: true
+    },
+
+    // Additional Services
     {
       id: 'extra-editing',
       name: 'Extra Photo Editing',
@@ -223,6 +410,41 @@ const PriceListModal: React.FC<PriceListModalProps> = ({ onClose, onSelectItem }
       category: 'Services',
       type: 'service',
       unit: 'service',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'free-shipping',
+      name: 'Free Shipping',
+      description: 'Complimentary shipping for your order',
+      price: 0,
+      category: 'Services',
+      type: 'service',
+      unit: 'service',
+      taxRate: 19,
+      isActive: true
+    },
+
+    // Legacy Products (kept for compatibility)
+    {
+      id: 'photo-album',
+      name: 'Premium Photo Album',
+      description: 'High-quality photo album (30 pages)',
+      price: 150,
+      category: 'Products',
+      type: 'product',
+      unit: 'piece',
+      taxRate: 19,
+      isActive: true
+    },
+    {
+      id: 'usb-drive',
+      name: 'USB Drive with Photos',
+      description: 'Custom USB drive with all high-resolution photos',
+      price: 50,
+      category: 'Products',
+      type: 'product',
+      unit: 'piece',
       taxRate: 19,
       isActive: true
     }
