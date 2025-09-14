@@ -1946,6 +1946,36 @@ New Age Fotografie Team`;
               const checkoutData = JSON.parse(body);
               console.log('💳 Creating Stripe checkout session:', checkoutData);
               
+              // Handle different data formats (items array or direct data)
+              let lineItems = [];
+              if (checkoutData.items && Array.isArray(checkoutData.items)) {
+                // New format with items array
+                lineItems = checkoutData.items.map(item => ({
+                  price_data: {
+                    currency: 'eur',
+                    product_data: {
+                      name: item.name || 'Photography Service',
+                      description: item.description || 'Professional photography service',
+                    },
+                    unit_amount: item.price || 0, // Already in cents
+                  },
+                  quantity: item.quantity || 1,
+                }));
+              } else {
+                // Legacy format
+                lineItems = [{
+                  price_data: {
+                    currency: checkoutData.currency || 'eur',
+                    product_data: {
+                      name: checkoutData.product_name || 'Photography Service',
+                      description: checkoutData.description || 'Professional photography service',
+                    },
+                    unit_amount: Math.round((checkoutData.amount || 0) * 100), // Convert to cents
+                  },
+                  quantity: 1,
+                }];
+              }
+              
               // Check if we have Stripe configured
               if (!stripe) {
                 console.log('⚠️ Stripe not configured, using demo mode');
@@ -1966,28 +1996,35 @@ New Age Fotografie Team`;
               // Create real Stripe checkout session
               const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
               
-              const session = await stripe.checkout.sessions.create({
+              const sessionParams = {
                 payment_method_types: ['card'],
-                line_items: checkoutData.line_items || [{
-                  price_data: {
-                    currency: checkoutData.currency || 'eur',
-                    product_data: {
-                      name: checkoutData.product_name || 'Photography Service',
-                      description: checkoutData.description || 'Professional photography service',
-                    },
-                    unit_amount: Math.round((checkoutData.amount || 0) * 100), // Convert to cents
-                  },
-                  quantity: 1,
-                }],
+                line_items: lineItems,
                 mode: 'payment',
                 success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
                 cancel_url: `${baseUrl}/checkout/cancel`,
                 metadata: {
                   client_id: checkoutData.client_id || '',
                   invoice_id: checkoutData.invoice_id || '',
-                  order_type: checkoutData.order_type || 'photography_service'
+                  order_type: checkoutData.order_type || checkoutData.mode || 'photography_service'
                 }
-              });
+              };
+
+              // Add customer email if provided
+              if (checkoutData.customerEmail) {
+                sessionParams.customer_email = checkoutData.customerEmail;
+              }
+
+              // Add voucher-specific metadata if present
+              if (checkoutData.voucherData) {
+                sessionParams.metadata.voucher_mode = 'true';
+                sessionParams.metadata.voucher_design = checkoutData.voucherData.selectedDesign?.name || 'custom';
+                sessionParams.metadata.delivery_option = checkoutData.voucherData.deliveryOption?.name || 'email';
+                if (checkoutData.voucherData.personalMessage) {
+                  sessionParams.metadata.personal_message = checkoutData.voucherData.personalMessage.substring(0, 500); // Stripe metadata limit
+                }
+              }
+
+              const session = await stripe.checkout.sessions.create(sessionParams);
 
               console.log('✅ Stripe session created:', session.id);
               
