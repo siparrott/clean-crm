@@ -94,7 +94,7 @@ async function generateModernInvoicePDF(invoice: any, client: any): Promise<Buff
   doc.setTextColor(100, 100, 100);
   doc.text('Professionelle Fotografie im Herzen von Wien', 20, yPosition);
   doc.text('Schönbrunner Str. 25, 1050 Wien, Austria', 20, yPosition + 6);
-  doc.text('Tel: +43 677 933 99210 | Email: hallo@newagefotografie.com', 20, yPosition + 12);
+  doc.text('Tel: +43 677 663 99210 | Email: hallo@newagefotografie.com', 20, yPosition + 12);
   doc.text('Web: www.newagefotografie.com', 20, yPosition + 18);
 
   // Invoice header section with modern styling
@@ -327,7 +327,7 @@ Kontakt:
 --------
 New Age Fotografie
 Wehrgasse 11A/2+5, 1050 Wien
-Tel: +43 677 933 99210
+Tel: +43 677 663 99210
 Email: hallo@newagefotografie.com
 Web: www.newagefotografie.com
 
@@ -543,7 +543,7 @@ function generateInvoiceHTML(invoice: any, client: any): string {
           <div class="company-details">
             <p><strong>Adresse:</strong> Eingang Ecke Schönbrunnerstraße</p>
             <p>Wehrgasse 11A/2+5, 1050 Wien, Austria</p>
-            <p><strong>Telefon:</strong> +43 677 933 99210</p>
+            <p><strong>Telefon:</strong> +43 677 663 99210</p>
             <p><strong>Email:</strong> hallo@newagefotografie.com</p>
             <p><strong>Website:</strong> www.newagefotografie.com</p>
             <p><strong>UID:</strong> ATU12345678 | <strong>FN:</strong> 123456a</p>
@@ -643,7 +643,7 @@ function generateInvoiceHTML(invoice: any, client: any): string {
             <p><strong>New Age Fotografie</strong></p>
             <p>Eingang Ecke Schönbrunnerstraße</p>
             <p>Wehrgasse 11A/2+5, 1050 Wien</p>
-            <p>Tel: +43 677 933 99210</p>
+            <p>Tel: +43 677 663 99210</p>
             <p>Email: hallo@newagefotografie.com</p>
           </div>
           <div class="footer-section">
@@ -3543,7 +3543,7 @@ Bitte versuchen Sie es später noch einmal.`;
               <p><strong>New Age Fotografie</strong><br>
               Schönbrunner Str. 25<br>
               1050 Wien, Austria<br>
-              Tel: +43 677 933 99210<br>
+              Tel: +43 677 663 99210<br>
               Email: hallo@newagefotografie.com</p>
             </div>
           </div>
@@ -6681,7 +6681,7 @@ What would you like help with today? Just describe the task and I'll guide you t
 • Haustiere willkommen! 🐕
 
 **Direkter Kontakt:**
-WhatsApp: 0677 633 99210
+WhatsApp: +43 677 663 99210
 Email: hallo@newagefotografie.com
 
 Welches Paket interessiert Sie am meisten?`;
@@ -6693,7 +6693,7 @@ Welches Paket interessiert Sie am meisten?`;
 Wir sind meistens ausgebucht, aber ich kann Sie gerne auf unsere Warteliste setzen. Oft bekommen wir kurzfristig Termine frei!
 
 **So geht's:**
-1. Geben Sie mir Ihre WhatsApp Nummer: 0677 633 99210
+1. Geben Sie mir Ihre WhatsApp Nummer: +43 677 663 99210
 2. Nennen Sie mir Ihre Wunschtermine
 3. Ich melde mich bei Ihnen sobald ein Platz frei wird
 
@@ -6713,7 +6713,7 @@ Ich bin Alex von New Age Fotografie Wien. Wir sind spezialisiert auf:
 
 Wie kann ich Ihnen heute helfen? Haben Sie Fragen zu unseren Preisen, möchten Sie einen Termin vereinbaren oder brauchen Sie andere Informationen?
 
-WhatsApp: 0677 633 99210`;
+WhatsApp: +43 677 663 99210`;
     }
 
     if (lowerMessage.includes('familien') || lowerMessage.includes('family') || lowerMessage.includes('familie')) {
@@ -6732,7 +6732,7 @@ WhatsApp: 0677 633 99210`;
 • Bis zu 12 Erwachsene + 4 Kinder
 • Haustiere willkommen! 🐕
 
-Termin buchen: WhatsApp 0677 633 99210`;
+Termin buchen: WhatsApp +43 677 663 99210`;
     }
     
     if (lowerMessage.includes('location') || lowerMessage.includes('adresse') || lowerMessage.includes('wo')) {
@@ -6743,7 +6743,7 @@ Schönbrunner Str. 25, 1050 Wien
 (5 Minuten von Kettenbrückengasse, Parkplätze verfügbar)
 
 **Kontakt:**
-WhatsApp: 0677 633 99210
+WhatsApp: +43 677 663 99210
 Email: hallo@newagefotografie.com
 
 **Öffnungszeiten:**
@@ -6772,7 +6772,7 @@ Möchten Sie einen Termin vereinbaren?`;
 • Haustiere willkommen! 🐕
 
 **Direkter Kontakt:**
-WhatsApp: 0677 633 99210
+WhatsApp: +43 677 663 99210
 Email: hallo@newagefotografie.com`;
       }
       
@@ -6792,7 +6792,7 @@ Schönbrunner Str. 25, 1050 Wien
 (5 Min von Kettenbrückengasse)
 
 **Direkter Kontakt:**
-WhatsApp: 0677 633 99210
+WhatsApp: +43 677 663 99210
 Email: hallo@newagefotografie.com
 
 Was interessiert Sie am meisten? Preise, Terminbuchung oder spezielle Fotoshootings?`;
@@ -6806,7 +6806,7 @@ Ich bin Alex von New Age Fotografie Wien. Gerne helfe ich Ihnen bei:
 • **Informationen** über unsere Services
 
 **Direkter Kontakt:**
-WhatsApp: 0677 633 99210
+WhatsApp: +43 677 663 99210
 Email: hallo@newagefotografie.com
 
 Was interessiert Sie am meisten?`;

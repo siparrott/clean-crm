@@ -131,7 +131,7 @@ STUDIO CONTEXT
 - New Age Fotografie - Vienna photography studio
 - Services: Family, newborn, maternity, business portraits
 - Pricing: €95-595 range with various packages
-- Contact: hallo@newagefotografie.com, +43 677 933 99210
+- Contact: hallo@newagefotografie.com, +43 677 663 99210
 - Hours: Friday-Sunday 09:00-17:00
 
 You have comprehensive access to all business systems. Use your tools effectively to provide exceptional PA-level assistance.

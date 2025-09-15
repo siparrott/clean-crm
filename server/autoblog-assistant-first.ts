@@ -184,7 +184,7 @@ export class AssistantFirstAutoBlogGenerator {
     comprehensiveContext += `BUSINESS INTELLIGENCE:\n`;
     comprehensiveContext += `- Studio: New Age Fotografie\n`;
     comprehensiveContext += `- Location: Schönbrunner Str. 25, 1050 Wien\n`;
-    comprehensiveContext += `- Phone: +43 677 633 99210\n`;
+    comprehensiveContext += `- Phone: +43 677 663 99210\n`;
     comprehensiveContext += `- Email: hallo@newagefotografie.com\n`;
     comprehensiveContext += `- Hours: Fr-So: 09:00 - 17:00\n`;
     comprehensiveContext += `- Services: Family, newborn, maternity, business portraits\n`;

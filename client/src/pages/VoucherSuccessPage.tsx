@@ -93,7 +93,7 @@ const VoucherSuccessPage: React.FC = () => {
               </p>
               <div className="space-y-2 text-sm">
                 <p>
-                  <strong>{t('voucher.phone')}:</strong> +43 677 933 99210
+                  <strong>{t('voucher.phone')}:</strong> +43 677 663 99210
                 </p>
                 <p>
                   <strong>{t('voucher.email')}:</strong> hallo@newagefotografie.com

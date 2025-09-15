@@ -95,7 +95,7 @@ const createProductionHTML = () => {
         <div class="contact">
             <strong>Kontakt:</strong><br>
             📧 hallo@newagefotografie.com<br>
-            📞 +43 677 933 99210<br>
+            📞 +43 677 663 99210<br>
             📍 Schönbrunner Str. 25, 1050 Wien
         </div>
         <div style="margin-top: 30px;">

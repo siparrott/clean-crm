@@ -110,7 +110,7 @@ const ChatBot: React.FC = () => {
       // console.error removed
       setMessages(prev => {
         const filtered = prev.filter(msg => !msg.loading);
-        return [...filtered, { text: "Entschuldigung, es gab ein technisches Problem. Bitte kontaktieren Sie uns direkt unter 0677 633 99210.", isUser: false }];
+        return [...filtered, { text: "Entschuldigung, es gab ein technisches Problem. Bitte kontaktieren Sie uns direkt unter +43 677 663 99210.", isUser: false }];
       });
     } finally {
       setIsLoading(false);

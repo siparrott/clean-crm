@@ -753,7 +753,7 @@ WEBSITE TONE ANALYSIS:
     const businessContext = `
 NEW AGE FOTOGRAFIE COMPREHENSIVE BUSINESS DETAILS:
 - Studio address: Schönbrunner Str. 25, 1050 Wien, Austria
-- Contact: hallo@newagefotografie.com, +43 677 933 99210
+- Contact: hallo@newagefotografie.com, +43 677 663 99210
 - Business hours: Fr-So: 09:00 - 17:00 (weekend focused for family convenience)
 - Website: https://www.newagefotografie.com
 - Booking system: /warteliste/ (waitlist page for high demand)
