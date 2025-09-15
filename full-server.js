@@ -34,19 +34,55 @@ try {
 
 // Initialize Stripe
 let stripe = null;
-try {
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (stripeKey) {
-    const Stripe = require('stripe');
-    stripe = Stripe(stripeKey);
-    console.log('✅ Stripe initialized with live key');
-  } else {
-    console.log('⚠️ STRIPE_SECRET_KEY not set; payments will be in demo mode');
+
+async function initializeStripe() {
+  try {
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    console.log('🔍 Checking Stripe configuration...');
+    console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    if (stripeKey) {
+      console.log(`🔑 Stripe key found: ${stripeKey.substring(0, 20)}...${stripeKey.slice(-4)}`);
+      
+      // Validate key format
+      if (!stripeKey.startsWith('sk_live_') && !stripeKey.startsWith('sk_test_')) {
+        console.error('❌ Invalid Stripe key format. Key should start with sk_live_ or sk_test_');
+        console.error('💡 Check your Heroku Config Vars or local .env file');
+        stripe = null;
+        return;
+      }
+      
+      const Stripe = require('stripe');
+      stripe = Stripe(stripeKey, {
+        apiVersion: '2023-10-16',
+      });
+      
+      const keyType = stripeKey.startsWith('sk_live_') ? 'LIVE' : 'TEST';
+      console.log(`✅ Stripe initialized with ${keyType} key`);
+      
+      // Test the key asynchronously
+      try {
+        await stripe.balance.retrieve();
+        console.log('✅ Stripe key authentication verified');
+        console.log(`💳 Stripe is ready for ${keyType} payments`);
+      } catch (testError) {
+        console.error('❌ Stripe key authentication failed:', testError.message);
+        console.error('💡 Checkout will fall back to demo mode');
+        console.error('🔧 Please verify your Stripe key in Heroku Config Vars');
+        // Don't set stripe to null here - let it try to work anyway
+      }
+    } else {
+      console.log('⚠️ STRIPE_SECRET_KEY not set; payments will be in demo mode');
+      console.log('💡 Set STRIPE_SECRET_KEY in your Heroku Config Vars for live payments');
+    }
+  } catch (err) {
+    console.warn('⚠️ Could not initialize Stripe:', err.message);
+    stripe = null;
   }
-} catch (err) {
-  console.warn('⚠️ Could not initialize Stripe:', err.message);
-  stripe = null;
 }
+
+// Initialize Stripe asynchronously
+initializeStripe();
 
 console.log('🚀 Starting PRODUCTION server with Neon database...');
 
@@ -1978,7 +2014,9 @@ New Age Fotografie Team`;
               
               // Check if we have Stripe configured
               if (!stripe) {
-                console.log('⚠️ Stripe not configured, using demo mode');
+                console.log('⚠️ Stripe not configured, redirecting to demo mode');
+                console.log('💡 To enable live payments, set STRIPE_SECRET_KEY in Heroku Config Vars');
+                
                 const mockSessionId = `mock_session_${Date.now()}`;
                 const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
                 const mockSuccessUrl = `${baseUrl}/checkout/mock-success?session_id=${mockSessionId}`;
@@ -1988,12 +2026,14 @@ New Age Fotografie Team`;
                   success: true,
                   sessionId: mockSessionId,
                   url: mockSuccessUrl,
-                  message: 'Demo checkout session created - Stripe not configured'
+                  message: 'Demo checkout - Configure Stripe for live payments',
+                  isDemo: true
                 }));
                 return;
               }
 
               // Create real Stripe checkout session
+              console.log('💳 Creating LIVE Stripe checkout session...');
               const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
               
               const sessionParams = {
