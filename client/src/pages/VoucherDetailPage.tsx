@@ -130,23 +130,13 @@ const VoucherDetailPage: React.FC = () => {
                     {/* Personalisieren Button - Triggers voucher flow */}
                     <button 
                       onClick={() => {
-                        // Add voucher to cart and navigate to checkout for personalization
-                        navigate('/checkout', { 
-                          state: { 
-                            voucherPersonalization: true,
-                            voucherData: {
-                              id: voucher.id,
-                              title: voucher.title,
-                              price: voucher.discountPrice,
-                              quantity: quantity
-                            }
-                          } 
-                        });
+                        // Navigate to personalization checkout with proper route
+                        navigate(`/checkout/voucher/${voucher.id}?personalize=true&quantity=${quantity}`);
                       }}
                       className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center"
                     >
                       <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002 2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                       Personalisieren - €{(voucher.discountPrice * quantity).toFixed(2)}
                     </button>

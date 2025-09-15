@@ -9,13 +9,6 @@ import { purchaseVoucher } from '../lib/voucher';
 
 interface LocationState {
   quantity: number;
-  voucherPersonalization?: boolean;
-  voucherData?: {
-    id: string;
-    title: string;
-    price: number;
-    quantity: number;
-  };
 }
 
 interface CheckoutData {
@@ -34,26 +27,31 @@ const CheckoutPage: React.FC = () => {
   const state = location.state as LocationState;
   const initialQuantity = state?.quantity || 1;
   
-  // Check if this is a direct voucher personalization request
-  const isVoucherPersonalization = state?.voucherPersonalization && state?.voucherData;
+  // Check URL parameters for personalization
+  const searchParams = new URLSearchParams(location.search);
+  const isPersonalize = searchParams.get('personalize') === 'true';
+  const quantityParam = parseInt(searchParams.get('quantity') || '1');
+  
+  // Check if this is a voucher personalization request from URL
+  const isVoucherPersonalization = isPersonalize && location.pathname.includes('/checkout/voucher/');
+  
+  const voucher = getVoucherById(id || '');
   
   // If this is a voucher personalization request, show VoucherFlow immediately
-  if (isVoucherPersonalization && state?.voucherData) {
-    const voucherData = state.voucherData;
-    
+  if (isVoucherPersonalization && voucher) {
     const handleVoucherFlowComplete = (voucherCheckoutData: any) => {
       console.log('Voucher purchase completed:', voucherCheckoutData);
       navigate('/checkout/success');
     };
     
     const handleBackToVoucher = () => {
-      navigate(-1); // Go back to voucher detail page
+      navigate(`/voucher/${voucher.slug}`);
     };
     
     return (
       <VoucherFlow
-        voucherType={voucherData.title}
-        baseAmount={voucherData.price * voucherData.quantity}
+        voucherType={voucher.title}
+        baseAmount={voucher.discountPrice * quantityParam}
         onComplete={handleVoucherFlowComplete}
         onBack={handleBackToVoucher}
       />
@@ -130,9 +128,6 @@ const CheckoutPage: React.FC = () => {
     );
   }
   
-  // Original voucher checkout logic for old system
-  const voucher = getVoucherById(id || '');
-  
   useEffect(() => {
     if (id && !voucher) {
       navigate('/vouchers');
@@ -145,15 +140,15 @@ const CheckoutPage: React.FC = () => {
       <Layout>
         <div className="container mx-auto px-4 py-16 text-center">
           <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold mb-4 text-gray-800">Voucher Not Found</h1>
+          <h1 className="text-2xl font-bold mb-4 text-gray-800">Gutschein nicht gefunden</h1>
           <p className="text-gray-600 mb-8">
-            We couldn't find the voucher you're looking for.
+            Der gesuchte Gutschein konnte nicht gefunden werden.
           </p>
           <button 
             onClick={() => navigate('/vouchers')}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
+            className="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
           >
-            Browse Vouchers
+            Gutscheine durchsuchen
           </button>
         </div>
       </Layout>
@@ -181,13 +176,13 @@ const CheckoutPage: React.FC = () => {
     const newErrors: { [key: string]: string } = {};
     
     if (!purchaserName.trim()) {
-      newErrors.name = 'Name is required';
+      newErrors.name = 'Name ist erforderlich';
     }
     
     if (!purchaserEmail.trim()) {
-      newErrors.email = 'Email is required';
+      newErrors.email = 'E-Mail ist erforderlich';
     } else if (!/\S+@\S+\.\S+/.test(purchaserEmail)) {
-      newErrors.email = 'Email is invalid';
+      newErrors.email = 'E-Mail ist ungültig';
     }
     
     setErrors(newErrors);
@@ -239,7 +234,7 @@ const CheckoutPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Checkout error:', error);
-      setErrors({ submit: 'Failed to process payment. Please try again.' });
+      setErrors({ submit: 'Zahlung konnte nicht verarbeitet werden. Bitte versuchen Sie es erneut.' });
       setIsSubmitting(false);
     }
   };
@@ -263,31 +258,31 @@ const CheckoutPage: React.FC = () => {
               navigate('/cart');
             }
           }}
-          className="flex items-center text-blue-600 hover:text-blue-800 mb-6 transition-colors"
+          className="flex items-center text-purple-600 hover:text-purple-800 mb-6 transition-colors"
         >
           <ArrowLeft size={16} className="mr-1" /> 
-          {voucher ? 'Back to voucher' : 'Back to cart'}
+          {voucher ? 'Zurück zum Gutschein' : 'Zurück zum Warenkorb'}
         </button>
         
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Checkout</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-8">Kasse</h1>
         
         <div className="md:grid md:grid-cols-3 md:gap-8">
           {/* Checkout form */}
           <div className="md:col-span-2 mb-8 md:mb-0">
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-semibold mb-6 text-gray-800">Your Information</h2>
+              <h2 className="text-xl font-semibold mb-6 text-gray-800">Ihre Informationen</h2>
               
               <form onSubmit={handleSubmit}>
                 <div className="mb-4">
                   <label className="block text-gray-700 font-medium mb-2 flex items-center">
-                    <User size={16} className="mr-2" /> Full Name
+                    <User size={16} className="mr-2" /> Vollständiger Name
                   </label>
                   <input
                     type="text"
                     value={purchaserName}
                     onChange={(e) => setPurchaserName(e.target.value)}
                     disabled={isSubmitting}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors ${
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition-colors ${
                       errors.name ? 'border-red-500 focus:ring-red-600 focus:border-red-600' : 'border-gray-300'
                     }`}
                   />
@@ -296,14 +291,14 @@ const CheckoutPage: React.FC = () => {
                 
                 <div className="mb-6">
                   <label className="block text-gray-700 font-medium mb-2 flex items-center">
-                    <Mail size={16} className="mr-2" /> Email Address
+                    <Mail size={16} className="mr-2" /> E-Mail-Adresse
                   </label>
                   <input
                     type="email"
                     value={purchaserEmail}
                     onChange={(e) => setPurchaserEmail(e.target.value)}
                     disabled={isSubmitting}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors ${
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600 transition-colors ${
                       errors.email ? 'border-red-500 focus:ring-red-600 focus:border-red-600' : 'border-gray-300'
                     }`}
                   />
@@ -312,39 +307,39 @@ const CheckoutPage: React.FC = () => {
                 
                 <div>
                   <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center">
-                    <CreditCard size={20} className="mr-2" /> Payment Information
+                    <CreditCard size={20} className="mr-2" /> Zahlungsinformationen
                   </h2>
                   
                   {(!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.includes('test') || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.includes('pk_test')) && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                       <p className="text-blue-700 text-sm">
-                        <strong>Note:</strong> This is a demo application. No actual payment will be processed.
+                        <strong>Hinweis:</strong> Dies ist eine Demo-Anwendung. Es wird keine echte Zahlung verarbeitet.
                       </p>
                     </div>
                   )}
                   
                   <div className="mb-6">
                     <label className="block text-gray-700 font-medium mb-2">
-                      Card Information
+                      Karteninformationen
                     </label>
                     <input
                       type="text"
                       placeholder="4242 4242 4242 4242"
                       disabled={isSubmitting}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2 focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2 focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
                     />
                     <div className="grid grid-cols-2 gap-4">
                       <input
                         type="text"
                         placeholder="MM / YY"
                         disabled={isSubmitting}
-                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
                       />
                       <input
                         type="text"
                         placeholder="CVC"
                         disabled={isSubmitting}
-                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
                       />
                     </div>
                   </div>
@@ -362,7 +357,7 @@ const CheckoutPage: React.FC = () => {
                   className={`w-full py-3 px-6 rounded-lg font-medium text-white transition-colors ${
                     isSubmitting
                       ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-purple-600 hover:bg-purple-700'
                   }`}
                 >
                   {isSubmitting ? (
@@ -371,10 +366,10 @@ const CheckoutPage: React.FC = () => {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      Processing...
+                      Verarbeitung...
                     </span>
                   ) : (
-                    `Pay €${totalPrice.toFixed(2)}`
+                    `Zahlen €${totalPrice.toFixed(2)}`
                   )}
                 </button>
               </form>
@@ -384,7 +379,7 @@ const CheckoutPage: React.FC = () => {
           {/* Order summary */}
           <div className="md:col-span-1">
             <div className="bg-white rounded-lg shadow-lg p-6 sticky top-24">
-              <h2 className="text-xl font-semibold mb-6 text-gray-800">Order Summary</h2>
+              <h2 className="text-xl font-semibold mb-6 text-gray-800">Bestellübersicht</h2>
               
               {voucher ? (
                 <>
@@ -397,14 +392,14 @@ const CheckoutPage: React.FC = () => {
                     <div className="ml-4">
                       <h3 className="font-medium text-gray-800">{voucher.title}</h3>
                       <p className="text-gray-600 text-sm">
-                        Valid until {new Date(voucher.validUntil).toLocaleDateString()}
+                        Gültig bis {new Date(voucher.validUntil).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
                   
                   <div className="mb-6">
                     <div className="flex justify-between mb-2">
-                      <label className="text-gray-600">Quantity:</label>
+                      <label className="text-gray-600">Anzahl:</label>
                       <input
                         type="number"
                         min="1"
@@ -412,20 +407,20 @@ const CheckoutPage: React.FC = () => {
                         value={quantity}
                         onChange={handleQuantityChange}
                         disabled={isSubmitting}
-                        className="w-16 px-2 py-1 border border-gray-300 rounded text-right focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                        className="w-16 px-2 py-1 border border-gray-300 rounded text-right focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
                       />
                     </div>
                     
                     <div className="flex justify-between mb-2">
-                      <span className="text-gray-600">Price per voucher:</span>
+                      <span className="text-gray-600">Preis pro Gutschein:</span>
                       <span className="text-gray-800">€{voucher.discountPrice.toFixed(2)}</span>
                     </div>
                     
                     <hr className="my-4 border-gray-200" />
                     
                     <div className="flex justify-between font-bold text-lg">
-                      <span>Total:</span>
-                      <span className="text-blue-600">€{totalPrice.toFixed(2)}</span>
+                      <span>Gesamt:</span>
+                      <span className="text-purple-600">€{totalPrice.toFixed(2)}</span>
                     </div>
                   </div>
                 </>
@@ -439,7 +434,7 @@ const CheckoutPage: React.FC = () => {
                       <div className="ml-4 flex-1">
                         <h3 className="font-medium text-gray-800">{item.title}</h3>
                         <p className="text-gray-600 text-sm">{item.packageType}</p>
-                        <p className="text-gray-600 text-sm">Qty: {item.quantity}</p>
+                        <p className="text-gray-600 text-sm">Menge: {item.quantity}</p>
                       </div>
                       <div className="text-right">
                         <span className="text-gray-800">€{(item.price * item.quantity).toFixed(2)}</span>
@@ -450,8 +445,8 @@ const CheckoutPage: React.FC = () => {
                   <hr className="my-4 border-gray-200" />
                   
                   <div className="flex justify-between font-bold text-lg">
-                    <span>Total:</span>
-                    <span className="text-blue-600">€{totalPrice.toFixed(2)}</span>
+                    <span>Gesamt:</span>
+                    <span className="text-purple-600">€{totalPrice.toFixed(2)}</span>
                   </div>
                 </>
               ) : null}
@@ -460,9 +455,9 @@ const CheckoutPage: React.FC = () => {
                 <div className="flex items-start">
                   <CheckCircle size={20} className="text-green-500 mr-2 mt-0.5" />
                   <div>
-                    <h3 className="font-semibold text-gray-800 mb-1">Secure Voucher Purchase</h3>
+                    <h3 className="font-semibold text-gray-800 mb-1">Sicherer Gutscheinkauf</h3>
                     <p className="text-green-700 text-sm">
-                      This voucher will be delivered to your email immediately after purchase.
+                      Dieser Gutschein wird unmittelbar nach dem Kauf an Ihre E-Mail gesendet.
                     </p>
                   </div>
                 </div>
