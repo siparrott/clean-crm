@@ -114,7 +114,7 @@ const VoucherDetailPage: React.FC = () => {
               {isAvailable && isValid ? (
                 <div className="mb-6">
                   <label className="block text-gray-700 font-medium mb-2">Anzahl</label>
-                  <div className="flex items-center">
+                  <div className="flex items-center mb-4">
                     <input
                       type="number"
                       min="1"
@@ -123,13 +123,49 @@ const VoucherDetailPage: React.FC = () => {
                       onChange={handleQuantityChange}
                       className="w-20 px-3 py-2 border border-gray-300 rounded-lg mr-4 focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
                     />
+                  </div>
+                  
+                  {/* Two button options */}
+                  <div className="space-y-3">
+                    {/* Personalisieren Button - Triggers voucher flow */}
+                    <button 
+                      onClick={() => {
+                        // Add voucher to cart and navigate to checkout for personalization
+                        navigate('/checkout', { 
+                          state: { 
+                            voucherPersonalization: true,
+                            voucherData: {
+                              id: voucher.id,
+                              title: voucher.title,
+                              price: voucher.discountPrice,
+                              quantity: quantity
+                            }
+                          } 
+                        });
+                      }}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center"
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Personalisieren - €{(voucher.discountPrice * quantity).toFixed(2)}
+                    </button>
+                    
+                    {/* Quick Checkout Button - Direct purchase without personalization */}
                     <button 
                       onClick={handleCheckout}
-                      className="flex-grow bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center"
+                      className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center"
                     >
                       <ShoppingCart size={18} className="mr-2" />
-                      Jetzt kaufen - €{(voucher.discountPrice * quantity).toFixed(2)}
+                      Schnellkauf - €{(voucher.discountPrice * quantity).toFixed(2)}
                     </button>
+                  </div>
+                  
+                  <div className="mt-3 text-center">
+                    <p className="text-sm text-gray-600">
+                      💎 <strong>Personalisieren:</strong> Fügen Sie eigene Fotos und Nachrichten hinzu<br/>
+                      ⚡ <strong>Schnellkauf:</strong> Sofortiger Kauf ohne Anpassung
+                    </p>
                   </div>
                 </div>
               ) : (

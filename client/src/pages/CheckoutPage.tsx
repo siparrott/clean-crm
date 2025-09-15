@@ -9,6 +9,13 @@ import { purchaseVoucher } from '../lib/voucher';
 
 interface LocationState {
   quantity: number;
+  voucherPersonalization?: boolean;
+  voucherData?: {
+    id: string;
+    title: string;
+    price: number;
+    quantity: number;
+  };
 }
 
 interface CheckoutData {
@@ -26,6 +33,32 @@ const CheckoutPage: React.FC = () => {
   
   const state = location.state as LocationState;
   const initialQuantity = state?.quantity || 1;
+  
+  // Check if this is a direct voucher personalization request
+  const isVoucherPersonalization = state?.voucherPersonalization && state?.voucherData;
+  
+  // If this is a voucher personalization request, show VoucherFlow immediately
+  if (isVoucherPersonalization && state?.voucherData) {
+    const voucherData = state.voucherData;
+    
+    const handleVoucherFlowComplete = (voucherCheckoutData: any) => {
+      console.log('Voucher purchase completed:', voucherCheckoutData);
+      navigate('/checkout/success');
+    };
+    
+    const handleBackToVoucher = () => {
+      navigate(-1); // Go back to voucher detail page
+    };
+    
+    return (
+      <VoucherFlow
+        voucherType={voucherData.title}
+        baseAmount={voucherData.price * voucherData.quantity}
+        onComplete={handleVoucherFlowComplete}
+        onBack={handleBackToVoucher}
+      />
+    );
+  }
   
   const [quantity, setQuantity] = useState<number>(initialQuantity);
   const [purchaserName, setPurchaserName] = useState<string>('');
