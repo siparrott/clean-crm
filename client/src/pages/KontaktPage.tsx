@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/layout/Layout';
-import { Mail, Phone, Clock, MapPin, Train, Car } from 'lucide-react';
+import { Mail, Phone, Clock, MapPin, Train, Car, MessageCircle } from 'lucide-react';
 import { submitContactForm } from '../lib/forms';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -99,7 +99,27 @@ const KontaktPage: React.FC = () => {
               </div>
               <div className="flex items-center space-x-4">
                 <Phone className="w-6 h-6 text-gray-600" />
-                <span className="text-gray-700">+43 677 663 99210</span>
+                <div className="flex flex-col space-y-2">
+                  <span className="text-gray-700">+43 677 663 99210</span>
+                  <div className="flex space-x-3">
+                    <a 
+                      href="tel:+43677663992210"
+                      className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      <Phone className="w-4 h-4 mr-2" />
+                      {t('contact.call')}
+                    </a>
+                    <a 
+                      href="https://wa.me/43677663992210"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
+                    >
+                      <MessageCircle className="w-4 h-4 mr-2" />
+                      WhatsApp
+                    </a>
+                  </div>
+                </div>
               </div>
               <div className="flex items-center space-x-4">
                 <Clock className="w-6 h-6 text-gray-600" />

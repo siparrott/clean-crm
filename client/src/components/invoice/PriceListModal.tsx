@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Search, Filter } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Search, Filter, Upload, Download } from 'lucide-react';
 
 interface PriceListItem {
   id: string;
@@ -25,6 +25,9 @@ const PriceListModal: React.FC<PriceListModalProps> = ({ onClose, onSelectItem }
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Photography price guide data (replacing voucher system)
   const defaultPriceGuide: PriceListItem[] = [
@@ -494,6 +497,89 @@ const PriceListModal: React.FC<PriceListModalProps> = ({ onClose, onSelectItem }
     onClose();
   };
 
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const csvText = e.target?.result as string;
+        const csvData = parseCSV(csvText);
+        await importPriceList(csvData);
+      } catch (error) {
+        console.error('Error parsing CSV:', error);
+        setError('Error parsing CSV file. Please check the format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const parseCSV = (csvText: string): any[] => {
+    const lines = csvText.split('\n').filter(line => line.trim());
+    if (lines.length < 2) throw new Error('CSV must contain headers and at least one data row');
+    
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const data = lines.slice(1).map(line => {
+      const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+      const row: any = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index] || '';
+      });
+      return row;
+    });
+    
+    return data;
+  };
+
+  const importPriceList = async (csvData: any[]) => {
+    setImporting(true);
+    try {
+      const response = await fetch('/api/crm/price-list/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ items: csvData }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to import price list');
+      }
+
+      const result = await response.json();
+      
+      // Refresh the price list
+      const newResponse = await fetch('/api/crm/price-list');
+      if (newResponse.ok) {
+        const newPriceList = await newResponse.json();
+        setPriceList(newPriceList);
+      }
+      
+      setShowImportDialog(false);
+      alert(`Successfully imported ${result.imported} items!`);
+    } catch (error) {
+      console.error('Error importing price list:', error);
+      setError('Error importing price list. Please try again.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const template = 'Name,Description,Category,Price,Currency,TaxRate,SKU,ProductCode,Unit,Notes\n' +
+                    'Portrait Session Basic,Basic portrait session with 10 edited photos,Portrait,150,EUR,19,PORT-001,portrait-basic,session,Standard portrait package\n' +
+                    'Print 15x10cm,Professional photo print 15x10cm,Prints,35,EUR,19,PRT-001,print-15x10,piece,High quality print';
+    
+    const blob = new Blob([template], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'price-list-template.csv';
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('de-DE', {
       style: 'currency',
@@ -543,6 +629,29 @@ const PriceListModal: React.FC<PriceListModalProps> = ({ onClose, onSelectItem }
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+          
+          {/* Import Controls */}
+          <div className="flex items-center justify-between border-t pt-4">
+            <div className="text-sm text-gray-600">
+              Import price list from CSV or download template
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={downloadTemplate}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download Template
+              </button>
+              <button
+                onClick={() => setShowImportDialog(true)}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Import CSV
+              </button>
             </div>
           </div>
         </div>
@@ -618,6 +727,62 @@ const PriceListModal: React.FC<PriceListModalProps> = ({ onClose, onSelectItem }
           </button>
         </div>
       </div>
+
+      {/* Import Dialog */}
+      {showImportDialog && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-60">
+          <div className="relative top-1/2 transform -translate-y-1/2 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mb-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Import Price List from CSV
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Upload a CSV file with your price list. Download the template first to see the required format.
+              </p>
+              
+              <div className="mb-4">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className="w-full flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-md hover:border-purple-400 focus:outline-none focus:border-purple-400 disabled:opacity-50"
+                >
+                  <Upload className="w-5 h-5 mr-2 text-gray-400" />
+                  <span className="text-sm text-gray-600">
+                    {importing ? 'Importing...' : 'Choose CSV file or drag and drop'}
+                  </span>
+                </button>
+              </div>
+              
+              <div className="text-xs text-gray-500 mb-4">
+                Expected columns: Name, Description, Category, Price, Currency, TaxRate, SKU, ProductCode, Unit, Notes
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setShowImportDialog(false)}
+                disabled={importing}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={downloadTemplate}
+                className="px-4 py-2 text-purple-600 border border-purple-300 rounded hover:bg-purple-50"
+              >
+                Download Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

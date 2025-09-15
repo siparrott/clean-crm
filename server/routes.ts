@@ -12,6 +12,7 @@ async function runSql(query: string, params?: any[]) {
 }
 import { sql } from 'drizzle-orm';
 import { eq } from "drizzle-orm";
+import { priceListItems } from "../shared/schema";
 import path from 'path';
 import os from 'os';
 import multer from 'multer';
@@ -5897,6 +5898,109 @@ New Age Fotografie CRM System
 
   // ==================== PRICE LIST ROUTES ====================
   app.get("/api/crm/price-list", async (req: Request, res: Response) => {
+    try {
+      // Fetch price list from database
+      const priceList = await db.select().from(priceListItems).where(eq(priceListItems.isActive, true)).orderBy(priceListItems.category, priceListItems.name);
+      
+      // Convert decimal to number for API response
+      const formattedPriceList = priceList.map(item => ({
+        id: item.id,
+        category: item.category,
+        name: item.name,
+        description: item.description,
+        price: parseFloat(item.price),
+        currency: item.currency,
+        taxRate: item.taxRate ? parseFloat(item.taxRate) : 19,
+        sku: item.sku,
+        productCode: item.productCode,
+        unit: item.unit,
+        notes: item.notes,
+        isActive: item.isActive
+      }));
+
+      res.json(formattedPriceList);
+    } catch (error) {
+      console.error("Error fetching price list:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create new price list item
+  app.post("/api/crm/price-list", async (req: Request, res: Response) => {
+    try {
+      const newItem = await db.insert(priceListItems).values(req.body).returning();
+      res.json(newItem[0]);
+    } catch (error) {
+      console.error("Error creating price list item:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update price list item
+  app.put("/api/crm/price-list/:id", async (req: Request, res: Response) => {
+    try {
+      const updatedItem = await db.update(priceListItems)
+        .set(req.body)
+        .where(eq(priceListItems.id, req.params.id))
+        .returning();
+      res.json(updatedItem[0]);
+    } catch (error) {
+      console.error("Error updating price list item:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete price list item
+  app.delete("/api/crm/price-list/:id", async (req: Request, res: Response) => {
+    try {
+      await db.delete(priceListItems).where(eq(priceListItems.id, req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting price list item:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Import price list from CSV
+  app.post("/api/crm/price-list/import", async (req: Request, res: Response) => {
+    try {
+      const { items } = req.body;
+      
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ error: "Items must be an array" });
+      }
+
+      // Validate and format items
+      const formattedItems = items.map((item: any) => ({
+        name: item.name || item.Name || '',
+        description: item.description || item.Description || '',
+        category: item.category || item.Category || 'GENERAL',
+        price: item.price || item.Price || '0',
+        currency: item.currency || item.Currency || 'EUR',
+        taxRate: item.taxRate || item.TaxRate || '19.00',
+        sku: item.sku || item.SKU || '',
+        productCode: item.productCode || item.ProductCode || '',
+        unit: item.unit || item.Unit || 'piece',
+        notes: item.notes || item.Notes || '',
+        isActive: item.isActive !== undefined ? item.isActive : true
+      }));
+
+      // Insert into database
+      const insertedItems = await db.insert(priceListItems).values(formattedItems).returning();
+      
+      res.json({ 
+        success: true, 
+        imported: insertedItems.length,
+        items: insertedItems 
+      });
+    } catch (error) {
+      console.error("Error importing price list:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get original hardcoded price list (for migration/reference)
+  app.get("/api/crm/price-list/legacy", async (req: Request, res: Response) => {
     try {
       // Complete New Age Fotografie price list based on official price guide
       const priceList = [

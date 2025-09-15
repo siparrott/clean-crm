@@ -512,6 +512,7 @@ const translations = {
     'contact.trainInfo': '5 minutes from Kettenbrückengasse',
     'contact.streetParking': 'Street parking available',
     'contact.mapTitle': 'Studio Location',
+    'contact.call': 'Call Now',
     
     // Footer
     'footer.quickLinks': 'Quick Links',
@@ -1047,6 +1048,7 @@ const translations = {
     'contact.trainInfo': '5 Minuten von Kettenbrückengasse',
     'contact.streetParking': 'Straßenparkplätze verfügbar',
     'contact.mapTitle': 'Studio Location',
+    'contact.call': 'Jetzt anrufen',
     
     // Footer
     'footer.quickLinks': 'Schnelllinks',

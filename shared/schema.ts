@@ -289,6 +289,36 @@ export const discountCoupons = pgTable("discount_coupons", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Price List Items (for invoice creation)
+export const priceListItems = pgTable("price_list_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  studioId: uuid("studio_id").references(() => studioConfigs.id, { onDelete: "cascade" }),
+  
+  // Item details
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // "PRINTS", "LEINWAND", "DIGITAL", etc.
+  
+  // Pricing
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  currency: text("currency").default("EUR"),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("19.00"), // percentage
+  
+  // SKU and codes
+  sku: text("sku"),
+  productCode: text("product_code"),
+  
+  // Additional details
+  unit: text("unit"), // "piece", "hour", "session", etc.
+  notes: text("notes"),
+  
+  // Status
+  isActive: boolean("is_active").default(true),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Voucher Sales (purchases)
 export const voucherSales = pgTable("voucher_sales", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -1188,6 +1218,16 @@ export const insertAgentActionLogSchema = createInsertSchema(agentActionLog, {
   createdAt: true 
 });
 
+export const insertPriceListItemSchema = createInsertSchema(priceListItems, {
+  name: z.string().min(1, "Item name is required"),
+  category: z.string().min(1, "Category is required"),
+  price: z.string().min(1, "Price is required"),
+}).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true 
+});
+
 // Type exports for new tables
 export type Studio = typeof studios.$inferSelect;
 export type InsertStudio = z.infer<typeof insertStudioSchema>;
@@ -1197,6 +1237,8 @@ export type AiPolicy = typeof aiPolicies.$inferSelect;
 export type InsertAiPolicy = z.infer<typeof insertAiPolicySchema>;
 export type AgentActionLog = typeof agentActionLog.$inferSelect;
 export type InsertAgentActionLog = z.infer<typeof insertAgentActionLogSchema>;
+export type PriceListItem = typeof priceListItems.$inferSelect;
+export type InsertPriceListItem = z.infer<typeof insertPriceListItemSchema>;
 
 // Communication types
 export type MessageCampaign = typeof messageCampaigns.$inferSelect;
