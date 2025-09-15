@@ -38,6 +38,7 @@ interface Invoice {
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -70,6 +71,7 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     fetchInvoices();
+    fetchClients();
   }, []);
 
   const fetchInvoices = async () => {
@@ -84,21 +86,106 @@ export default function InvoicesPage() {
     }
   };
 
+  const fetchClients = async () => {
+    try {
+      const response = await fetch('/api/crm/clients', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const data = await response.json();
+      setClients(data?.clients || []);
+    } catch (err) {
+      console.error('Failed to load clients:', err);
+    }
+  };
+
   const handleCreateInvoice = async () => {
     try {
+      // Validate required fields
+      if (!newInvoice.client_id) {
+        setError('Please select a client');
+        return;
+      }
+      
+      if (!newInvoice.due_date) {
+        setError('Please set a due date');
+        return;
+      }
+      
+      if (newInvoice.items.length === 0) {
+        setError('Please add at least one invoice item');
+        return;
+      }
+      
+      // Calculate total
+      const subtotal = newInvoice.items.reduce((sum, item) => 
+        sum + (item.quantity * item.unit_price), 0
+      );
+      const taxTotal = newInvoice.items.reduce((sum, item) => 
+        sum + (item.quantity * item.unit_price * (item.tax_rate || 0) / 100), 0
+      );
+      const total = subtotal + taxTotal - (newInvoice.discount_amount || 0);
+
       const invoiceData = {
-        client_id: newInvoice.client_id,
-        due_date: newInvoice.due_date,
-        payment_terms: newInvoice.payment_terms,
+        clientId: newInvoice.client_id,
+        issueDate: new Date().toISOString().split('T')[0],
+        dueDate: newInvoice.due_date,
+        paymentTerms: newInvoice.payment_terms,
         currency: newInvoice.currency,
         notes: newInvoice.notes,
-        discount_amount: newInvoice.discount_amount,
-        items: newInvoice.items
+        discountAmount: newInvoice.discount_amount || 0,
+        subtotal: subtotal,
+        taxAmount: taxTotal,
+        total: total,
+        status: 'DRAFT',
+        items: newInvoice.items.map((item, index) => ({
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unit_price,
+          taxRate: item.tax_rate || 0,
+          sortOrder: index
+        }))
       };
 
-      await createInvoice(invoiceData);
+      console.log('Creating invoice with data:', invoiceData);
+      const createdInvoice = await createInvoice(invoiceData);
+      console.log('Invoice created successfully:', createdInvoice);
+      
       setShowCreateModal(false);
       fetchInvoices();
+      
+      // Show success message with options
+      const shouldSendEmail = window.confirm(
+        `Invoice ${createdInvoice.invoiceNumber || createdInvoice.id} created successfully!\n\nWould you like to send it via email to the client now?`
+      );
+      
+      if (shouldSendEmail) {
+        try {
+          const response = await fetch(`/api/crm/invoices/${createdInvoice.id}/email`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+              subject: `Rechnung ${createdInvoice.invoiceNumber || createdInvoice.id} - New Age Fotografie`,
+              message: 'Anbei senden wir Ihnen Ihre Rechnung zu. Bei Fragen stehen wir Ihnen gerne zur Verfügung.',
+              includeAttachment: true
+            })
+          });
+          
+          const result = await response.json();
+          if (result.success || response.ok) {
+            alert('Invoice created and email sent successfully!');
+          } else {
+            alert('Invoice created, but email sending failed. You can send it manually from the invoice list.');
+          }
+        } catch (emailError) {
+          console.error('Email sending error:', emailError);
+          alert('Invoice created, but email sending failed. You can send it manually from the invoice list.');
+        }
+      }
       
       // Reset form
       setNewInvoice({
@@ -116,7 +203,8 @@ export default function InvoicesPage() {
         items: []
       });
     } catch (err: any) {
-      setError(err.message);
+      console.error('Invoice creation error:', err);
+      setError(err.message || 'Failed to create invoice');
     }
   };
 
@@ -162,8 +250,14 @@ export default function InvoicesPage() {
   const handleSendWhatsApp = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setShowWhatsAppModal(true);
-    // Pre-populate phone number if available
-    setWhatsAppPhone('');
+    
+    // Pre-populate phone number if available from client data
+    const selectedClient = clients.find(c => c.id === invoice.client_id);
+    if (selectedClient?.phone) {
+      setWhatsAppPhone(selectedClient.phone);
+    } else {
+      setWhatsAppPhone('');
+    }
   };
 
   const handleConfirmWhatsAppSend = async () => {
@@ -395,14 +489,35 @@ export default function InvoicesPage() {
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Client ID
+                    Client *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={newInvoice.client_id}
-                    onChange={(e) => setNewInvoice(prev => ({ ...prev, client_id: e.target.value }))}
+                    onChange={(e) => {
+                      const selectedClient = clients.find(c => c.id === e.target.value);
+                      setNewInvoice(prev => ({ 
+                        ...prev, 
+                        client_id: e.target.value,
+                        client_name: selectedClient ? `${selectedClient.firstName} ${selectedClient.lastName}` : '',
+                        client_email: selectedClient?.email || ''
+                      }));
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                    required
+                  >
+                    <option value="">Select a client...</option>
+                    {clients.map(client => (
+                      <option key={client.id} value={client.id}>
+                        {client.firstName} {client.lastName} ({client.email})
+                      </option>
+                    ))}
+                  </select>
+                  {newInvoice.client_id && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      <p><strong>Email:</strong> {newInvoice.client_email}</p>
+                      <p><strong>Phone:</strong> {clients.find(c => c.id === newInvoice.client_id)?.phone || 'N/A'}</p>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -421,15 +536,56 @@ export default function InvoicesPage() {
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-md font-medium text-gray-900">Invoice Items</h4>
-                  <button
-                    onClick={() => setShowPriceListModal(true)}
-                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                  >
-                    Add from Price Guide
-                  </button>
+                  <div className="space-x-2">
+                    <button
+                      onClick={() => {
+                        setNewInvoice(prev => ({
+                          ...prev,
+                          items: [...prev.items, {
+                            description: '',
+                            quantity: 1,
+                            unit_price: 0,
+                            tax_rate: 19,
+                            line_total: 0
+                          }]
+                        }));
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                      + Add Item
+                    </button>
+                    <button
+                      onClick={() => setShowPriceListModal(true)}
+                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                    >
+                      Add from Price Guide
+                    </button>
+                  </div>
                 </div>
                 
-                {newInvoice.items.map((item, index) => (
+                {newInvoice.items.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500 mb-4">No items added yet</p>
+                    <button
+                      onClick={() => {
+                        setNewInvoice(prev => ({
+                          ...prev,
+                          items: [{
+                            description: '',
+                            quantity: 1,
+                            unit_price: 0,
+                            tax_rate: 19,
+                            line_total: 0
+                          }]
+                        }));
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                      Add Your First Item
+                    </button>
+                  </div>
+                ) : (
+                  newInvoice.items.map((item, index) => (
                   <div key={index} className="grid grid-cols-5 gap-2 mb-2 p-3 bg-gray-50 rounded">
                     <input
                       type="text"
@@ -485,22 +641,8 @@ export default function InvoicesPage() {
                       Remove
                     </button>
                   </div>
-                ))}
+                )))}
                 
-                <button
-                  onClick={() => {
-                    const newItem = {
-                      description: '',
-                      quantity: 1,
-                      unit_price: 0,
-                      tax_rate: 19
-                    };
-                    setNewInvoice(prev => ({ ...prev, items: [...prev.items, newItem] }));
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Add Item
-                </button>
               </div>
 
               {/* Totals Preview */}
@@ -545,10 +687,20 @@ export default function InvoicesPage() {
                 </button>
                 <button
                   onClick={handleCreateInvoice}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  className={`px-6 py-2 rounded font-medium ${
+                    !newInvoice.client_id || !newInvoice.due_date || newInvoice.items.length === 0
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
                   disabled={!newInvoice.client_id || !newInvoice.due_date || newInvoice.items.length === 0}
+                  title={
+                    !newInvoice.client_id ? 'Please select a client'
+                    : !newInvoice.due_date ? 'Please set a due date'
+                    : newInvoice.items.length === 0 ? 'Please add at least one item'
+                    : 'Create invoice and optionally send via email'
+                  }
                 >
-                  Create Invoice
+                  Create Invoice & Send
                 </button>
               </div>
             </div>
@@ -567,39 +719,71 @@ export default function InvoicesPage() {
       {/* WhatsApp Share Modal */}
       {showWhatsAppModal && selectedInvoice && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="relative top-10 mx-auto p-6 border w-[500px] shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Send Invoice via WhatsApp
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  📱 Send Invoice via WhatsApp
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowWhatsAppModal(false);
+                    setWhatsAppPhone('');
+                    setSelectedInvoice(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
               
-              <div className="mb-4 p-3 bg-gray-50 rounded">
-                <p className="text-sm text-gray-600">
-                  Invoice: <span className="font-medium">#{selectedInvoice.invoice_number}</span>
-                </p>
-                <p className="text-sm text-gray-600">
-                  Amount: <span className="font-medium">€{selectedInvoice.total_amount.toFixed(2)}</span>
-                </p>
-                <p className="text-sm text-gray-600">
-                  Client: <span className="font-medium">{selectedInvoice.client?.name || selectedInvoice.client_id}</span>
-                </p>
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-medium text-blue-900 mb-2">Invoice Details</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <p className="text-blue-700">
+                    <span className="font-medium">Invoice:</span> #{selectedInvoice.invoice_number || selectedInvoice.id}
+                  </p>
+                  <p className="text-blue-700">
+                    <span className="font-medium">Amount:</span> €{selectedInvoice.total_amount?.toFixed(2) || '0.00'}
+                  </p>
+                  <p className="text-blue-700">
+                    <span className="font-medium">Client:</span> {selectedInvoice.client?.name || clients.find(c => c.id === selectedInvoice.client_id)?.firstName + ' ' + clients.find(c => c.id === selectedInvoice.client_id)?.lastName || 'Unknown'}
+                  </p>
+                  <p className="text-blue-700">
+                    <span className="font-medium">Due:</span> {new Date(selectedInvoice.due_date).toLocaleDateString('de-DE')}
+                  </p>
+                </div>
               </div>
 
               <div className="mb-4">
                 <label htmlFor="whatsapp-phone" className="block text-sm font-medium text-gray-700 mb-2">
-                  WhatsApp Phone Number (with country code)
+                  WhatsApp Phone Number *
                 </label>
                 <input
                   type="tel"
                   id="whatsapp-phone"
                   value={whatsAppPhone}
                   onChange={(e) => setWhatsAppPhone(e.target.value)}
-                  placeholder="e.g., +436641234567"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="+43 677 123 4567"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Include country code (e.g., +43 for Austria, +49 for Germany)
                 </p>
+              </div>
+
+              <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                <h4 className="font-medium text-green-900 mb-2">📱 WhatsApp Message Preview</h4>
+                <div className="text-sm text-green-800 bg-white p-3 rounded border italic">
+                  "Hallo! 👋 Hier ist Ihre Rechnung #{selectedInvoice.invoice_number || selectedInvoice.id} von New Age Fotografie über €{selectedInvoice.total_amount?.toFixed(2) || '0.00'}. 
+                  
+                  Sie können die Rechnung hier einsehen: [Invoice Link]
+                  
+                  Bei Fragen stehen wir Ihnen gerne zur Verfügung! 📸
+                  
+                  Vielen Dank für Ihr Vertrauen!
+                  New Age Fotografie Team"
+                </div>
               </div>
 
               <div className="flex items-center justify-end space-x-3">
@@ -616,7 +800,11 @@ export default function InvoicesPage() {
                 <button
                   onClick={handleConfirmWhatsAppSend}
                   disabled={!whatsAppPhone.trim()}
-                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2"
+                  className={`px-6 py-2 rounded font-medium flex items-center space-x-2 ${
+                    whatsAppPhone.trim() 
+                      ? 'bg-green-600 text-white hover:bg-green-700' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                 >
                   <MessageCircle className="w-4 h-4" />
                   <span>Send via WhatsApp</span>

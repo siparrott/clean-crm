@@ -29,6 +29,7 @@ const ClientDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [client, setClient] = useState<Client | null>(null);
+  const [clientInvoices, setClientInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showQuestionnaireModal, setShowQuestionnaireModal] = useState(false);
@@ -38,6 +39,7 @@ const ClientDetailPage: React.FC = () => {
   useEffect(() => {
     if (id) {
       fetchClient(id);
+      fetchClientInvoices(id);
     }
   }, [id]);
 
@@ -56,6 +58,23 @@ const ClientDetailPage: React.FC = () => {
       setError('Failed to load client details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchClientInvoices = async (clientId: string) => {
+    try {
+      const response = await fetch(`/api/crm/invoices?clientId=${clientId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setClientInvoices(data.invoices || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch client invoices:', err);
     }
   };
 
@@ -346,8 +365,97 @@ const ClientDetailPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Invoice History */}
+        <div className="bg-white shadow rounded-lg p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Invoice History</h3>
+            <button
+              onClick={handleCreateInvoice}
+              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Invoice
+            </button>
+          </div>
+          
+          {clientInvoices.length === 0 ? (
+            <div className="text-center py-8">
+              <FileText className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No invoices yet</h3>
+              <p className="mt-1 text-sm text-gray-500">Get started by creating an invoice for this client.</p>
+              <div className="mt-6">
+                <button
+                  onClick={handleCreateInvoice}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create First Invoice
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+              <table className="min-w-full divide-y divide-gray-300">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Invoice #
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Due Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {clientInvoices.map((invoice) => (
+                    <tr key={invoice.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        #{invoice.invoiceNumber || invoice.id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        €{(invoice.total || invoice.totalAmount || 0).toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          invoice.status === 'PAID' ? 'bg-green-100 text-green-800' :
+                          invoice.status === 'SENT' ? 'bg-blue-100 text-blue-800' :
+                          invoice.status === 'OVERDUE' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {invoice.status || 'DRAFT'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <button
+                          onClick={() => navigate(`/admin/invoices`)}
+                          className="text-blue-600 hover:text-blue-900"
+                          title="View Invoice"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <button 
             onClick={handleScheduleSession}
             className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 hover:border-purple-300 transition-colors flex items-center justify-center"
@@ -361,13 +469,6 @@ const ClientDetailPage: React.FC = () => {
           >
             <Plus size={20} className="mr-2 text-purple-600" />
             <span>Add Appointment</span>
-          </button>
-          <button 
-            onClick={handleCreateInvoice}
-            className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 hover:border-green-300 transition-colors flex items-center justify-center"
-          >
-            <Euro size={20} className="mr-2 text-green-600" />
-            <span>Create Invoice</span>
           </button>
           <button 
             onClick={handleSendEmail}
