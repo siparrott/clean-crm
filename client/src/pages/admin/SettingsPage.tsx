@@ -12,7 +12,8 @@ import {
   Palette,
   Bell,
   Users,
-  Key
+  Key,
+  DollarSign
 } from 'lucide-react';
 
 const SettingsPage: React.FC = () => {
@@ -37,6 +38,13 @@ const SettingsPage: React.FC = () => {
       title: 'System Configuration',
       description: 'Configure core system settings',
       items: [
+        {
+          icon: DollarSign,
+          title: 'Price List Management',
+          description: 'Manage price list items and import CSV files',
+          path: '/admin/settings/price-list',
+          color: 'bg-emerald-500'
+        },
         {
           icon: Database,
           title: 'Database Settings',

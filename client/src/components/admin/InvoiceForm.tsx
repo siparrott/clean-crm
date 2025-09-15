@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 // Using Neon database with Express API endpoints
 import { invoiceService, priceListService, Invoice, InvoiceItem, PriceListItem, Client } from '../../lib/invoicing';
+import { sendInvoiceEmail, shareInvoiceWhatsApp } from '../../api/invoices';
 import { 
   Plus, 
   Trash2, 
@@ -11,7 +12,10 @@ import {
   X,
   Loader2,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Mail,
+  MessageCircle,
+  Phone
 } from 'lucide-react';
 
 interface InvoiceFormProps {
@@ -49,6 +53,18 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({
   const [success, setSuccess] = useState<string | null>(null);
   const [showPriceList, setShowPriceList] = useState(false);
   const [priceListSearch, setPriceListSearch] = useState('');
+  
+  // Email and WhatsApp state
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [emailData, setEmailData] = useState({
+    email_address: '',
+    subject: '',
+    message: ''
+  });
+  const [whatsAppPhone, setWhatsAppPhone] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const selectedClient = clients.find(c => c.id === formData.client_id);
   const filteredPriceList = priceList.filter(item =>
@@ -209,6 +225,82 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({
         setError('Invoice saved but failed to mark as sent');
       }
     }
+  };
+
+  const handleSendEmail = async () => {
+    if (!invoice?.id) {
+      setError('Please save the invoice first');
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const clientEmail = selectedClient?.email || '';
+      const invoiceNumber = invoice.invoice_number || formData.invoice_number;
+      
+      const emailPayload = {
+        email_address: emailData.email_address || clientEmail,
+        subject: emailData.subject || `Rechnung ${invoiceNumber} - New Age Fotografie`,
+        message: emailData.message || 'Vielen Dank für Ihr Vertrauen! Anbei finden Sie Ihre Rechnung für unsere Fotografie-Dienstleistungen.'
+      };
+
+      await sendInvoiceEmail(invoice.id, emailPayload);
+      setSuccess('Invoice sent successfully via email!');
+      setShowEmailModal(false);
+      setEmailData({ email_address: '', subject: '', message: '' });
+    } catch (err) {
+      setError('Failed to send invoice email. Please try again.');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (!invoice?.id) {
+      setError('Please save the invoice first');
+      return;
+    }
+
+    setSendingWhatsApp(true);
+    try {
+      const phone = whatsAppPhone.replace(/[^\d+]/g, ''); // Clean phone number
+      const result = await shareInvoiceWhatsApp(invoice.id, phone);
+      
+      // Open WhatsApp link in new window
+      window.open(result.whatsapp_url, '_blank');
+      
+      setSuccess('WhatsApp share link created successfully!');
+      setShowWhatsAppModal(false);
+      setWhatsAppPhone('');
+    } catch (err) {
+      setError('Failed to create WhatsApp share link. Please try again.');
+    } finally {
+      setSendingWhatsApp(false);
+    }
+  };
+
+  const openEmailModal = () => {
+    if (!invoice?.id && !formData.id) {
+      setError('Please save the invoice first');
+      return;
+    }
+    
+    setEmailData({
+      email_address: selectedClient?.email || '',
+      subject: `Rechnung ${invoice?.invoice_number || formData.invoice_number} - New Age Fotografie`,
+      message: 'Vielen Dank für Ihr Vertrauen! Anbei finden Sie Ihre Rechnung für unsere Fotografie-Dienstleistungen.'
+    });
+    setShowEmailModal(true);
+  };
+
+  const openWhatsAppModal = () => {
+    if (!invoice?.id && !formData.id) {
+      setError('Please save the invoice first');
+      return;
+    }
+    
+    setWhatsAppPhone(selectedClient?.phone || selectedClient?.telephone || '');
+    setShowWhatsAppModal(true);
   };
 
   return (
@@ -462,6 +554,29 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({
           >
             Cancel
           </button>
+          
+          {/* Email and WhatsApp buttons for saved invoices */}
+          {(invoice?.id || formData.id) && (
+            <>
+              <button
+                type="button"
+                onClick={openEmailModal}
+                className="flex items-center space-x-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Mail className="h-4 w-4" />
+                <span>Send Email</span>
+              </button>
+              <button
+                type="button"
+                onClick={openWhatsAppModal}
+                className="flex items-center space-x-2 px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span>Share WhatsApp</span>
+              </button>
+            </>
+          )}
+          
           <button
             type="submit"
             disabled={loading}
@@ -545,6 +660,156 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({
                     No items found matching your search.
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Modal */}
+      {showEmailModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <Mail className="h-5 w-5 mr-2 text-green-600" />
+                  Send Invoice via Email
+                </h3>
+                <button
+                  onClick={() => setShowEmailModal(false)}
+                  className="p-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={emailData.email_address}
+                    onChange={(e) => setEmailData(prev => ({ ...prev, email_address: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="client@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subject
+                  </label>
+                  <input
+                    type="text"
+                    value={emailData.subject}
+                    onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Invoice subject"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Message (Optional)
+                  </label>
+                  <textarea
+                    value={emailData.message}
+                    onChange={(e) => setEmailData(prev => ({ ...prev, message: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Additional message to include with the invoice..."
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowEmailModal(false)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendEmail}
+                  disabled={sendingEmail || !emailData.email_address}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  {sendingEmail ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Mail className="h-4 w-4" />
+                  )}
+                  <span>Send Email</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Modal */}
+      {showWhatsAppModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <MessageCircle className="h-5 w-5 mr-2 text-green-500" />
+                  Share via WhatsApp
+                </h3>
+                <button
+                  onClick={() => setShowWhatsAppModal(false)}
+                  className="p-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Phone className="h-4 w-4 inline mr-1" />
+                    WhatsApp Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={whatsAppPhone}
+                    onChange={(e) => setWhatsAppPhone(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="+43 677 123 4567"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Include country code (e.g., +43 for Austria)
+                  </p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-green-800">
+                    📱 This will create a pre-filled WhatsApp message with the invoice details and link. 
+                    The WhatsApp app will open in a new window.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowWhatsAppModal(false)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendWhatsApp}
+                  disabled={sendingWhatsApp || !whatsAppPhone}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+                >
+                  {sendingWhatsApp ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MessageCircle className="h-4 w-4" />
+                  )}
+                  <span>Open WhatsApp</span>
+                </button>
               </div>
             </div>
           </div>

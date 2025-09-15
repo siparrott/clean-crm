@@ -2010,214 +2010,260 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
       // CRM Price List API endpoint (returns photography price guide for invoice creation)
       if (pathname === '/api/crm/price-list' && req.method === 'GET') {
         try {
-          console.log('📋 Fetching price list (photography price guide) for invoice creation...');
+          console.log('📋 Fetching price list from database for invoice creation...');
           
-          // Photography price guide data (replacing voucher products)
-          const priceGuide = [
-            {
-              id: 'portrait-basic',
-              name: 'Portrait Session - Basic',
-              description: 'Basic portrait session with 10 edited photos',
-              price: 150,
-              category: 'Portrait',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'portrait-premium',
-              name: 'Portrait Session - Premium',
-              description: 'Premium portrait session with 20 edited photos and styling consultation',
-              price: 250,
-              category: 'Portrait',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'family-outdoor',
-              name: 'Family Outdoor Shooting',
-              description: 'Family photography session in outdoor location with 15 edited photos',
-              price: 200,
-              category: 'Family',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'family-studio',
-              name: 'Family Studio Session',
-              description: 'Professional family photos in our studio with 12 edited photos',
-              price: 180,
-              category: 'Family',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'couple-engagement',
-              name: 'Couple & Engagement',
-              description: 'Romantic couple or engagement session with 25 edited photos',
-              price: 300,
-              category: 'Couple',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'wedding-basic',
-              name: 'Wedding Photography - Basic',
-              description: 'Wedding coverage (4 hours) with 100+ edited photos',
-              price: 800,
-              category: 'Wedding',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'wedding-premium',
-              name: 'Wedding Photography - Premium',
-              description: 'Full day wedding coverage (8 hours) with 200+ photos and album',
-              price: 1200,
-              category: 'Wedding',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'business-headshots',
-              name: 'Business Headshots',
-              description: 'Professional headshots for business use with 5 edited photos',
-              price: 120,
-              category: 'Business',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'business-team',
-              name: 'Business Team Photography',
-              description: 'Team photography session for corporate use',
-              price: 350,
-              category: 'Business',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'maternity-session',
-              name: 'Maternity Photography',
-              description: 'Beautiful maternity session with 15 edited photos',
-              price: 220,
-              category: 'Maternity',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'newborn-session',
-              name: 'Newborn Photography',
-              description: 'Gentle newborn session with props and 20 edited photos',
-              price: 280,
-              category: 'Newborn',
-              type: 'service',
-              unit: 'session',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'event-coverage',
-              name: 'Event Photography',
-              description: 'Event coverage with unlimited photos (price per hour)',
-              price: 80,
-              category: 'Events',
-              type: 'service',
-              unit: 'hour',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'photo-album',
-              name: 'Premium Photo Album',
-              description: 'High-quality photo album (30 pages)',
-              price: 150,
-              category: 'Products',
-              type: 'product',
-              unit: 'piece',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'usb-drive',
-              name: 'USB Drive with Photos',
-              description: 'Custom USB drive with all high-resolution photos',
-              price: 50,
-              category: 'Products',
-              type: 'product',
-              unit: 'piece',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'prints-package',
-              name: 'Print Package',
-              description: 'Professional prints package (10x 20x30cm)',
-              price: 80,
-              category: 'Products',
-              type: 'product',
-              unit: 'package',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'extra-editing',
-              name: 'Extra Photo Editing',
-              description: 'Additional photo editing and retouching',
-              price: 25,
-              category: 'Services',
-              type: 'service',
-              unit: 'photo',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'travel-fee',
-              name: 'Travel Fee',
-              description: 'Travel fee for locations outside Vienna',
-              price: 50,
-              category: 'Services',
-              type: 'service',
-              unit: 'trip',
-              taxRate: 19,
-              isActive: true
-            },
-            {
-              id: 'rush-delivery',
-              name: 'Rush Delivery',
-              description: 'Express photo delivery within 48 hours',
-              price: 100,
-              category: 'Services',
-              type: 'service',
-              unit: 'service',
-              taxRate: 19,
-              isActive: true
-            }
-          ];
+          if (!sql) {
+            console.log('⚠️ Database not connected, returning empty price list');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify([]));
+            return;
+          }
+          
+          // Query active price list items from database
+          const priceListQuery = `
+            SELECT 
+              id,
+              name,
+              description,
+              category,
+              price,
+              currency,
+              tax_rate as "taxRate",
+              unit,
+              notes,
+              is_active as "isActive"
+            FROM price_list_items 
+            WHERE is_active = true 
+            ORDER BY category, name
+          `;
+          
+          const priceListItems = await sql(priceListQuery);
+          
+          // Format for frontend (convert price to number, add type field)
+          const formattedPriceList = priceListItems.map(item => ({
+            id: item.id,
+            name: item.name,
+            description: item.description || '',
+            price: parseFloat(item.price) || 0,
+            category: item.category,
+            currency: item.currency || 'EUR',
+            taxRate: parseFloat(item.taxRate) || 19,
+            unit: item.unit || 'piece',
+            notes: item.notes || '',
+            isActive: item.isActive,
+            type: 'service' // Default type for compatibility
+          }));
+          
+          console.log(`📋 Found ${formattedPriceList.length} active price list items`);
           
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(priceGuide));
+          res.end(JSON.stringify(formattedPriceList));
         } catch (error) {
           console.error('❌ Price list API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Price List Import API endpoint
+      if (pathname === '/api/crm/price-list/import' && req.method === 'POST') {
+        try {
+          console.log('📤 Importing price list items...');
+          const body = await parseBody(req);
+          const { items } = JSON.parse(body);
+          
+          if (!sql) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Database not connected' }));
+            return;
+          }
+          
+          if (!Array.isArray(items) || items.length === 0) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Items array is required' }));
+            return;
+          }
+          
+          const insertedItems = [];
+          
+          for (const item of items) {
+            try {
+              // Check if item already exists (by name and category to avoid duplicates)
+              const existing = await sql`
+                SELECT id FROM price_list_items 
+                WHERE name = ${item.name} AND category = ${item.category}
+              `;
+              
+              if (existing.length > 0) {
+                console.log(`⏭️ Skipping existing item: ${item.name}`);
+                continue;
+              }
+              
+              // Insert new item
+              const insertResult = await sql`
+                INSERT INTO price_list_items (
+                  name, description, category, price, currency, tax_rate, 
+                  unit, notes, is_active, created_at, updated_at
+                ) VALUES (
+                  ${item.name}, 
+                  ${item.description || ''}, 
+                  ${item.category}, 
+                  ${parseFloat(item.price) || 0}, 
+                  ${item.currency || 'EUR'}, 
+                  ${parseFloat(item.taxRate || '19.00')}, 
+                  ${item.unit || 'piece'}, 
+                  ${item.notes || ''}, 
+                  ${item.isActive !== false}, 
+                  NOW(), 
+                  NOW()
+                )
+                RETURNING *
+              `;
+              
+              if (insertResult.length > 0) {
+                insertedItems.push(insertResult[0]);
+              }
+            } catch (itemError) {
+              console.error(`❌ Failed to insert item ${item.name}:`, itemError.message);
+            }
+          }
+          
+          console.log(`✅ Successfully imported ${insertedItems.length} price list items`);
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ 
+            success: true, 
+            imported: insertedItems.length,
+            items: insertedItems 
+          }));
+        } catch (error) {
+          console.error('❌ Price list import error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Price List Create API endpoint
+      if (pathname === '/api/crm/price-list' && req.method === 'POST') {
+        try {
+          console.log('➕ Creating new price list item...');
+          const body = await parseBody(req);
+          const itemData = JSON.parse(body);
+          
+          if (!sql) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Database not connected' }));
+            return;
+          }
+          
+          const insertResult = await sql`
+            INSERT INTO price_list_items (
+              name, description, category, price, currency, tax_rate, 
+              unit, notes, is_active, created_at, updated_at
+            ) VALUES (
+              ${itemData.name}, 
+              ${itemData.description || ''}, 
+              ${itemData.category}, 
+              ${parseFloat(itemData.price) || 0}, 
+              ${itemData.currency || 'EUR'}, 
+              ${parseFloat(itemData.taxRate || '19.00')}, 
+              ${itemData.unit || 'piece'}, 
+              ${itemData.notes || ''}, 
+              ${itemData.isActive !== false}, 
+              NOW(), 
+              NOW()
+            )
+            RETURNING *
+          `;
+          
+          res.writeHead(201, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(insertResult[0]));
+        } catch (error) {
+          console.error('❌ Price list create error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Price List Update API endpoint
+      if (pathname.startsWith('/api/crm/price-list/') && req.method === 'PUT') {
+        try {
+          const itemId = pathname.split('/').pop();
+          console.log(`✏️ Updating price list item ${itemId}...`);
+          
+          const body = await parseBody(req);
+          const updates = JSON.parse(body);
+          
+          if (!sql) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Database not connected' }));
+            return;
+          }
+          
+          const updateResult = await sql`
+            UPDATE price_list_items 
+            SET 
+              name = ${updates.name},
+              description = ${updates.description || ''},
+              category = ${updates.category},
+              price = ${parseFloat(updates.price) || 0},
+              currency = ${updates.currency || 'EUR'},
+              tax_rate = ${parseFloat(updates.taxRate || '19.00')},
+              unit = ${updates.unit || 'piece'},
+              notes = ${updates.notes || ''},
+              is_active = ${updates.isActive !== false},
+              updated_at = NOW()
+            WHERE id = ${itemId}
+            RETURNING *
+          `;
+          
+          if (updateResult.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Item not found' }));
+            return;
+          }
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(updateResult[0]));
+        } catch (error) {
+          console.error('❌ Price list update error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Price List Delete API endpoint
+      if (pathname.startsWith('/api/crm/price-list/') && req.method === 'DELETE') {
+        try {
+          const itemId = pathname.split('/').pop();
+          console.log(`🗑️ Deleting price list item ${itemId}...`);
+          
+          if (!sql) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Database not connected' }));
+            return;
+          }
+          
+          const deleteResult = await sql`
+            DELETE FROM price_list_items 
+            WHERE id = ${itemId}
+            RETURNING id
+          `;
+          
+          if (deleteResult.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Item not found' }));
+            return;
+          }
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, deleted: itemId }));
+        } catch (error) {
+          console.error('❌ Price list delete error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
         }

@@ -62,6 +62,7 @@ import AdminBlogEditPage from './pages/admin/AdminBlogEditPage';
 import KnowledgeBasePage from './pages/admin/KnowledgeBasePage';
 import CRMOperationsAssistant from './pages/admin/CRMOperationsAssistant';
 import WebsiteWizard from './pages/admin/WebsiteWizard';
+import PriceListSettingsPage from './pages/admin/settings/PriceListSettingsPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import NeonProtectedRoute from './components/auth/NeonProtectedRoute';
 import CartPage from './pages/CartPage';
@@ -353,6 +354,14 @@ function App() {
                   element={
                     <NeonProtectedRoute>
                       <SettingsPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/settings/price-list"
+                  element={
+                    <NeonProtectedRoute>
+                      <PriceListSettingsPage />
                     </NeonProtectedRoute>
                   }
                 />
