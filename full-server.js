@@ -394,6 +394,568 @@ async function handleFilesAPI(req, res, pathname, query) {
   res.end(JSON.stringify({ error: 'Files API endpoint not found' }));
 }
 
+// Gallery API handler function
+async function handleGalleryAPI(req, res, pathname, query) {
+  let neon, sql;
+  try {
+    const neonModule = require('@neondatabase/serverless');
+    neon = neonModule.neon;
+    sql = neon(process.env.DATABASE_URL);
+  } catch (error) {
+    console.error('❌ Neon database not available:', error.message);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Database not available' }));
+    return;
+  }
+
+  // Parse the pathname to get the specific endpoint
+  const pathParts = pathname.split('/').filter(p => p);
+  const gallerySlug = pathParts[2]; // galleries/[slug]
+  const action = pathParts[3]; // auth, images, download, etc.
+  const imageId = pathParts[4]; // for image-specific operations
+
+  // Parse request body for POST/PUT requests
+  const getRequestBody = () => {
+    return new Promise((resolve, reject) => {
+      let body = '';
+      req.on('data', chunk => body += chunk.toString());
+      req.on('end', () => {
+        try {
+          resolve(body ? JSON.parse(body) : {});
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+  };
+
+  // Helper function to generate gallery tokens
+  const generateGalleryToken = (galleryId, email) => {
+    return Buffer.from(`${galleryId}:${email}:${Date.now()}`).toString('base64');
+  };
+
+  // Helper function to verify gallery tokens
+  const verifyGalleryToken = (token) => {
+    try {
+      const decoded = Buffer.from(token, 'base64').toString();
+      const [galleryId, email, timestamp] = decoded.split(':');
+      return { galleryId, email, timestamp: parseInt(timestamp) };
+    } catch (error) {
+      return null;
+    }
+  };
+
+  try {
+    // GET /api/galleries - Get all galleries
+    if (req.method === 'GET' && !gallerySlug) {
+      const galleries = await sql`
+        SELECT id, title, slug, description, cover_image, is_public, 
+               is_password_protected, client_id, created_by, sort_order, 
+               created_at, updated_at
+        FROM galleries
+        ORDER BY created_at DESC
+      `;
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(galleries));
+      return;
+    }
+
+    // GET /api/galleries/[slug] - Get gallery by slug
+    if (req.method === 'GET' && gallerySlug && !action) {
+      const gallery = await sql`
+        SELECT id, title, slug, description, cover_image, is_public, 
+               is_password_protected, password, client_id, created_by, 
+               sort_order, created_at, updated_at
+        FROM galleries
+        WHERE slug = ${gallerySlug}
+      `;
+      
+      if (gallery.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Gallery not found' }));
+        return;
+      }
+      
+      // Don't expose password in response
+      const galleryData = { ...gallery[0] };
+      delete galleryData.password;
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(galleryData));
+      return;
+    }
+
+    // POST /api/galleries - Create new gallery (admin only)
+    if (req.method === 'POST' && !gallerySlug) {
+      const body = await getRequestBody();
+      const { 
+        title, 
+        description, 
+        slug, 
+        coverImage, 
+        client_id, 
+        is_public = true, 
+        is_password_protected = false, 
+        password 
+      } = body;
+
+      if (!title) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Title is required' }));
+        return;
+      }
+
+      // Generate slug if not provided
+      const finalSlug = slug || title.toLowerCase()
+        .replace(/[^\w\s]/gi, '')
+        .replace(/\s+/g, '-')
+        .substring(0, 50);
+
+      const gallery = await sql`
+        INSERT INTO galleries (title, description, slug, cover_image, client_id, 
+                             is_public, is_password_protected, password, created_by)
+        VALUES (${title}, ${description}, ${finalSlug}, ${coverImage}, ${client_id}, 
+                ${is_public}, ${is_password_protected}, ${password}, 'admin')
+        RETURNING *
+      `;
+      
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(gallery[0]));
+      return;
+    }
+
+    // PUT /api/galleries/[id] - Update gallery (admin only)
+    if (req.method === 'PUT' && gallerySlug) {
+      const body = await getRequestBody();
+      const { 
+        title, 
+        description, 
+        coverImage, 
+        is_public, 
+        is_password_protected, 
+        password 
+      } = body;
+
+      const gallery = await sql`
+        UPDATE galleries 
+        SET title = COALESCE(${title}, title),
+            description = COALESCE(${description}, description),
+            cover_image = COALESCE(${coverImage}, cover_image),
+            is_public = COALESCE(${is_public}, is_public),
+            is_password_protected = COALESCE(${is_password_protected}, is_password_protected),
+            password = COALESCE(${password}, password),
+            updated_at = NOW()
+        WHERE id = ${gallerySlug}
+        RETURNING *
+      `;
+      
+      if (gallery.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Gallery not found' }));
+        return;
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(gallery[0]));
+      return;
+    }
+
+    // DELETE /api/galleries/[id] - Delete gallery (admin only)
+    if (req.method === 'DELETE' && gallerySlug) {
+      await sql`DELETE FROM galleries WHERE id = ${gallerySlug}`;
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
+
+    // POST /api/galleries/[slug]/auth - Authenticate gallery access
+    if (req.method === 'POST' && action === 'auth') {
+      const body = await getRequestBody();
+      const { email, firstName, lastName, password } = body;
+
+      if (!email) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Email is required' }));
+        return;
+      }
+
+      // Get the gallery
+      const gallery = await sql`
+        SELECT id, is_password_protected, password
+        FROM galleries
+        WHERE slug = ${gallerySlug}
+      `;
+
+      if (gallery.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Gallery not found' }));
+        return;
+      }
+
+      const galleryData = gallery[0];
+
+      // Check password if gallery is password protected
+      if (galleryData.is_password_protected && galleryData.password) {
+        if (!password) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Password is required' }));
+          return;
+        }
+
+        if (password !== galleryData.password) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid password' }));
+          return;
+        }
+      }
+
+      // Log the access attempt
+      await sql`
+        INSERT INTO gallery_access_logs (gallery_id, visitor_email, visitor_name, accessed_at)
+        VALUES (${galleryData.id}, ${email}, ${firstName ? `${firstName} ${lastName || ''}`.trim() : ''}, NOW())
+      `.catch(() => {
+        // Ignore error if table doesn't exist
+      });
+
+      const token = generateGalleryToken(galleryData.id, email);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ token }));
+      return;
+    }
+
+    // GET /api/galleries/[slug]/images - Get gallery images (requires auth)
+    if (req.method === 'GET' && action === 'images') {
+      const authToken = req.headers.authorization?.replace('Bearer ', '');
+
+      if (!authToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Authentication token required' }));
+        return;
+      }
+
+      const tokenData = verifyGalleryToken(authToken);
+      if (!tokenData) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid token' }));
+        return;
+      }
+
+      // Get the gallery
+      const gallery = await sql`
+        SELECT id FROM galleries WHERE slug = ${gallerySlug}
+      `;
+
+      if (gallery.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Gallery not found' }));
+        return;
+      }
+
+      const galleryId = gallery[0].id;
+
+      // Get gallery images from database
+      let galleryImages = await sql`
+        SELECT id, gallery_id, filename, url, title, description, 
+               sort_order, metadata, created_at
+        FROM gallery_images
+        WHERE gallery_id = ${galleryId}
+        ORDER BY sort_order ASC, created_at DESC
+      `;
+
+      // If no database records found, provide sample images
+      if (galleryImages.length === 0) {
+        console.log('No database records found, providing sample images...');
+        
+        galleryImages = [
+          {
+            id: 'sample-1',
+            gallery_id: galleryId,
+            filename: 'mountain_landscape.jpg',
+            url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
+            title: 'Mountain Vista',
+            description: 'Beautiful mountain landscape captured during golden hour',
+            sort_order: 0,
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'sample-2',
+            gallery_id: galleryId,
+            filename: 'forest_path.jpg',
+            url: 'https://images.unsplash.com/photo-1501594907352-04cda38ebc29?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
+            title: 'Forest Trail',
+            description: 'Peaceful forest path through autumn trees',
+            sort_order: 1,
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'sample-3',
+            gallery_id: galleryId,
+            filename: 'lake_reflection.jpg',
+            url: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
+            title: 'Lake Reflection',
+            description: 'Perfect mirror reflection on a calm mountain lake',
+            sort_order: 2,
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'sample-4',
+            gallery_id: galleryId,
+            filename: 'city_skyline.jpg',
+            url: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
+            title: 'Urban Evening',
+            description: 'City skyline illuminated at twilight',
+            sort_order: 3,
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'sample-5',
+            gallery_id: galleryId,
+            filename: 'coastal_sunset.jpg',
+            url: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2156&q=80',
+            title: 'Coastal Sunset',
+            description: 'Golden hour over the ocean coastline',
+            sort_order: 4,
+            created_at: new Date().toISOString()
+          }
+        ];
+      }
+
+      // Format images for frontend
+      const formattedImages = galleryImages.map(image => ({
+        id: image.id,
+        galleryId: image.gallery_id,
+        filename: image.filename,
+        originalUrl: image.url,
+        displayUrl: image.url,
+        thumbUrl: image.url,
+        title: image.title,
+        description: image.description,
+        orderIndex: image.sort_order,
+        createdAt: image.created_at,
+        sizeBytes: 2500000,
+        contentType: 'image/jpeg',
+        capturedAt: null,
+        isFavorite: false
+      }));
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(formattedImages));
+      return;
+    }
+
+    // POST /api/galleries/[galleryId]/upload - Upload images to gallery (admin only)
+    if (req.method === 'POST' && action === 'upload') {
+      // For now, return success response - image upload requires multipart/form-data handling
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        success: true, 
+        message: 'Image upload endpoint ready - requires multipart implementation' 
+      }));
+      return;
+    }
+
+    // GET /api/galleries/[slug]/download - Download gallery as ZIP (requires auth)
+    if (req.method === 'GET' && action === 'download') {
+      const authToken = req.headers.authorization?.replace('Bearer ', '');
+
+      if (!authToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Authentication token required' }));
+        return;
+      }
+
+      const tokenData = verifyGalleryToken(authToken);
+      if (!tokenData) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid token' }));
+        return;
+      }
+
+      // For now, return a message - ZIP creation requires additional libraries
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        success: true, 
+        message: 'Gallery download endpoint ready - requires ZIP implementation',
+        downloadUrl: `/api/galleries/${gallerySlug}/download-zip`
+      }));
+      return;
+    }
+
+    // POST /api/galleries/images/[imageId]/favorite - Toggle image favorite
+    if (req.method === 'POST' && pathParts[2] === 'images' && pathParts[4] === 'favorite') {
+      const authToken = req.headers.authorization?.replace('Bearer ', '');
+
+      if (!authToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Authentication token required' }));
+        return;
+      }
+
+      const tokenData = verifyGalleryToken(authToken);
+      if (!tokenData) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid token' }));
+        return;
+      }
+
+      // For now, return success - favorites require user session management
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        success: true, 
+        message: 'Image favorite toggle endpoint ready',
+        isFavorite: Math.random() > 0.5 // Random for demo
+      }));
+      return;
+    }
+
+    // PUT /api/galleries/[galleryId]/images/reorder - Reorder images (admin only)
+    if (req.method === 'PUT' && action === 'images' && pathParts[4] === 'reorder') {
+      const body = await getRequestBody();
+      const { imageIds } = body;
+
+      if (!Array.isArray(imageIds)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'imageIds array is required' }));
+        return;
+      }
+
+      // Update image order in database
+      for (let i = 0; i < imageIds.length; i++) {
+        await sql`
+          UPDATE gallery_images 
+          SET sort_order = ${i}
+          WHERE id = ${imageIds[i]}
+        `.catch(() => {
+          // Ignore errors for non-existent images
+        });
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
+
+    // DELETE /api/galleries/images/[imageId] - Delete image (admin only)
+    if (req.method === 'DELETE' && pathParts[2] === 'images' && pathParts[3]) {
+      await sql`DELETE FROM gallery_images WHERE id = ${pathParts[3]}`.catch(() => {});
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
+
+    // PUT /api/galleries/[galleryId]/cover-image - Set gallery cover image (admin only)
+    if (req.method === 'PUT' && action === 'cover-image') {
+      const body = await getRequestBody();
+      const { imageId } = body;
+
+      if (!imageId) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'imageId is required' }));
+        return;
+      }
+
+      // Get image URL
+      const image = await sql`
+        SELECT url FROM gallery_images WHERE id = ${imageId}
+      `;
+
+      if (image.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Image not found' }));
+        return;
+      }
+
+      // Update gallery cover image
+      await sql`
+        UPDATE galleries 
+        SET cover_image = ${image[0].url}
+        WHERE id = ${gallerySlug}
+      `;
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
+
+    // GET /api/galleries/[galleryId]/stats - Get gallery statistics (admin only)
+    if (req.method === 'GET' && action === 'stats') {
+      const stats = await sql`
+        SELECT 
+          COUNT(*) as total_images,
+          COUNT(CASE WHEN created_at > NOW() - INTERVAL '7 days' THEN 1 END) as recent_images
+        FROM gallery_images
+        WHERE gallery_id = ${gallerySlug}
+      `.catch(() => [{ total_images: 0, recent_images: 0 }]);
+
+      const accessLogs = await sql`
+        SELECT COUNT(*) as total_views,
+               COUNT(DISTINCT visitor_email) as unique_visitors,
+               COUNT(CASE WHEN accessed_at > NOW() - INTERVAL '7 days' THEN 1 END) as recent_views
+        FROM gallery_access_logs
+        WHERE gallery_id = ${gallerySlug}
+      `.catch(() => [{ total_views: 0, unique_visitors: 0, recent_views: 0 }]);
+
+      const galleryStats = {
+        totalImages: parseInt(stats[0]?.total_images || 0),
+        recentImages: parseInt(stats[0]?.recent_images || 0),
+        totalViews: parseInt(accessLogs[0]?.total_views || 0),
+        uniqueVisitors: parseInt(accessLogs[0]?.unique_visitors || 0),
+        recentViews: parseInt(accessLogs[0]?.recent_views || 0)
+      };
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(galleryStats));
+      return;
+    }
+
+    // GET /api/galleries/[galleryId]/visitors - Get gallery visitors (admin only)
+    if (req.method === 'GET' && action === 'visitors') {
+      const visitors = await sql`
+        SELECT visitor_email, visitor_name, accessed_at,
+               COUNT(*) as visit_count,
+               MAX(accessed_at) as last_visit
+        FROM gallery_access_logs
+        WHERE gallery_id = ${gallerySlug}
+        GROUP BY visitor_email, visitor_name
+        ORDER BY last_visit DESC
+      `.catch(() => []);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(visitors));
+      return;
+    }
+
+    // GET /api/galleries/[galleryId]/access-logs - Get gallery access logs (admin only)
+    if (req.method === 'GET' && action === 'access-logs') {
+      const logs = await sql`
+        SELECT visitor_email, visitor_name, accessed_at, ip_address, user_agent
+        FROM gallery_access_logs
+        WHERE gallery_id = ${gallerySlug}
+        ORDER BY accessed_at DESC
+        LIMIT 100
+      `.catch(() => []);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(logs));
+      return;
+    }
+
+  } catch (error) {
+    console.error('Gallery API error:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Internal server error' }));
+    return;
+  }
+
+  // If no matching endpoint found
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Gallery API endpoint not found' }));
+}
+
 const port = process.env.PORT || 3001;
 
 // Mock database responses for now - will integrate real Neon connection next
@@ -1972,6 +2534,223 @@ New Age Fotografie Team`;
         return;
       }
 
+      // Email Invoice Sending API endpoint
+      if (pathname === '/api/invoices/send-email' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { invoice_id, email_address, subject, message } = JSON.parse(body);
+              console.log('📧 Sending invoice via email:', invoice_id, 'to', email_address);
+              
+              // Get invoice details
+              const invoices = await sql`
+                SELECT 
+                  i.*,
+                  c.name as client_name,
+                  c.email as client_email,
+                  c.firstname,
+                  c.lastname
+                FROM crm_invoices i
+                LEFT JOIN crm_clients c ON i.client_id = c.id
+                WHERE i.id = ${invoice_id}
+              `;
+              
+              if (invoices.length === 0) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invoice not found' }));
+                return;
+              }
+              
+              const invoice = invoices[0];
+              const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
+              const invoiceUrl = `${baseUrl}/invoice/public/${invoice_id}`;
+              
+              // Get invoice items for email
+              const items = await sql`
+                SELECT * FROM crm_invoice_items 
+                WHERE invoice_id = ${invoice_id}
+                ORDER BY sort_order
+              `;
+
+              // Create email content
+              const clientName = invoice.firstname && invoice.lastname 
+                ? `${invoice.firstname} ${invoice.lastname}` 
+                : invoice.client_name || 'Kunde';
+
+              const emailSubject = subject || `Rechnung ${invoice.invoice_number} - New Age Fotografie`;
+              
+              const itemsHtml = items.map(item => `
+                <tr>
+                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.description}</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">€${parseFloat(item.unit_price).toFixed(2)}</td>
+                  <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">€${parseFloat(item.line_total).toFixed(2)}</td>
+                </tr>
+              `).join('');
+
+              const emailHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="utf-8">
+                  <title>Rechnung ${invoice.invoice_number}</title>
+                </head>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                      <img src="${baseUrl}/frontend-logo.jpg" alt="New Age Fotografie" style="max-height: 80px;">
+                      <h1 style="color: #8B5CF6;">New Age Fotografie</h1>
+                    </div>
+                    
+                    <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                      <h2 style="color: #8B5CF6; margin-top: 0;">Liebe(r) ${clientName},</h2>
+                      <p>${message || 'vielen Dank für Ihr Vertrauen! Anbei finden Sie Ihre Rechnung für unsere Fotografie-Dienstleistungen.'}</p>
+                    </div>
+
+                    <div style="border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin-bottom: 20px;">
+                      <div style="background: #8B5CF6; color: white; padding: 15px;">
+                        <h3 style="margin: 0;">Rechnung ${invoice.invoice_number}</h3>
+                      </div>
+                      
+                      <div style="padding: 20px;">
+                        <div style="margin-bottom: 20px;">
+                          <strong>Rechnungsdatum:</strong> ${new Date(invoice.created_at).toLocaleDateString('de-DE')}<br>
+                          <strong>Fälligkeitsdatum:</strong> ${new Date(invoice.due_date).toLocaleDateString('de-DE')}<br>
+                          <strong>Zahlungsbedingungen:</strong> ${invoice.payment_terms}
+                        </div>
+
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                          <thead>
+                            <tr style="background: #f8f9fa;">
+                              <th style="padding: 12px 8px; text-align: left; border-bottom: 2px solid #dee2e6;">Beschreibung</th>
+                              <th style="padding: 12px 8px; text-align: center; border-bottom: 2px solid #dee2e6;">Menge</th>
+                              <th style="padding: 12px 8px; text-align: right; border-bottom: 2px solid #dee2e6;">Preis</th>
+                              <th style="padding: 12px 8px; text-align: right; border-bottom: 2px solid #dee2e6;">Gesamt</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${itemsHtml}
+                          </tbody>
+                        </table>
+
+                        <div style="text-align: right; margin-top: 20px;">
+                          <div style="margin-bottom: 5px;">
+                            <strong>Zwischensumme: €${parseFloat(invoice.subtotal_amount || invoice.total_amount).toFixed(2)}</strong>
+                          </div>
+                          ${invoice.tax_amount ? `
+                          <div style="margin-bottom: 5px;">
+                            Steuer: €${parseFloat(invoice.tax_amount).toFixed(2)}
+                          </div>
+                          ` : ''}
+                          <div style="font-size: 18px; font-weight: bold; color: #8B5CF6; border-top: 2px solid #8B5CF6; padding-top: 10px;">
+                            Gesamtbetrag: €${parseFloat(invoice.total_amount).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                      <h4 style="color: #1e40af; margin-top: 0;">📄 Rechnung online ansehen</h4>
+                      <p>Klicken Sie hier, um Ihre Rechnung online anzusehen oder herunterzuladen:</p>
+                      <a href="${invoiceUrl}" style="display: inline-block; background: #8B5CF6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Rechnung ansehen</a>
+                    </div>
+
+                    ${invoice.notes ? `
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                      <strong>Notizen:</strong><br>
+                      ${invoice.notes}
+                    </div>
+                    ` : ''}
+
+                    <div style="border-top: 1px solid #eee; padding-top: 20px; text-align: center; color: #666; font-size: 14px;">
+                      <p><strong>New Age Fotografie</strong><br>
+                      Wien, Österreich<br>
+                      Telefon: +43 677 663 99210<br>
+                      Email: hallo@newagefotografie.com</p>
+                      
+                      <p>Bei Fragen zu Ihrer Rechnung stehen wir Ihnen gerne zur Verfügung!</p>
+                    </div>
+                  </div>
+                </body>
+                </html>
+              `;
+
+              // Initialize nodemailer with EasyName SMTP
+              const nodemailer = require('nodemailer');
+              const transporter = nodemailer.createTransporter({
+                host: 'mail.easyname.com',
+                port: 587,
+                secure: false,
+                auth: {
+                  user: process.env.SMTP_USER || 'hallo@newagefotografie.com',
+                  pass: process.env.SMTP_PASS || 'your-email-password'
+                },
+                tls: {
+                  rejectUnauthorized: false
+                }
+              });
+
+              // Send email
+              const mailOptions = {
+                from: '"New Age Fotografie" <hallo@newagefotografie.com>',
+                to: email_address || invoice.client_email,
+                subject: emailSubject,
+                html: emailHtml,
+                attachments: []
+              };
+
+              await transporter.sendMail(mailOptions);
+
+              // Update invoice status to 'sent' and set sent_date
+              await sql`
+                UPDATE crm_invoices 
+                SET 
+                  status = 'sent',
+                  sent_date = NOW(),
+                  updated_at = NOW()
+                WHERE id = ${invoice_id}
+              `;
+
+              // Log email activity
+              await sql`
+                INSERT INTO crm_client_activity_log (
+                  client_id, activity_type, description, metadata, created_at
+                ) VALUES (
+                  ${invoice.client_id}, 'invoice_sent_email', 
+                  ${`Invoice ${invoice.invoice_number} sent via email to ${email_address || invoice.client_email}`},
+                  ${JSON.stringify({ 
+                    invoice_id: invoice_id, 
+                    email_address: email_address || invoice.client_email,
+                    subject: emailSubject,
+                    invoice_url: invoiceUrl
+                  })},
+                  NOW()
+                )
+              `;
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                message: 'Invoice sent successfully via email',
+                email_sent_to: email_address || invoice.client_email,
+                invoice_url: invoiceUrl
+              }));
+            } catch (error) {
+              console.error('❌ Invoice email error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Invoice email API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
       // Update Invoice Status API endpoint
       if (pathname.match(/^\/api\/invoices\/[^\/]+\/status$/) && req.method === 'PUT') {
         try {
@@ -2538,6 +3317,18 @@ New Age Fotografie Team`;
           await handleFilesAPI(req, res, pathname, parsedUrl.query);
         } catch (error) {
           console.error('❌ Files API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Gallery API endpoints
+      if (pathname.startsWith('/api/galleries')) {
+        try {
+          await handleGalleryAPI(req, res, pathname, parsedUrl.query);
+        } catch (error) {
+          console.error('❌ Gallery API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
         }

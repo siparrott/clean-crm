@@ -74,19 +74,11 @@ export async function listInvoices() {
 }
 
 export async function getInvoice(id: string) {
-  const { data, error } = await supabase
-    .from('crm_invoices')
-    .select(`
-      *,
-      crm_clients(name, email, address1, city, country),
-      crm_invoice_items(*),
-      crm_invoice_payments(*)
-    `)
-    .eq('id', id)
-    .single();
-  
-  if (error) throw error;
-  return data;
+  const response = await fetch(`/api/invoices/${id}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch invoice');
+  }
+  return response.json();
 }
 
 export async function createInvoice(payload: CreateInvoiceData) {
@@ -158,29 +150,49 @@ export async function addInvoicePayment(invoiceId: string, payment: {
 
   return response.json();
 }
-    }])
-    .select()
-    .single();
 
-  if (error) throw error;
+// Send invoice via email
+export async function sendInvoiceEmail(invoiceId: string, emailData: {
+  email_address?: string;
+  subject?: string;
+  message?: string;
+}) {
+  const response = await fetch('/api/invoices/send-email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      invoice_id: invoiceId,
+      ...emailData
+    }),
+  });
 
-  // Check if invoice is fully paid
-  const { data: invoice } = await supabase
-    .from('crm_invoices')
-    .select('total_amount')
-    .eq('id', invoiceId)
-    .single();
-
-  const { data: payments } = await supabase
-    .from('crm_invoice_payments')
-    .select('amount')
-    .eq('invoice_id', invoiceId);
-
-  const totalPaid = payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
-  
-  if (invoice && totalPaid >= invoice.total_amount) {
-    await updateInvoiceStatus(invoiceId, 'paid');
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to send invoice email');
   }
 
-  return data;
+  return response.json();
+}
+
+// Share invoice via WhatsApp
+export async function shareInvoiceWhatsApp(invoiceId: string, phoneNumber: string) {
+  const response = await fetch('/api/invoices/share-whatsapp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      invoice_id: invoiceId,
+      phone_number: phoneNumber
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to create WhatsApp share link');
+  }
+
+  return response.json();
 }
