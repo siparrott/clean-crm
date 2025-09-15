@@ -310,7 +310,7 @@ const CheckoutPage: React.FC = () => {
                     <CreditCard size={20} className="mr-2" /> Zahlungsinformationen
                   </h2>
                   
-                  {(!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.includes('test') || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.includes('pk_test')) && (
+                  {(!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.startsWith('pk_test_')) && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                       <p className="text-blue-700 text-sm">
                         <strong>Hinweis:</strong> Dies ist eine Demo-Anwendung. Es wird keine echte Zahlung verarbeitet.
