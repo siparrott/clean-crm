@@ -7458,6 +7458,405 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
     }
   });
 
+  // ==================== CONTACT FORM ROUTES ====================
+  app.post("/api/contact", async (req: Request, res: Response) => {
+    try {
+      const { fullName, email, phone, message } = req.body;
+
+      // Validate required fields
+      if (!fullName || !email || !message) {
+        return res.status(400).json({ error: "Name, email, and message are required" });
+      }
+
+      // Save to database as a lead
+      const leadData = {
+        firstName: fullName.split(' ')[0] || fullName,
+        lastName: fullName.split(' ').slice(1).join(' ') || '',
+        email: email,
+        phone: phone || null,
+        source: 'Website Contact Form',
+        notes: message,
+        status: 'new'
+      };
+
+      const newLead = await db.insert(crmLeads).values(leadData).returning();
+
+      // Send email notification to business
+      try {
+        const transporter = nodemailer.createTransporter({
+          host: 'smtp.easyname.com',
+          port: 465,
+          secure: true,
+          auth: {
+            user: process.env.BUSINESS_MAILBOX_USER || '30840mail10',
+            pass: process.env.EMAIL_PASSWORD || 'your-email-password'
+          }
+        });
+
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #333; border-bottom: 2px solid #7C3AED; padding-bottom: 10px;">
+              Neue Kontaktanfrage von Website
+            </h2>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #333; margin: 0 0 15px 0;">Kontaktdaten:</h3>
+              <p><strong>Name:</strong> ${fullName}</p>
+              <p><strong>E-Mail:</strong> <a href="mailto:${email}">${email}</a></p>
+              ${phone ? `<p><strong>Telefon:</strong> <a href="tel:${phone}">${phone}</a></p>` : ''}
+              <p><strong>Zeitpunkt:</strong> ${new Date().toLocaleString('de-DE')}</p>
+            </div>
+
+            <div style="background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+              <h3 style="color: #333; margin: 0 0 15px 0;">Nachricht:</h3>
+              <p style="line-height: 1.6; white-space: pre-wrap;">${message}</p>
+            </div>
+
+            <div style="margin-top: 20px; padding: 15px; background-color: #e8f4fd; border-radius: 8px;">
+              <p style="margin: 0; font-size: 14px; color: #666;">
+                Diese Nachricht wurde automatisch von Ihrer Website generiert. 
+                Der Lead wurde bereits in Ihrem CRM-System gespeichert.
+              </p>
+            </div>
+          </div>
+        `;
+
+        await transporter.sendMail({
+          from: '"New Age Fotografie Website" <hallo@newagefotografie.com>',
+          to: 'hallo@newagefotografie.com',
+          subject: `Neue Kontaktanfrage von ${fullName}`,
+          html: emailHtml
+        });
+
+      } catch (emailError) {
+        console.error('Error sending contact form email:', emailError);
+        // Don't fail the request if email fails - lead is still saved
+      }
+
+      res.json({ 
+        success: true, 
+        message: "Ihre Nachricht wurde erfolgreich gesendet. Wir melden uns bald bei Ihnen!",
+        leadId: newLead[0]?.id 
+      });
+
+    } catch (error) {
+      console.error("Error processing contact form:", error);
+      res.status(500).json({ error: "Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut." });
+    }
+  });
+
+  // ==================== APPOINTMENT/WAITLIST ROUTES ====================
+  app.post("/api/waitlist", async (req: Request, res: Response) => {
+    try {
+      const { fullName, email, phone, preferredDate, message } = req.body;
+
+      // Validate required fields
+      if (!fullName || !email || !phone || !preferredDate) {
+        return res.status(400).json({ error: "Name, email, phone, and preferred date are required" });
+      }
+
+      // Save to database as a lead with appointment details
+      const leadData = {
+        firstName: fullName.split(' ')[0] || fullName,
+        lastName: fullName.split(' ').slice(1).join(' ') || '',
+        email: email,
+        phone: phone,
+        source: 'Appointment Request (Waitlist)',
+        notes: `Preferred Date: ${preferredDate}${message ? '\n\nAdditional Message: ' + message : ''}`,
+        status: 'new'
+      };
+
+      const newLead = await db.insert(crmLeads).values(leadData).returning();
+
+      // Send appointment request email to business
+      try {
+        const transporter = nodemailer.createTransporter({
+          host: 'smtp.easyname.com',
+          port: 465,
+          secure: true,
+          auth: {
+            user: process.env.BUSINESS_MAILBOX_USER || '30840mail10',
+            pass: process.env.EMAIL_PASSWORD || 'your-email-password'
+          }
+        });
+
+        const formatDate = (dateString: string) => {
+          const date = new Date(dateString);
+          return date.toLocaleDateString('de-DE', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          });
+        };
+
+        const appointmentEmailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #7C3AED; border-bottom: 2px solid #7C3AED; padding-bottom: 10px;">
+              📅 Neue Terminanfrage
+            </h2>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #333; margin: 0 0 15px 0;">Kundendaten:</h3>
+              <p><strong>Name:</strong> ${fullName}</p>
+              <p><strong>E-Mail:</strong> <a href="mailto:${email}">${email}</a></p>
+              <p><strong>Telefon:</strong> <a href="tel:${phone}">${phone}</a></p>
+              <p><strong>Eingegangen:</strong> ${new Date().toLocaleString('de-DE')}</p>
+            </div>
+
+            <div style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #7C3AED;">
+              <h3 style="color: #7C3AED; margin: 0 0 15px 0;">🗓️ Gewünschter Termin:</h3>
+              <p style="font-size: 18px; font-weight: bold; color: #333; margin: 0;">
+                ${formatDate(preferredDate)}
+              </p>
+              <p style="font-size: 14px; color: #666; margin: 5px 0 0 0;">
+                (${preferredDate})
+              </p>
+            </div>
+
+            ${message ? `
+              <div style="background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #333; margin: 0 0 15px 0;">💬 Zusätzliche Nachricht:</h3>
+                <p style="line-height: 1.6; white-space: pre-wrap;">${message}</p>
+              </div>
+            ` : ''}
+
+            <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #333; margin: 0 0 15px 0;">📞 Schnelle Aktionen:</h3>
+              <p style="margin: 5px 0;">
+                <a href="tel:${phone}" style="color: #7C3AED; text-decoration: none; font-weight: bold;">
+                  📱 ${phone} anrufen
+                </a>
+              </p>
+              <p style="margin: 5px 0;">
+                <a href="mailto:${email}?subject=Bestätigung Ihres Fotoshooting-Termins am ${formatDate(preferredDate)}" style="color: #7C3AED; text-decoration: none; font-weight: bold;">
+                  ✉️ Terminbestätigung senden
+                </a>
+              </p>
+              <p style="margin: 5px 0;">
+                <a href="https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=Hallo ${fullName.split(' ')[0]}, vielen Dank für Ihre Terminanfrage für den ${formatDate(preferredDate)}. Gerne bestätige ich Ihnen den Termin!" style="color: #7C3AED; text-decoration: none; font-weight: bold;">
+                  💬 WhatsApp-Bestätigung
+                </a>
+              </p>
+            </div>
+
+            <div style="margin-top: 20px; padding: 15px; background-color: #e8f4fd; border-radius: 8px;">
+              <p style="margin: 0; font-size: 14px; color: #666;">
+                Diese Terminanfrage wurde automatisch von Ihrer Website generiert. 
+                Der Lead wurde bereits in Ihrem CRM-System gespeichert.
+              </p>
+            </div>
+          </div>
+        `;
+
+        await transporter.sendMail({
+          from: '"New Age Fotografie Website" <hallo@newagefotografie.com>',
+          to: 'hallo@newagefotografie.com',
+          subject: `📅 Neue Terminanfrage: ${fullName} für ${formatDate(preferredDate)}`,
+          html: appointmentEmailHtml
+        });
+
+        // Send confirmation email to customer
+        const customerConfirmationHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #7C3AED; margin: 0;">New Age Fotografie</h1>
+              <p style="color: #666; margin: 5px 0;">Familienfotograf Wien</p>
+            </div>
+
+            <h2 style="color: #333; text-align: center;">
+              Vielen Dank für Ihre Terminanfrage! 📸
+            </h2>
+            
+            <div style="background-color: #f8f9fa; padding: 30px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #7C3AED; margin: 0 0 20px 0;">Ihre Anfrage im Überblick:</h3>
+              <p><strong>Gewünschter Termin:</strong> ${formatDate(preferredDate)}</p>
+              <p><strong>Name:</strong> ${fullName}</p>
+              <p><strong>E-Mail:</strong> ${email}</p>
+              <p><strong>Telefon:</strong> ${phone}</p>
+              ${message ? `<p><strong>Ihre Nachricht:</strong><br>${message}</p>` : ''}
+            </div>
+
+            <div style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #333; margin: 0 0 15px 0;">📞 Wie geht es weiter?</h3>
+              <p style="margin: 10px 0;">
+                Wir melden uns innerhalb von <strong>24 Stunden</strong> bei Ihnen zurück, um Ihren Wunschtermin zu bestätigen oder alternative Termine vorzuschlagen.
+              </p>
+              <p style="margin: 10px 0;">
+                <strong>Dringende Anfragen:</strong><br>
+                WhatsApp/Tel: <a href="tel:+43677663992010" style="color: #7C3AED;">+43 677 663 99210</a><br>
+                E-Mail: <a href="mailto:hallo@newagefotografie.com" style="color: #7C3AED;">hallo@newagefotografie.com</a>
+              </p>
+            </div>
+
+            <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h4 style="color: #333; margin: 0 0 10px 0;">💡 Tipp für Ihren Fotoshooting-Termin:</h4>
+              <ul style="color: #666; margin: 0; padding-left: 20px;">
+                <li>Wir fotografieren auch an Wochenenden</li>
+                <li>Flexible Termingestaltung nach Ihren Wünschen</li>
+                <li>Outdoor- und Indoor-Fotoshootings möglich</li>
+                <li>Professionelle Nachbearbeitung inklusive</li>
+              </ul>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+              <p style="margin: 0; color: #666; font-size: 14px;">
+                New Age Fotografie | Wehrgasse 11A/2+5, 1050 Wien<br>
+                Tel/WhatsApp: +43 677 663 99210 | E-Mail: hallo@newagefotografie.com
+              </p>
+            </div>
+          </div>
+        `;
+
+        await transporter.sendMail({
+          from: '"New Age Fotografie" <hallo@newagefotografie.com>',
+          to: email,
+          subject: '📅 Terminanfrage erhalten - Wir melden uns bald!',
+          html: customerConfirmationHtml
+        });
+
+      } catch (emailError) {
+        console.error('Error sending appointment emails:', emailError);
+        // Don't fail the request if email fails - lead is still saved
+      }
+
+      res.json({ 
+        success: true, 
+        message: "Ihre Terminanfrage wurde erfolgreich übermittelt. Wir melden uns innerhalb von 24 Stunden bei Ihnen!",
+        leadId: newLead[0]?.id 
+      });
+
+    } catch (error) {
+      console.error("Error processing appointment request:", error);
+      res.status(500).json({ error: "Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut." });
+    }
+  });
+
+  // ==================== NEWSLETTER/VOUCHER SIGNUP ROUTES ====================
+  app.post("/api/newsletter/signup", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+
+      // Validate email
+      if (!email || !email.includes('@')) {
+        return res.status(400).json({ error: "Valid email address is required" });
+      }
+
+      // Save to database as a lead
+      const leadData = {
+        firstName: '',
+        lastName: '',
+        email: email,
+        source: 'Newsletter Signup (50 EUR Voucher)',
+        notes: 'Signed up for 50 EUR voucher offer',
+        status: 'new'
+      };
+
+      const newLead = await db.insert(crmLeads).values(leadData).returning();
+
+      // Send voucher email to customer
+      try {
+        const transporter = nodemailer.createTransporter({
+          host: 'smtp.easyname.com',
+          port: 465,
+          secure: true,
+          auth: {
+            user: process.env.BUSINESS_MAILBOX_USER || '30840mail10',
+            pass: process.env.EMAIL_PASSWORD || 'your-email-password'
+          }
+        });
+
+        const voucherEmailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #7C3AED; margin: 0;">New Age Fotografie</h1>
+              <p style="color: #666; margin: 5px 0;">Familienfotograf Wien</p>
+            </div>
+
+            <h2 style="color: #333; text-align: center;">
+              Vielen Dank für Ihr Interesse! 🎉
+            </h2>
+            
+            <div style="background-color: #f8f9fa; padding: 30px; border-radius: 8px; margin: 20px 0; text-align: center;">
+              <h3 style="color: #7C3AED; margin: 0 0 20px 0; font-size: 24px;">
+                Ihr 50€ Fotoshooting-Gutschein
+              </h3>
+              <div style="background-color: #7C3AED; color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0; font-size: 18px; font-weight: bold;">VOUCHER50</p>
+                <p style="margin: 5px 0 0 0; font-size: 14px;">Gutscheincode für 50€ Rabatt</p>
+              </div>
+              <p style="color: #666; margin: 10px 0;">
+                Gültig für alle Fotoshooting-Pakete. Einfach bei der Buchung angeben.
+              </p>
+            </div>
+
+            <div style="margin: 30px 0;">
+              <h3 style="color: #333;">So einfach geht's:</h3>
+              <ol style="color: #666; line-height: 1.6;">
+                <li>WhatsApp an <strong>+43 677 663 99210</strong> oder E-Mail an <strong>hallo@newagefotografie.com</strong></li>
+                <li>Ihren Wunschtermin nennen</li>
+                <li>Gutscheincode <strong>VOUCHER50</strong> erwähnen</li>
+                <li>50€ sparen und wunderschöne Erinnerungen schaffen!</li>
+              </ol>
+            </div>
+
+            <div style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h4 style="color: #333; margin: 0 0 10px 0;">Unsere Fotoshootings:</h4>
+              <ul style="color: #666; margin: 0; padding-left: 20px;">
+                <li>Familienfotografie</li>
+                <li>Neugeborenen-Fotografie</li>
+                <li>Schwangerschaftsfotos</li>
+                <li>Business-Headshots</li>
+              </ul>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+              <p style="margin: 0; color: #666; font-size: 14px;">
+                New Age Fotografie | Wehrgasse 11A/2+5, 1050 Wien<br>
+                Tel/WhatsApp: +43 677 663 99210 | E-Mail: hallo@newagefotografie.com
+              </p>
+            </div>
+          </div>
+        `;
+
+        await transporter.sendMail({
+          from: '"New Age Fotografie" <hallo@newagefotografie.com>',
+          to: email,
+          subject: '🎉 Ihr 50€ Fotoshooting-Gutschein ist da!',
+          html: voucherEmailHtml
+        });
+
+        // Send notification to business
+        await transporter.sendMail({
+          from: '"New Age Fotografie Website" <hallo@newagefotografie.com>',
+          to: 'hallo@newagefotografie.com',
+          subject: `Neue Newsletter-Anmeldung: ${email}`,
+          html: `
+            <h3>Neue Newsletter-Anmeldung</h3>
+            <p><strong>E-Mail:</strong> ${email}</p>
+            <p><strong>Zeitpunkt:</strong> ${new Date().toLocaleString('de-DE')}</p>
+            <p><strong>Angebot:</strong> 50 EUR Gutschein</p>
+            <p>Der Lead wurde automatisch in Ihrem CRM-System gespeichert.</p>
+          `
+        });
+
+      } catch (emailError) {
+        console.error('Error sending voucher email:', emailError);
+        // Don't fail the request if email fails - lead is still saved
+      }
+
+      res.json({ 
+        success: true, 
+        message: "Vielen Dank! Prüfen Sie Ihre E-Mails für Ihren 50€ Gutschein.",
+        leadId: newLead[0]?.id 
+      });
+
+    } catch (error) {
+      console.error("Error processing newsletter signup:", error);
+      res.status(500).json({ error: "Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut." });
+    }
+  });
+
   // Website Wizard routes
   app.use('/api/website-wizard', websiteWizardRoutes);
   app.use('/api/gallery', galleryShopRouter);
