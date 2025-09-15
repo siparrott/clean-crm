@@ -1,4 +1,5 @@
-import { supabase } from '../lib/supabase';
+// Remove supabase import - we use Neon via server endpoints
+// import { supabase } from '../lib/supabase';
 
 export interface Invoice {
   id: string;
@@ -106,71 +107,33 @@ export async function createInvoice(payload: CreateInvoiceData) {
 }
 
 export async function updateInvoiceStatus(id: string, status: string) {
-  const { data: user } = await supabase.auth.getUser();
-  
-  // Get current invoice data for audit
-  const { data: currentInvoice } = await supabase
-    .from('crm_invoices')
-    .select('*')
-    .eq('id', id)
-    .single();
+  const response = await fetch(`/api/invoices/${id}/status`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ status }),
+  });
 
-  const updateData: any = {
-    status,
-    updated_at: new Date().toISOString()
-  };
-
-  // Set dates based on status
-  if (status === 'sent' && !currentInvoice?.sent_date) {
-    updateData.sent_date = new Date().toISOString();
-  }
-  if (status === 'paid' && !currentInvoice?.paid_date) {
-    updateData.paid_date = new Date().toISOString();
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to update invoice status');
   }
 
-  const { data, error } = await supabase
-    .from('crm_invoices')
-    .update(updateData)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  // Create audit log entry
-  await supabase
-    .from('crm_invoice_audit_log')
-    .insert([{
-      invoice_id: id,
-      action: 'updated',
-      old_values: { status: currentInvoice?.status },
-      new_values: { status },
-      user_id: user.user?.id,
-      user_email: user.user?.email
-    }]);
-
-  return data;
+  return response.json();
 }
 
 export async function deleteInvoice(id: string) {
-  const { data: user } = await supabase.auth.getUser();
-  
-  // Create audit log entry before deletion
-  await supabase
-    .from('crm_invoice_audit_log')
-    .insert([{
-      invoice_id: id,
-      action: 'deleted',
-      user_id: user.user?.id,
-      user_email: user.user?.email
-    }]);
+  const response = await fetch(`/api/invoices/${id}`, {
+    method: 'DELETE',
+  });
 
-  const { error } = await supabase
-    .from('crm_invoices')
-    .delete()
-    .eq('id', id);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to delete invoice');
+  }
 
-  if (error) throw error;
+  return response.json();
 }
 
 export async function addInvoicePayment(invoiceId: string, payment: {
@@ -180,14 +143,21 @@ export async function addInvoicePayment(invoiceId: string, payment: {
   payment_date: string;
   notes?: string;
 }) {
-  const { data: user } = await supabase.auth.getUser();
-  
-  const { data, error } = await supabase
-    .from('crm_invoice_payments')
-    .insert([{
-      invoice_id: invoiceId,
-      ...payment,
-      created_by: user.user?.id
+  const response = await fetch(`/api/invoices/${invoiceId}/payments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payment),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to add payment');
+  }
+
+  return response.json();
+}
     }])
     .select()
     .single();

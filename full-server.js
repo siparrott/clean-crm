@@ -1972,6 +1972,112 @@ New Age Fotografie Team`;
         return;
       }
 
+      // Update Invoice Status API endpoint
+      if (pathname.match(/^\/api\/invoices\/[^\/]+\/status$/) && req.method === 'PUT') {
+        try {
+          const invoiceId = pathname.split('/')[3];
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { status } = JSON.parse(body);
+              console.log('📝 Updating invoice status:', invoiceId, 'to', status);
+
+              const updateData = {
+                status,
+                updated_at: new Date().toISOString()
+              };
+
+              // Set dates based on status
+              if (status === 'sent') {
+                updateData.sent_date = new Date().toISOString();
+              }
+              if (status === 'paid') {
+                updateData.paid_date = new Date().toISOString();
+              }
+
+              await sql`
+                UPDATE crm_invoices 
+                SET 
+                  status = ${status},
+                  sent_date = ${updateData.sent_date || null},
+                  paid_date = ${updateData.paid_date || null},
+                  updated_at = ${updateData.updated_at}
+                WHERE id = ${invoiceId}
+              `;
+
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: true, message: 'Invoice status updated' }));
+            } catch (error) {
+              console.error('❌ Invoice status update error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Invoice status API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Delete Invoice API endpoint
+      if (pathname.match(/^\/api\/invoices\/[^\/]+$/) && req.method === 'DELETE') {
+        try {
+          const invoiceId = pathname.split('/')[3];
+          console.log('🗑️ Deleting invoice:', invoiceId);
+
+          await sql`DELETE FROM crm_invoices WHERE id = ${invoiceId}`;
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, message: 'Invoice deleted' }));
+        } catch (error) {
+          console.error('❌ Invoice deletion error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Add Invoice Payment API endpoint
+      if (pathname.match(/^\/api\/invoices\/[^\/]+\/payments$/) && req.method === 'POST') {
+        try {
+          const invoiceId = pathname.split('/')[3];
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const paymentData = JSON.parse(body);
+              console.log('💰 Adding invoice payment:', invoiceId, paymentData);
+
+              await sql`
+                INSERT INTO crm_invoice_payments (
+                  invoice_id, amount, payment_method, payment_reference, 
+                  payment_date, notes, created_at
+                ) VALUES (
+                  ${invoiceId}, ${paymentData.amount}, ${paymentData.payment_method},
+                  ${paymentData.payment_reference || null}, ${paymentData.payment_date},
+                  ${paymentData.notes || null}, NOW()
+                )
+              `;
+
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: true, message: 'Payment added' }));
+            } catch (error) {
+              console.error('❌ Invoice payment error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Invoice payment API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
       // Stripe Checkout API endpoints
       if (pathname === '/api/checkout/create-session' && req.method === 'POST') {
         try {
