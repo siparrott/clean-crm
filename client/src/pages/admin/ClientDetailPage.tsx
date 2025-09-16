@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { ArrowLeft, Mail, Phone, MapPin, Building, Edit, Trash2, Calendar, Euro, MessageSquare, Plus, FileText, Inbox, ClipboardList, Eye } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Building, Edit, Trash2, Calendar, Euro, MessageSquare, Plus, FileText, Inbox, ClipboardList, Eye, Download, Link, Share } from 'lucide-react';
 import { googleCalendarService } from '../../services/googleCalendarService';
 import SendQuestionnaireModal from '../../components/admin/SendQuestionnaireModal';
 import ViewEmailsModal from '../../components/admin/ViewEmailsModal';
@@ -76,6 +76,73 @@ const ClientDetailPage: React.FC = () => {
     } catch (err) {
       console.error('Failed to fetch client invoices:', err);
     }
+  };
+
+  // PDF Download Function for invoices
+  const downloadInvoicePDF = async (invoiceId: string, invoiceNumber: string) => {
+    try {
+      const response = await fetch(`/api/crm/invoices/${invoiceId}/pdf`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/pdf'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`PDF generation failed: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `Rechnung-${invoiceNumber || invoiceId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      alert('PDF download failed. Please try again.');
+    }
+  };
+
+  // Copy Invoice Link to Clipboard Function
+  const copyInvoiceLinkToClipboard = async (invoiceId: string) => {
+    const baseUrl = window.location.origin;
+    const shareableLink = `${baseUrl}/invoice/${invoiceId}`;
+    
+    try {
+      await navigator.clipboard.writeText(shareableLink);
+      alert('Invoice link copied to clipboard!');
+    } catch (error) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = shareableLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Invoice link copied to clipboard!');
+    }
+  };
+
+  // Share Invoice via WhatsApp Function
+  const shareInvoiceViaWhatsApp = (invoiceId: string) => {
+    const baseUrl = window.location.origin;
+    const shareableLink = `${baseUrl}/invoice/${invoiceId}`;
+    const message = encodeURIComponent(
+      `Hi ${client?.firstName || 'there'}! Here's your invoice: ${shareableLink}`
+    );
+    
+    // Open WhatsApp with pre-filled message
+    const whatsappUrl = `https://wa.me/?text=${message}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   const handleEdit = () => {
@@ -444,6 +511,27 @@ const ClientDetailPage: React.FC = () => {
                           title="View Invoice"
                         >
                           <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => downloadInvoicePDF(invoice.id, invoice.invoiceNumber)}
+                          className="text-green-600 hover:text-green-900"
+                          title="Download PDF"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => copyInvoiceLinkToClipboard(invoice.id)}
+                          className="text-purple-600 hover:text-purple-900"
+                          title="Copy Link"
+                        >
+                          <Link className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => shareInvoiceViaWhatsApp(invoice.id)}
+                          className="text-green-500 hover:text-green-700"
+                          title="Share via WhatsApp"
+                        >
+                          <Share className="w-4 h-4" />
                         </button>
                       </td>
                     </tr>

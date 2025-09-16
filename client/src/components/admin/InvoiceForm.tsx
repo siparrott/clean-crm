@@ -121,7 +121,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({
       quantity: 1,
       rate: 0,
       amount: 0,
-      tax_rate: 19 // Default German VAT
+      tax_rate: 0 // Default VAT
     };
 
     setFormData(prev => ({
@@ -136,7 +136,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({
       quantity: 1,
       rate: priceItem.price,
       amount: priceItem.price,
-      tax_rate: priceItem.tax_rate || 19,
+      tax_rate: priceItem.tax_rate || 0,
       category: priceItem.category
     };
 

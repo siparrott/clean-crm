@@ -15,11 +15,13 @@ import {
   ChevronRight,
   AlertCircle,
   Check,
-  ShoppingCart
+  ShoppingCart,
+  Link,
+  Share
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/queryClient';
-import { priceListService, PriceListItem } from '../../lib/invoicing';
+import { priceListService, PriceListItem, pdfService } from '../../lib/invoicing';
 
 interface Client {
   id: string;
@@ -83,6 +85,16 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [priceList, setPriceList] = useState<PriceListItem[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // VAT memory functionality
+  const getLastUsedVatRate = (): number => {
+    const saved = localStorage.getItem('lastUsedVatRate');
+    return saved ? parseFloat(saved) : 0;
+  };
+
+  const saveLastUsedVatRate = (rate: number): void => {
+    localStorage.setItem('lastUsedVatRate', rate.toString());
+  };
   const [formData, setFormData] = useState<InvoiceFormData>({
     client_id: '',
     due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
@@ -96,7 +108,7 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
         description: '',
         quantity: 1,
         unit_price: 0,
-        tax_rate: 19 // Default German VAT
+        tax_rate: getLastUsedVatRate() // Use remembered VAT rate
       }
     ]
   });
@@ -308,7 +320,7 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
       description: '',
       quantity: 1,
       unit_price: 0,
-      tax_rate: 19
+      tax_rate: getLastUsedVatRate() // Use remembered VAT rate
     };
     setFormData(prev => ({
       ...prev,
@@ -325,6 +337,11 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
     }
   };
   const updateItem = (itemId: string, updates: Partial<InvoiceItem>) => {
+    // If tax_rate is being updated, save it to localStorage for future use
+    if (updates.tax_rate !== undefined) {
+      saveLastUsedVatRate(updates.tax_rate);
+    }
+    
     setFormData(prev => ({
       ...prev,
       items: prev.items.map(item => 
@@ -339,7 +356,7 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
       description: '',
       quantity: 1,
       unit_price: 0,
-      tax_rate: 19 // Default German VAT
+      tax_rate: getLastUsedVatRate() // Use remembered VAT rate
     };
     setFormData(prev => ({
       ...prev,
@@ -525,6 +542,50 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Generate Shareable Link Function
+  const generateShareableLink = () => {
+    if (!createdInvoice) return '';
+    
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/invoice/${createdInvoice.id}`;
+  };
+
+  // Copy Link to Clipboard Function
+  const copyLinkToClipboard = async () => {
+    if (!createdInvoice) return;
+    
+    const shareableLink = generateShareableLink();
+    
+    try {
+      await navigator.clipboard.writeText(shareableLink);
+      alert('Invoice link copied to clipboard!');
+    } catch (error) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = shareableLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Invoice link copied to clipboard!');
+    }
+  };
+
+  // Share via WhatsApp Function
+  const shareViaWhatsApp = () => {
+    if (!createdInvoice) return;
+    
+    const client = clients.find(c => c.id === formData.client_id);
+    const shareableLink = generateShareableLink();
+    const message = encodeURIComponent(
+      `Hi ${client?.name || 'there'}! Here's your invoice: ${shareableLink}`
+    );
+    
+    // Open WhatsApp with pre-filled message
+    const whatsappUrl = `https://wa.me/?text=${message}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   const renderStepContent = () => {
@@ -1099,6 +1160,20 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
                       <Send size={16} className="mr-2" />
                       Send Email
                     </button>
+                    <button
+                      onClick={copyLinkToClipboard}
+                      className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                    >
+                      <Link size={16} className="mr-2" />
+                      Copy Link
+                    </button>
+                    <button
+                      onClick={shareViaWhatsApp}
+                      className="flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                    >
+                      <Share size={16} className="mr-2" />
+                      WhatsApp
+                    </button>
                   </>
                 ) : (
                   <button
@@ -1186,7 +1261,7 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
                             description: item.name + (item.description ? ` - ${item.description}` : ''),
                             quantity: 1,
                             unit_price: item.price || 0,
-                            tax_rate: item.tax_rate || 19
+                            tax_rate: item.tax_rate || 0
                           };
                           setFormData(prev => ({...prev, items: [...prev.items, newItem]}));
                           setShowPriceList(false);

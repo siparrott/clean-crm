@@ -238,7 +238,7 @@ export default function InvoicesPage() {
       description: item.name,
       quantity: 1,
       unit_price: item.price,
-      tax_rate: item.taxRate || 19
+      tax_rate: item.taxRate || 0
     };
     
     setNewInvoice(prev => ({
@@ -545,7 +545,7 @@ export default function InvoicesPage() {
                             description: '',
                             quantity: 1,
                             unit_price: 0,
-                            tax_rate: 19,
+                            tax_rate: 0,
                             line_total: 0
                           }]
                         }));
@@ -574,7 +574,7 @@ export default function InvoicesPage() {
                             description: '',
                             quantity: 1,
                             unit_price: 0,
-                            tax_rate: 19,
+                            tax_rate: 0,
                             line_total: 0
                           }]
                         }));
