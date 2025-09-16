@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Download, Send, Eye, Edit, Trash2, MessageCircle, Link, Share } from 'lucide-react';
+import { Plus, Download, Send, Eye, Edit, Trash2, MessageCircle, Link, Share, Phone } from 'lucide-react';
 import { listInvoices, createInvoice, updateInvoiceStatus, deleteInvoice } from '../../api/invoices';
 import InvoiceTemplate from '../../components/invoice/InvoiceTemplate';
 import PriceListModal from '../../components/invoice/PriceListModal';
@@ -44,7 +44,9 @@ export default function InvoicesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPriceListModal, setShowPriceListModal] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [showSMSModal, setShowSMSModal] = useState(false);
   const [whatsAppPhone, setWhatsAppPhone] = useState('');
+  const [smsPhone, setSmsPhone] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'preview'>('list');
 
@@ -304,6 +306,63 @@ export default function InvoicesPage() {
     }
   };
 
+  // SMS Handler
+  const handleSendSMS = (invoice: Invoice) => {
+    setSelectedInvoice(invoice);
+    setShowSMSModal(true);
+    
+    // Pre-populate phone number if available from client data
+    const selectedClient = clients.find(c => c.id === invoice.client_id);
+    if (selectedClient?.phone) {
+      setSmsPhone(selectedClient.phone);
+    } else {
+      setSmsPhone('');
+    }
+  };
+
+  const handleConfirmSMSSend = async () => {
+    if (!selectedInvoice || !smsPhone.trim()) {
+      alert('Please enter a valid phone number');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/crm/invoices/${selectedInvoice.id}/sms`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          phoneNumber: smsPhone.replace(/[^\d+]/g, '') // Clean phone number
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        alert('SMS sent successfully!');
+        
+        // Update invoice status to 'sent' if it was draft
+        if (selectedInvoice.status === 'draft') {
+          await handleStatusUpdate(selectedInvoice.id, 'sent');
+        }
+        
+        setShowSMSModal(false);
+        setSmsPhone('');
+        setSelectedInvoice(null);
+        
+        // Refresh invoices to show updated status
+        fetchInvoices();
+      } else {
+        alert('Failed to send SMS: ' + result.error);
+      }
+    } catch (error) {
+      console.error('SMS send error:', error);
+      alert('Failed to send SMS message');
+    }
+  };
+
   // PDF Download Function
   const downloadInvoicePDF = async (invoiceId: string, invoiceNumber: string) => {
     try {
@@ -544,6 +603,13 @@ export default function InvoicesPage() {
                       title="Send via WhatsApp"
                     >
                       <MessageCircle className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleSendSMS(invoice)}
+                      className="text-purple-600 hover:text-purple-900"
+                      title="Send via SMS"
+                    >
+                      <Phone className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleStatusUpdate(invoice.id, invoice.status === 'draft' ? 'sent' : 'paid')}
@@ -897,6 +963,104 @@ export default function InvoicesPage() {
                 >
                   <MessageCircle className="w-4 h-4" />
                   <span>Send via WhatsApp</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SMS Share Modal */}
+      {showSMSModal && selectedInvoice && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-6 border w-[500px] shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  📱 Send Invoice via SMS
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowSMSModal(false);
+                    setSmsPhone('');
+                    setSelectedInvoice(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-medium text-blue-900 mb-2">Invoice Details</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <p className="text-blue-700">
+                    <span className="font-medium">Invoice:</span> #{selectedInvoice.invoice_number || selectedInvoice.id}
+                  </p>
+                  <p className="text-blue-700">
+                    <span className="font-medium">Amount:</span> €{selectedInvoice.total_amount?.toFixed(2) || '0.00'}
+                  </p>
+                  <p className="text-blue-700">
+                    <span className="font-medium">Client:</span> {selectedInvoice.client?.name || clients.find(c => c.id === selectedInvoice.client_id)?.firstName + ' ' + clients.find(c => c.id === selectedInvoice.client_id)?.lastName || 'Unknown'}
+                  </p>
+                  <p className="text-blue-700">
+                    <span className="font-medium">Due:</span> {new Date(selectedInvoice.due_date).toLocaleDateString('de-DE')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="sms-phone" className="block text-sm font-medium text-gray-700 mb-2">
+                  SMS Phone Number *
+                </label>
+                <input
+                  type="tel"
+                  id="sms-phone"
+                  value={smsPhone}
+                  onChange={(e) => setSmsPhone(e.target.value)}
+                  placeholder="+43 677 123 4567"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Include country code (e.g., +43 for Austria, +49 for Germany)
+                </p>
+              </div>
+
+              <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <h4 className="font-medium text-purple-900 mb-2">📱 SMS Message Preview</h4>
+                <div className="text-sm text-purple-800 bg-white p-3 rounded border italic">
+                  "Hallo! Hier ist Ihre Rechnung #{selectedInvoice.invoice_number || selectedInvoice.id} von New Age Fotografie über €{selectedInvoice.total_amount?.toFixed(2) || '0.00'}. 
+                  
+                  Rechnung ansehen: [Invoice Link]
+                  
+                  Bei Fragen: +43 677 633 99210
+                  
+                  New Age Fotografie Team"
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowSMSModal(false);
+                    setSmsPhone('');
+                    setSelectedInvoice(null);
+                  }}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmSMSSend}
+                  disabled={!smsPhone.trim()}
+                  className={`px-6 py-2 rounded font-medium flex items-center space-x-2 ${
+                    smsPhone.trim() 
+                      ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  <Phone className="w-4 h-4" />
+                  <span>Send via SMS</span>
                 </button>
               </div>
             </div>

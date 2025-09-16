@@ -3585,6 +3585,161 @@ Bitte versuchen Sie es später noch einmal.`;
     }
   });
 
+  // SMS invoice to client
+  app.post("/api/crm/invoices/:id/sms", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const { phoneNumber, customMessage } = req.body;
+      
+      const invoice = await storage.getCrmInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+
+      const client = await storage.getCrmClient(invoice.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const clientPhone = phoneNumber || client.phone;
+      if (!clientPhone) {
+        return res.status(400).json({ error: "No phone number provided or available for client" });
+      }
+
+      // Create invoice link
+      const baseUrl = process.env.FRONTEND_URL || 'https://newagefotografie.com';
+      const invoiceUrl = `${baseUrl}/invoice/${invoice.id}`;
+      
+      // Create SMS message
+      const clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || 'Kunde';
+      const defaultMessage = `Hallo ${clientName},
+
+hier ist Ihre Rechnung von New Age Fotografie:
+
+📄 Rechnungsnummer: ${invoice.invoiceNumber}
+💰 Betrag: €${parseFloat(invoice.total?.toString() || '0').toFixed(2)}
+📅 Fälligkeitsdatum: ${new Date(invoice.dueDate || Date.now()).toLocaleDateString('de-DE')}
+
+🔗 Rechnung ansehen: ${invoiceUrl}
+
+Bei Fragen: +43 677 633 99210
+
+New Age Fotografie Team`;
+
+      const finalMessage = customMessage || defaultMessage;
+
+      // Import SMS service dynamically
+      const { SMSService } = await import("./services/smsService");
+      
+      // Send SMS
+      const result = await SMSService.sendSMS({
+        to: clientPhone,
+        content: finalMessage,
+        clientId: client.id,
+        campaignType: 'invoice_notification',
+        messageType: 'sms'
+      });
+
+      // Log SMS activity in client activity log
+      await storage.addCrmClientActivity({
+        clientId: client.id,
+        activityType: 'invoice_sent_sms',
+        description: `Invoice ${invoice.invoiceNumber} sent via SMS to ${clientPhone}`,
+        metadata: { 
+          invoiceId: invoice.id, 
+          phoneNumber: clientPhone,
+          smsId: result.messageId,
+          invoiceUrl: invoiceUrl
+        }
+      });
+
+      res.json({
+        success: true,
+        message: "Invoice sent successfully via SMS",
+        phoneNumber: clientPhone,
+        smsId: result.messageId,
+        invoiceUrl: invoiceUrl
+      });
+
+    } catch (error) {
+      console.error("Error sending invoice SMS:", error);
+      res.status(500).json({ error: "Failed to send SMS" });
+    }
+  });
+
+  // WhatsApp invoice to client
+  app.post("/api/crm/invoices/:id/whatsapp", authenticateUser, async (req: Request, res: Response) => {
+    try {
+      const { phoneNumber, customMessage } = req.body;
+      
+      const invoice = await storage.getCrmInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+
+      const client = await storage.getCrmClient(invoice.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const clientPhone = phoneNumber || client.phone;
+      if (!clientPhone) {
+        return res.status(400).json({ error: "No phone number provided or available for client" });
+      }
+
+      // Create invoice link
+      const baseUrl = process.env.FRONTEND_URL || 'https://newagefotografie.com';
+      const invoiceUrl = `${baseUrl}/invoice/${invoice.id}`;
+      
+      // Create WhatsApp message
+      const clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || 'Kunde';
+      const defaultMessage = `Hallo ${clientName},
+
+hier ist Ihre Rechnung von New Age Fotografie:
+
+📄 Rechnungsnummer: ${invoice.invoiceNumber}
+💰 Betrag: €${parseFloat(invoice.total?.toString() || '0').toFixed(2)}
+📅 Fälligkeitsdatum: ${new Date(invoice.dueDate || Date.now()).toLocaleDateString('de-DE')}
+
+🔗 Rechnung ansehen: ${invoiceUrl}
+
+Bei Fragen stehe ich Ihnen gerne zur Verfügung!
+
+Mit freundlichen Grüßen,
+New Age Fotografie Team`;
+
+      const finalMessage = customMessage || defaultMessage;
+      
+      // Create WhatsApp URL
+      const cleanPhone = clientPhone.replace(/[^\d+]/g, '');
+      const encodedMessage = encodeURIComponent(finalMessage);
+      const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
+
+      // Log WhatsApp activity in client activity log
+      await storage.addCrmClientActivity({
+        clientId: client.id,
+        activityType: 'invoice_shared_whatsapp',
+        description: `Invoice ${invoice.invoiceNumber} shared via WhatsApp to ${clientPhone}`,
+        metadata: { 
+          invoiceId: invoice.id, 
+          phoneNumber: clientPhone,
+          whatsappUrl: whatsappUrl,
+          invoiceUrl: invoiceUrl
+        }
+      });
+
+      res.json({
+        success: true,
+        whatsappUrl: whatsappUrl,
+        invoiceUrl: invoiceUrl,
+        message: "WhatsApp share link created successfully"
+      });
+
+    } catch (error) {
+      console.error("Error creating WhatsApp share link:", error);
+      res.status(500).json({ error: "Failed to create WhatsApp share link" });
+    }
+  });
+
   // ==================== EMAIL ROUTES ====================
   app.post("/api/email/import", authenticateUser, async (req: Request, res: Response) => {
     try {

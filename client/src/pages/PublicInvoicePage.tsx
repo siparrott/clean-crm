@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Download, MessageCircle } from 'lucide-react';
+import { Download, MessageCircle, Printer } from 'lucide-react';
 import InvoiceTemplate from '../components/invoice/InvoiceTemplate';
 
 interface Invoice {
@@ -64,15 +64,50 @@ const PublicInvoicePage: React.FC = () => {
     }
   }, [invoiceId]);
 
-  const handleDownloadPDF = () => {
-    // Generate PDF download
-    window.print();
+  const handleDownloadPDF = async () => {
+    if (!invoice) return;
+    
+    try {
+      const response = await fetch(`/api/crm/invoices/${invoice.id}/pdf`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/pdf'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`PDF generation failed: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `Rechnung-${invoice.invoice_number || invoice.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('PDF download failed:', error);
+      alert('PDF download failed. Please try again.');
+    }
   };
 
   const handleWhatsAppContact = () => {
     const message = `Hello! I have a question about invoice #${invoice?.invoice_number}`;
-    const whatsappUrl = `https://wa.me/4366456789123?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/4367763399210?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
+  };
+
+  const handlePrintInvoice = () => {
+    window.print();
   };
 
   if (loading) {
@@ -128,6 +163,14 @@ const PublicInvoicePage: React.FC = () => {
               >
                 <MessageCircle className="w-4 h-4" />
                 <span>Contact Us</span>
+              </button>
+              
+              <button
+                onClick={handlePrintInvoice}
+                className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print</span>
               </button>
               
               <button
