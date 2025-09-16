@@ -78,7 +78,7 @@ export async function listInvoices() {
 }
 
 export async function getInvoice(id: string) {
-  const response = await fetch(`/api/crm/invoices/${id}`, {
+  const response = await fetch(`/api/invoices/${id}`, {
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('token')}`
     }
@@ -90,7 +90,7 @@ export async function getInvoice(id: string) {
 }
 
 export async function createInvoice(payload: CreateInvoiceData) {
-  const response = await fetch('/api/crm/invoices', {
+  const response = await fetch('/api/invoices', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -108,8 +108,8 @@ export async function createInvoice(payload: CreateInvoiceData) {
 }
 
 export async function updateInvoiceStatus(id: string, status: string) {
-  const response = await fetch(`/api/crm/invoices/${id}`, {
-    method: 'PATCH',
+  const response = await fetch(`/api/invoices/${id}/status`, {
+    method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -126,7 +126,7 @@ export async function updateInvoiceStatus(id: string, status: string) {
 }
 
 export async function deleteInvoice(id: string) {
-  const response = await fetch(`/api/crm/invoices/${id}`, {
+  const response = await fetch(`/api/invoices/${id}`, {
     method: 'DELETE',
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -148,7 +148,7 @@ export async function addInvoicePayment(invoiceId: string, payment: {
   payment_date: string;
   notes?: string;
 }) {
-  const response = await fetch(`/api/crm/invoices/${invoiceId}/payments`, {
+  const response = await fetch(`/api/invoices/${invoiceId}/payments`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
