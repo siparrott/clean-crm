@@ -103,14 +103,14 @@ const KontaktPage: React.FC = () => {
                   <span className="text-gray-700">+43 677 633 99210</span>
                   <div className="flex space-x-3">
                     <a 
-                      href="tel:+43677633992210"
+                      href="tel:+4367763399210"
                       className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
                     >
                       <Phone className="w-4 h-4 mr-2" />
                       {t('contact.call')}
                     </a>
                     <a 
-                      href="https://wa.me/43677633992210"
+                      href="https://wa.me/4367763399210"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
