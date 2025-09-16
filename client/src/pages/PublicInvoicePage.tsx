@@ -68,7 +68,7 @@ const PublicInvoicePage: React.FC = () => {
     if (!invoice) return;
     
     try {
-      const response = await fetch(`/api/crm/invoices/${invoice.id}/pdf`, {
+      const response = await fetch(`/api/invoices/${invoice.id}/download`, {
         method: 'GET',
         credentials: 'include',
         headers: {

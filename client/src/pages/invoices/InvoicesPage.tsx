@@ -366,7 +366,7 @@ export default function InvoicesPage() {
   // PDF Download Function
   const downloadInvoicePDF = async (invoiceId: string, invoiceNumber: string) => {
     try {
-      const response = await fetch(`/api/crm/invoices/${invoiceId}/pdf`, {
+      const response = await fetch(`/api/invoices/${invoiceId}/download`, {
         method: 'GET',
         credentials: 'include',
         headers: {
@@ -394,6 +394,7 @@ export default function InvoicesPage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
+      console.error('PDF download error:', error);
       alert('PDF download failed. Please try again.');
     }
   };

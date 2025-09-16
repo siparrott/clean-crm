@@ -2574,10 +2574,209 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
             ORDER BY i.created_at DESC
           `;
           
+          // Format invoices to match frontend expectations
+          const formattedInvoices = invoices.map(invoice => ({
+            ...invoice,
+            total_amount: parseFloat(invoice.total) || 0,
+            subtotal_amount: parseFloat(invoice.subtotal) || 0,
+            client: {
+              name: invoice.client_name,
+              email: invoice.client_email,
+              address1: invoice.client_address1,
+              city: invoice.client_city,
+              country: invoice.client_country
+            }
+          }));
+          
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(invoices));
+          res.end(JSON.stringify(formattedInvoices));
         } catch (error) {
           console.error('❌ Invoices API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Get single invoice by ID
+      if (pathname.match(/^\/api\/invoices\/[^\/]+$/) && req.method === 'GET') {
+        try {
+          const invoiceId = pathname.split('/').pop();
+          console.log('📄 Fetching single invoice:', invoiceId);
+          
+          const invoices = await sql`
+            SELECT 
+              i.*,
+              c.name as client_name,
+              c.email as client_email,
+              c.address1 as client_address1,
+              c.city as client_city,
+              c.country as client_country
+            FROM crm_invoices i
+            LEFT JOIN crm_clients c ON i.client_id = c.id
+            WHERE i.id = ${invoiceId}
+          `;
+          
+          if (invoices.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invoice not found' }));
+            return;
+          }
+          
+          const invoice = invoices[0];
+          
+          // Get invoice items
+          const items = await sql`
+            SELECT * FROM crm_invoice_items 
+            WHERE invoice_id = ${invoiceId}
+            ORDER BY sort_order
+          `;
+          
+          // Format the response to match frontend expectations
+          const formattedInvoice = {
+            ...invoice,
+            total_amount: parseFloat(invoice.total) || 0,
+            subtotal_amount: parseFloat(invoice.subtotal) || 0,
+            client: {
+              name: invoice.client_name,
+              email: invoice.client_email,
+              address1: invoice.client_address1,
+              city: invoice.client_city,
+              country: invoice.client_country
+            },
+            items: items.map(item => ({
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: parseFloat(item.unit_price),
+              tax_rate: parseFloat(item.tax_rate),
+              line_total: parseFloat(item.quantity) * parseFloat(item.unit_price)
+            }))
+          };
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(formattedInvoice));
+        } catch (error) {
+          console.error('❌ Single invoice API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Download invoice as PDF
+      if (pathname.match(/^\/api\/invoices\/[^\/]+\/download$/) && req.method === 'GET') {
+        try {
+          const invoiceId = pathname.split('/')[3]; // Extract invoice ID from /api/invoices/:id/download
+          console.log('📄 Generating PDF for invoice:', invoiceId);
+          
+          const invoices = await sql`
+            SELECT 
+              i.*,
+              c.name as client_name,
+              c.email as client_email,
+              c.address1 as client_address1,
+              c.city as client_city,
+              c.country as client_country
+            FROM crm_invoices i
+            LEFT JOIN crm_clients c ON i.client_id = c.id
+            WHERE i.id = ${invoiceId}
+          `;
+          
+          if (invoices.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invoice not found' }));
+            return;
+          }
+          
+          const invoice = invoices[0];
+          
+          // Get invoice items
+          const items = await sql`
+            SELECT * FROM crm_invoice_items 
+            WHERE invoice_id = ${invoiceId}
+            ORDER BY sort_order
+          `;
+          
+          // Generate PDF content (HTML that can be converted to PDF)
+          const pdfContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice ${invoice.invoice_number}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .invoice-details { margin-bottom: 30px; }
+        .client-details { margin-bottom: 30px; }
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        .items-table th, .items-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .items-table th { background-color: #f2f2f2; }
+        .total-section { text-align: right; }
+        .total-line { margin: 5px 0; }
+        .final-total { font-weight: bold; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>RECHNUNG</h1>
+        <h2>Invoice ${invoice.invoice_number}</h2>
+    </div>
+    
+    <div class="invoice-details">
+        <p><strong>Rechnungsdatum:</strong> ${new Date(invoice.issue_date).toLocaleDateString('de-DE')}</p>
+        <p><strong>Fälligkeitsdatum:</strong> ${new Date(invoice.due_date).toLocaleDateString('de-DE')}</p>
+        <p><strong>Status:</strong> ${invoice.status.toUpperCase()}</p>
+    </div>
+    
+    <div class="client-details">
+        <h3>Rechnungsempfänger:</h3>
+        <p><strong>${invoice.client_name}</strong></p>
+        <p>${invoice.client_email}</p>
+        <p>${invoice.client_address1}</p>
+        <p>${invoice.client_city}, ${invoice.client_country}</p>
+    </div>
+    
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Beschreibung</th>
+                <th>Menge</th>
+                <th>Einzelpreis</th>
+                <th>MwSt. %</th>
+                <th>Gesamt</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${items.map(item => `
+                <tr>
+                    <td>${item.description}</td>
+                    <td>${item.quantity}</td>
+                    <td>€${parseFloat(item.unit_price).toFixed(2)}</td>
+                    <td>${item.tax_rate}%</td>
+                    <td>€${(parseFloat(item.quantity) * parseFloat(item.unit_price)).toFixed(2)}</td>
+                </tr>
+            `).join('')}
+        </tbody>
+    </table>
+    
+    <div class="total-section">
+        <div class="total-line">Zwischensumme: €${parseFloat(invoice.subtotal).toFixed(2)}</div>
+        <div class="total-line">MwSt. (19%): €${parseFloat(invoice.tax_amount).toFixed(2)}</div>
+        <div class="total-line final-total">Gesamtbetrag: €${parseFloat(invoice.total).toFixed(2)}</div>
+    </div>
+    
+    ${invoice.notes ? `<div style="margin-top: 30px;"><h3>Notizen:</h3><p>${invoice.notes}</p></div>` : ''}
+</body>
+</html>`;
+
+          res.writeHead(200, { 
+            'Content-Type': 'text/html',
+            'Content-Disposition': `attachment; filename="Invoice-${invoice.invoice_number}.html"`
+          });
+          res.end(pdfContent);
+        } catch (error) {
+          console.error('❌ PDF generation error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
         }
@@ -2622,10 +2821,10 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
             id: invoice.id,
             invoice_number: invoice.invoice_number,
             client_id: invoice.client_id,
-            amount: parseFloat(invoice.amount) || 0,
+            amount: parseFloat(invoice.subtotal) || 0,
             tax_amount: parseFloat(invoice.tax_amount) || 0,
-            total_amount: parseFloat(invoice.total_amount) || 0,
-            subtotal_amount: parseFloat(invoice.subtotal_amount) || 0,
+            total_amount: parseFloat(invoice.total) || 0,
+            subtotal_amount: parseFloat(invoice.subtotal) || 0,
             discount_amount: parseFloat(invoice.discount_amount) || 0,
             currency: invoice.currency || 'EUR',
             status: invoice.status,
@@ -2645,7 +2844,7 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
               quantity: item.quantity,
               unit_price: parseFloat(item.unit_price),
               tax_rate: parseFloat(item.tax_rate),
-              line_total: parseFloat(item.line_total)
+              line_total: parseFloat(item.quantity) * parseFloat(item.unit_price)
             }))
           };
           
