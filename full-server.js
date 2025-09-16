@@ -3983,6 +3983,7 @@ New Age Fotografie Team`;
   });
 });
 
+console.log('ℹ️ Reaching server.listen with port =', port);
 server.listen(port, '0.0.0.0', () => {
   console.log(`✅ PRODUCTION server with database support running on port ${port}`);
   console.log(`🌐 Website: http://localhost:${port}`);
@@ -3995,5 +3996,6 @@ server.on('error', (err) => {
 });
 
 module.exports = server;
+
 }
 
