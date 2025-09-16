@@ -2713,7 +2713,7 @@ New Age Fotografie Team`;
                     <div style="border-top: 1px solid #eee; padding-top: 20px; text-align: center; color: #666; font-size: 14px;">
                       <p><strong>New Age Fotografie</strong><br>
                       Wien, Österreich<br>
-                      Telefon: +43 677 663 99210<br>
+                      Telefon: +43 677 633 99210<br>
                       Email: hallo@newagefotografie.com</p>
                       
                       <p>Bei Fragen zu Ihrer Rechnung stehen wir Ihnen gerne zur Verfügung!</p>

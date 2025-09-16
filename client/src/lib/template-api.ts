@@ -203,6 +203,6 @@ const getMockStudioConfig = (): StudioConfig => ({
   businessName: 'New Age Fotografie',
   address: 'Schönbrunner Str. 25',
   city: 'Wien',
-  phone: '+43 677 663 99210',
+  phone: '+43 677 633 99210',
   email: 'hallo@newagefotografie.com'
 });

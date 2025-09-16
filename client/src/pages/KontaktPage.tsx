@@ -27,7 +27,7 @@ const KontaktPage: React.FC = () => {
       metaDescription.setAttribute('name', 'description');
       document.head.appendChild(metaDescription);
     }
-    metaDescription.setAttribute('content', 'Kontaktieren Sie unseren Familienfotograf in Wien. STUDIO Eingang Ecke Schönbrunnerstraße, Studio: Wehrgasse 11A/2+5, 1050 Wien. Tel: +43 677 663 99210. Öffnungszeiten Fr-So 09:00-17:00.');
+    metaDescription.setAttribute('content', 'Kontaktieren Sie unseren Familienfotograf in Wien. STUDIO Eingang Ecke Schönbrunnerstraße, Studio: Wehrgasse 11A/2+5, 1050 Wien. Tel: +43 677 633 99210. Öffnungszeiten Fr-So 09:00-17:00.');
 
     // Open Graph tags
     let ogTitle = document.querySelector('meta[property="og:title"]');
@@ -44,7 +44,7 @@ const KontaktPage: React.FC = () => {
       ogDescription.setAttribute('property', 'og:description');
       document.head.appendChild(ogDescription);
     }
-    ogDescription.setAttribute('content', 'Kontaktieren Sie unseren Familienfotograf in Wien. STUDIO Eingang Ecke Schönbrunnerstraße, Studio: Wehrgasse 11A/2+5, 1050 Wien. Tel: +43 677 663 99210.');
+    ogDescription.setAttribute('content', 'Kontaktieren Sie unseren Familienfotograf in Wien. STUDIO Eingang Ecke Schönbrunnerstraße, Studio: Wehrgasse 11A/2+5, 1050 Wien. Tel: +43 677 633 99210.');
 
     return () => {
       document.title = 'New Age Fotografie - Familienfotograf Wien';
@@ -100,17 +100,17 @@ const KontaktPage: React.FC = () => {
               <div className="flex items-center space-x-4">
                 <Phone className="w-6 h-6 text-gray-600" />
                 <div className="flex flex-col space-y-2">
-                  <span className="text-gray-700">+43 677 663 99210</span>
+                  <span className="text-gray-700">+43 677 633 99210</span>
                   <div className="flex space-x-3">
                     <a 
-                      href="tel:+43677663992210"
+                      href="tel:+43677633992210"
                       className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
                     >
                       <Phone className="w-4 h-4 mr-2" />
                       {t('contact.call')}
                     </a>
                     <a 
-                      href="https://wa.me/43677663992210"
+                      href="https://wa.me/43677633992210"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
@@ -128,7 +128,6 @@ const KontaktPage: React.FC = () => {
               <div className="flex items-center space-x-4">
                 <MapPin className="w-6 h-6 text-gray-600" />
                 <div className="text-gray-700">
-                  <div className="font-medium">{t('contact.officeAddress')}</div>
                   <div>{t('contact.studioAddress')}</div>
                   <div className="text-sm text-gray-600 mt-1">{t('contact.addressNote')}</div>
                 </div>

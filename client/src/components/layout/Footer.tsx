@@ -118,7 +118,7 @@ const Footer: React.FC = () => {
                 <span className="text-sm">{t('contact.addressNote')}</span>
               </li>
               <li>
-                <span className="text-sm">Tel/WhatsApp: +43 677 663 99210</span>
+                <span className="text-sm">Tel/WhatsApp: +43 677 633 99210</span>
               </li>
               <li>
                 <Link 
