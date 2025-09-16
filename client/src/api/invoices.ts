@@ -65,8 +65,8 @@ export interface CreateInvoiceData {
 }
 
 export async function listInvoices() {
-  // Use our CRM API endpoint with authentication
-  const response = await fetch('/api/crm/invoices', {
+  // Use our invoice API endpoint with authentication
+  const response = await fetch('/api/invoices', {
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('token')}`
     }
