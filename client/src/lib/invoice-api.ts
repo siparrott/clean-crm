@@ -48,11 +48,11 @@ export interface CreateInvoiceData {
 
 export const invoiceApi = {
   async getInvoices(): Promise<Invoice[]> {
-    return apiRequest('/api/crm/invoices');
+    return apiRequest('/api/invoices');
   },
 
   async getInvoice(id: string): Promise<Invoice> {
-    return apiRequest(`/api/crm/invoices/${id}`);
+    return apiRequest(`/api/invoices/${id}`);
   },
 
   async createInvoice(data: CreateInvoiceData): Promise<Invoice> {
@@ -70,22 +70,17 @@ export const invoiceApi = {
     const invoiceNumber = `INV-${timestamp}`;
 
     const invoiceData = {
-      invoiceNumber,
-      clientId: data.clientId,
-      issueDate: data.issueDate,
-      dueDate: data.dueDate,
+      invoice_number: invoiceNumber,
+      client_id: data.clientId,
+      due_date: data.dueDate,
       currency: data.currency,
-      paymentTerms: data.paymentTerms || '',
+      payment_terms: data.paymentTerms || '',
       notes: data.notes || '',
-      subtotalAmount: subtotal.toFixed(2),
-      taxAmount: taxAmount.toFixed(2),
-      totalAmount: total.toFixed(2),
-      discountAmount: discount.toFixed(2),
-      status: 'draft' as const,
+      discount_amount: parseFloat(data.discountAmount || '0'),
       items: data.items
     };
 
-    const result = await apiRequest('/api/crm/invoices', {
+    const result = await apiRequest('/api/invoices', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -94,13 +89,13 @@ export const invoiceApi = {
     });
 
     // Invalidate invoices cache
-    queryClient.invalidateQueries({ queryKey: ['/api/crm/invoices'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
     
     return result;
   },
 
   async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
-    const result = await apiRequest(`/api/crm/invoices/${id}`, {
+    const result = await apiRequest(`/api/invoices/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -109,19 +104,19 @@ export const invoiceApi = {
     });
 
     // Invalidate caches
-    queryClient.invalidateQueries({ queryKey: ['/api/crm/invoices'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/crm/invoices', id] });
+    queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/invoices', id] });
     
     return result;
   },
 
   async deleteInvoice(id: string): Promise<void> {
-    await apiRequest(`/api/crm/invoices/${id}`, {
+    await apiRequest(`/api/invoices/${id}`, {
       method: 'DELETE'
     });
 
     // Invalidate caches
-    queryClient.invalidateQueries({ queryKey: ['/api/crm/invoices'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
   },
 
   calculateInvoiceTotals(items: InvoiceItem[]): { subtotal: number; taxAmount: number; total: number } {

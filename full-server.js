@@ -2683,13 +2683,11 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
               // Create invoice record
               const invoiceResult = await sql`
                 INSERT INTO crm_invoices (
-                  invoice_number, client_id, amount, tax_amount, total_amount,
-                  subtotal_amount, discount_amount, currency, status, due_date,
-                  payment_terms, notes, created_at, updated_at
+                  invoice_number, client_id, issue_date, due_date, subtotal, 
+                  tax_amount, total, status, notes, created_at, updated_at
                 ) VALUES (
-                  ${invoiceNumber}, ${invoiceData.client_id}, ${subtotal}, ${taxAmount}, ${total},
-                  ${subtotal}, ${discountAmount}, ${invoiceData.currency || 'EUR'}, 'draft', ${invoiceData.due_date},
-                  ${invoiceData.payment_terms}, ${invoiceData.notes || ''}, NOW(), NOW()
+                  ${invoiceNumber}, ${invoiceData.client_id}, ${new Date().toISOString().split('T')[0]}, ${invoiceData.due_date},
+                  ${subtotal}, ${taxAmount}, ${total}, 'draft', ${invoiceData.notes || ''}, NOW(), NOW()
                 ) RETURNING *
               `;
               
@@ -2697,16 +2695,11 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
               
               // Create invoice items
               for (const [index, item] of invoiceData.items.entries()) {
-                const lineTotal = item.quantity * item.unit_price;
-                const taxAmount = lineTotal * (item.tax_rate / 100);
-                
                 await sql`
                   INSERT INTO crm_invoice_items (
-                    invoice_id, description, quantity, unit_price, tax_rate,
-                    tax_amount, line_total, sort_order, created_at
+                    invoice_id, description, quantity, unit_price, tax_rate, sort_order, created_at
                   ) VALUES (
-                    ${invoice.id}, ${item.description}, ${item.quantity}, ${item.unit_price}, ${item.tax_rate},
-                    ${taxAmount}, ${lineTotal}, ${index}, NOW()
+                    ${invoice.id}, ${item.description}, ${item.quantity}, ${item.unit_price}, ${item.tax_rate || 0}, ${index}, NOW()
                   )
                 `;
               }
