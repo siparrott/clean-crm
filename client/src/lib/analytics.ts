@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+// Note: This file now uses the CRM API instead of direct Supabase calls for invoices
 
 export interface AnalyticsData {
   totalRevenue: number;
@@ -48,39 +48,51 @@ export interface LeadMetrics {
 export const analyticsService = {
   async getAnalyticsData(): Promise<AnalyticsData> {
     try {
-      // Get revenue data
-      const { data: invoices } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('status', 'paid');
+      // Get revenue data from CRM API
+      const invoiceResponse = await fetch('/api/crm/invoices', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const invoiceData = await invoiceResponse.json();
+      const invoices = invoiceData.success ? invoiceData.data : [];
+      const paidInvoices = invoices.filter((inv: any) => inv.status === 'PAID');
 
       // Get booking data
-      const { data: bookings } = await supabase
-        .from('bookings')
-        .select('*');
+      const bookingResponse = await fetch('/api/crm/bookings', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const bookingData = await bookingResponse.json();
+      const bookings = bookingData.success ? bookingData.data : [];
 
       // Get client data
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('*');
+      const clientResponse = await fetch('/api/crm/clients', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const clientData = await clientResponse.json();
+      const clients = clientData.success ? clientData.data : [];
 
       // Calculate metrics
-      const totalRevenue = invoices?.reduce((sum, inv) => sum + (inv.total_amount || 0), 0) || 0;
-      const totalBookings = bookings?.length || 0;
-      const totalClients = clients?.length || 0;
+      const totalRevenue = paidInvoices.reduce((sum: number, inv: any) => sum + (inv.total_amount || 0), 0);
+      const totalBookings = bookings.length;
+      const totalClients = clients.length;
       const conversionRate = totalClients > 0 ? (totalBookings / totalClients) * 100 : 0;
 
       // Calculate monthly revenue
-      const monthlyRevenue = this.calculateMonthlyRevenue(invoices || []);
+      const monthlyRevenue = this.calculateMonthlyRevenue(paidInvoices);
 
       // Calculate bookings by type
-      const bookingsByType = this.calculateBookingsByType(bookings || []);
+      const bookingsByType = this.calculateBookingsByType(bookings);
 
       // Calculate client acquisition
-      const clientAcquisition = this.calculateClientAcquisition(clients || []);
+      const clientAcquisition = this.calculateClientAcquisition(clients);
 
       // Calculate top services
-      const topServices = this.calculateTopServices(bookings || [], invoices || []);
+      const topServices = this.calculateTopServices(bookings, paidInvoices);
 
       return {
         totalRevenue,
@@ -100,12 +112,16 @@ export const analyticsService = {
 
   async getRevenueMetrics(): Promise<RevenueMetrics> {
     try {
-      const { data: invoices } = await supabase
-        .from('invoices')
-        .select('*');
+      const invoiceResponse = await fetch('/api/crm/invoices', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const invoiceData = await invoiceResponse.json();
+      const invoices = invoiceData.success ? invoiceData.data : [];
 
-      const paidInvoices = invoices?.filter(inv => inv.status === 'paid') || [];
-      const unpaidInvoices = invoices?.filter(inv => inv.status === 'pending') || [];
+      const paidInvoices = invoices.filter((inv: any) => inv.status === 'PAID');
+      const unpaidInvoices = invoices.filter((inv: any) => inv.status === 'PENDING');
 
       const totalRevenue = paidInvoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
       const unpaidAmount = unpaidInvoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
@@ -150,44 +166,52 @@ export const analyticsService = {
 
   async getClientMetrics(): Promise<ClientMetrics> {
     try {
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('*');
+      const clientResponse = await fetch('/api/crm/clients', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const clientData = await clientResponse.json();
+      const clients = clientData.success ? clientData.data : [];
 
-      const { data: invoices } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('status', 'paid');
+      const invoiceResponse = await fetch('/api/crm/invoices', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const invoiceData = await invoiceResponse.json();
+      const invoices = invoiceData.success ? invoiceData.data : [];
+      const paidInvoices = invoices.filter((inv: any) => inv.status === 'PAID');
 
-      const totalClients = clients?.length || 0;
+      const totalClients = clients.length;
 
       // Calculate new clients this month
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
-      const newClientsThisMonth = clients?.filter(client => {
+      const newClientsThisMonth = clients.filter((client: any) => {
         const clientDate = new Date(client.created_at);
         return clientDate.getMonth() === currentMonth && clientDate.getFullYear() === currentYear;
-      }).length || 0;
+      }).length;
 
       // Calculate growth rate
       const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
       const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-      const newClientsLastMonth = clients?.filter(client => {
+      const newClientsLastMonth = clients.filter((client: any) => {
         const clientDate = new Date(client.created_at);
         return clientDate.getMonth() === lastMonth && clientDate.getFullYear() === lastMonthYear;
-      }).length || 0;
+      }).length;
 
       const clientGrowthRate = newClientsLastMonth > 0 ? ((newClientsThisMonth - newClientsLastMonth) / newClientsLastMonth) * 100 : 0;
 
       // Calculate average client value
-      const totalRevenue = invoices?.reduce((sum, inv) => sum + (inv.total_amount || 0), 0) || 0;
+      const totalRevenue = paidInvoices.reduce((sum: number, inv: any) => sum + (inv.total_amount || 0), 0);
       const averageClientValue = totalClients > 0 ? totalRevenue / totalClients : 0;
 
       // Calculate top clients
       const clientRevenue = new Map();
       const clientBookings = new Map();
 
-      invoices?.forEach(invoice => {
+      paidInvoices.forEach((invoice: any) => {
         const clientId = invoice.client_id;
         const currentRevenue = clientRevenue.get(clientId) || 0;
         const currentBookings = clientBookings.get(clientId) || 0;
@@ -197,7 +221,7 @@ export const analyticsService = {
 
       const topClients = Array.from(clientRevenue.entries())
         .map(([clientId, revenue]) => {
-          const client = clients?.find(c => c.id === clientId);
+          const client = clients.find((c: any) => c.id === clientId);
           return {
             name: client ? `${client.first_name} ${client.last_name}` : 'Unknown',
             totalSpent: revenue,

@@ -1103,6 +1103,56 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
+      // POST /api/crm/leads - Create new lead
+      if (pathname === '/api/crm/leads' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { name, email, phone, message, source, status } = JSON.parse(body);
+              
+              console.log('📝 Creating new lead via CRM API:', { name, email, source });
+              
+              // Create lead in database
+              const leadData = {
+                name: name,
+                email: email,
+                phone: phone,
+                source: source || 'manual',
+                status: status || 'new',
+                notes: message || '',
+                created_at: new Date().toISOString()
+              };
+              
+              // Store lead in database
+              await sql`
+                INSERT INTO leads (name, email, phone, source, status, notes, created_at)
+                VALUES (${leadData.name}, ${leadData.email}, ${leadData.phone}, ${leadData.source}, ${leadData.status}, ${leadData.notes}, ${leadData.created_at})
+              `;
+              
+              console.log('✅ Lead created successfully via CRM API');
+              
+              res.writeHead(201, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: true, 
+                message: 'Lead created successfully',
+                data: leadData
+              }));
+            } catch (error) {
+              console.error('❌ CRM Lead creation error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Failed to create lead' }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ CRM Leads API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'API error' }));
+        }
+        return;
+      }
+      
       if (pathname === '/api/crm/top-clients' && req.method === 'GET') {
         try {
           const urlParams = new URLSearchParams(parsedUrl.query);
@@ -1653,6 +1703,208 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
             res.end(JSON.stringify({ error: error.message }));
           }
         });
+        return;
+      }
+      
+      // === LEAD CAPTURE ENDPOINTS ===
+      
+      // Contact form submission endpoint
+      if (pathname === '/api/contact' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { fullName, email, phone, message } = JSON.parse(body);
+              
+              console.log('📞 New contact form submission:', { fullName, email, phone });
+              
+              // Create lead in database
+              const leadData = {
+                name: fullName,
+                email: email,
+                phone: phone,
+                source: 'contact_form',
+                status: 'new',
+                notes: message,
+                created_at: new Date().toISOString()
+              };
+              
+              // Store lead in database
+              await sql`
+                INSERT INTO leads (name, email, phone, source, status, notes, created_at)
+                VALUES (${leadData.name}, ${leadData.email}, ${leadData.phone}, ${leadData.source}, ${leadData.status}, ${leadData.notes}, ${leadData.created_at})
+              `;
+              
+              console.log('✅ Lead created successfully for contact form submission');
+              
+              // Send notification email to hallo@newagefotografie.com
+              const notificationEmailData = {
+                to: 'hallo@newagefotografie.com',
+                subject: `Neue Kontaktanfrage von ${fullName}`,
+                html: `
+                  <h2>Neue Kontaktanfrage</h2>
+                  <p><strong>Name:</strong> ${fullName}</p>
+                  <p><strong>E-Mail:</strong> ${email}</p>
+                  <p><strong>Telefon:</strong> ${phone}</p>
+                  <p><strong>Nachricht:</strong></p>
+                  <p>${message}</p>
+                  <p><em>Eingegangen am: ${new Date().toLocaleString('de-DE')}</em></p>
+                `,
+                text: `Neue Kontaktanfrage von ${fullName}\n\nE-Mail: ${email}\nTelefon: ${phone}\n\nNachricht:\n${message}\n\nEingegangen am: ${new Date().toLocaleString('de-DE')}`
+              };
+              
+              await database.sendEmail(notificationEmailData);
+              console.log('📧 Contact form notification email sent to hallo@newagefotografie.com');
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: true, 
+                message: 'Kontaktformular erfolgreich übermittelt' 
+              }));
+            } catch (error) {
+              console.error('❌ Contact form submission error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Fehler beim Übermitteln des Kontaktformulars' }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Contact form API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'API-Fehler' }));
+        }
+        return;
+      }
+      
+      // Waitlist (Warteliste) form submission endpoint  
+      if (pathname === '/api/waitlist' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { fullName, email, phone, preferredDate, message } = JSON.parse(body);
+              
+              console.log('📅 New waitlist submission:', { fullName, email, phone, preferredDate });
+              
+              // Create lead in database
+              const leadData = {
+                name: fullName,
+                email: email,
+                phone: phone,
+                source: 'warteliste',
+                status: 'new',
+                notes: `Bevorzugtes Datum: ${preferredDate}${message ? '\n\nNachricht: ' + message : ''}`,
+                created_at: new Date().toISOString()
+              };
+              
+              // Store lead in database
+              await sql`
+                INSERT INTO leads (name, email, phone, source, status, notes, created_at)
+                VALUES (${leadData.name}, ${leadData.email}, ${leadData.phone}, ${leadData.source}, ${leadData.status}, ${leadData.notes}, ${leadData.created_at})
+              `;
+              
+              console.log('✅ Lead created successfully for waitlist submission');
+              
+              // Send notification email to hallo@newagefotografie.com
+              const notificationEmailData = {
+                to: 'hallo@newagefotografie.com',
+                subject: `Neue Warteliste-Anfrage von ${fullName}`,
+                html: `
+                  <h2>Neue Warteliste-Anfrage</h2>
+                  <p><strong>Name:</strong> ${fullName}</p>
+                  <p><strong>E-Mail:</strong> ${email}</p>
+                  <p><strong>Telefon:</strong> ${phone}</p>
+                  <p><strong>Bevorzugtes Datum:</strong> ${preferredDate}</p>
+                  ${message ? `<p><strong>Nachricht:</strong></p><p>${message}</p>` : ''}
+                  <p><em>Eingegangen am: ${new Date().toLocaleString('de-DE')}</em></p>
+                `,
+                text: `Neue Warteliste-Anfrage von ${fullName}\n\nE-Mail: ${email}\nTelefon: ${phone}\nBevorzugtes Datum: ${preferredDate}${message ? '\n\nNachricht:\n' + message : ''}\n\nEingegangen am: ${new Date().toLocaleString('de-DE')}`
+              };
+              
+              await database.sendEmail(notificationEmailData);
+              console.log('📧 Waitlist notification email sent to hallo@newagefotografie.com');
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: true, 
+                message: 'Warteliste-Anfrage erfolgreich übermittelt' 
+              }));
+            } catch (error) {
+              console.error('❌ Waitlist submission error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Fehler beim Übermitteln der Warteliste-Anfrage' }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Waitlist API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'API-Fehler' }));
+        }
+        return;
+      }
+      
+      // Newsletter signup endpoint
+      if (pathname === '/api/newsletter/signup' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { email } = JSON.parse(body);
+              
+              console.log('📧 New newsletter signup:', { email });
+              
+              // Create lead in database
+              const leadData = {
+                name: 'Newsletter Subscriber',
+                email: email,
+                phone: '',
+                source: 'newsletter',
+                status: 'new',
+                notes: 'Newsletter subscription',
+                created_at: new Date().toISOString()
+              };
+              
+              // Store lead in database
+              await sql`
+                INSERT INTO leads (name, email, phone, source, status, notes, created_at)
+                VALUES (${leadData.name}, ${leadData.email}, ${leadData.phone}, ${leadData.source}, ${leadData.status}, ${leadData.notes}, ${leadData.created_at})
+              `;
+              
+              console.log('✅ Lead created successfully for newsletter signup');
+              
+              // Send notification email to hallo@newagefotografie.com
+              const notificationEmailData = {
+                to: 'hallo@newagefotografie.com',
+                subject: `Neue Newsletter-Anmeldung: ${email}`,
+                html: `
+                  <h2>Neue Newsletter-Anmeldung</h2>
+                  <p><strong>E-Mail:</strong> ${email}</p>
+                  <p><em>Angemeldet am: ${new Date().toLocaleString('de-DE')}</em></p>
+                `,
+                text: `Neue Newsletter-Anmeldung\n\nE-Mail: ${email}\n\nAngemeldet am: ${new Date().toLocaleString('de-DE')}`
+              };
+              
+              await database.sendEmail(notificationEmailData);
+              console.log('📧 Newsletter signup notification email sent to hallo@newagefotografie.com');
+              
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                success: true, 
+                message: 'Newsletter-Anmeldung erfolgreich' 
+              }));
+            } catch (error) {
+              console.error('❌ Newsletter signup error:', error.message);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Fehler bei der Newsletter-Anmeldung' }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Newsletter API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'API-Fehler' }));
+        }
         return;
       }
       
