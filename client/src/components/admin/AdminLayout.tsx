@@ -211,6 +211,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                   <p className="text-blue-900 font-medium">
                     {newLeadsCount} unread leads waiting for your attention
                   </p>
+                  <p className="text-blue-700 text-xs mt-1">
+                    📧 Email notifications sent to: <span className="font-medium">hallo@newagefotografie.com</span>
+                  </p>
                   <button
                     onClick={() => navigate('/admin/leads')}
                     className="text-blue-600 hover:text-blue-800 text-xs underline mt-1"

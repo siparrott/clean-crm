@@ -54,8 +54,8 @@ const SettingsPage: React.FC = () => {
         },
         {
           icon: Mail,
-          title: 'Email Configuration',
-          description: 'Configure SMTP settings and email templates',
+          title: 'Email & Lead Notifications',
+          description: 'Configure SMTP settings and lead notification email (currently: hallo@newagefotografie.com)',
           path: '/admin/settings/email',
           color: 'bg-red-500'
         },

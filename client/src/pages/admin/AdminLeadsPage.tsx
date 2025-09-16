@@ -259,11 +259,32 @@ const AdminLeadsPage: React.FC = () => {
   return (
     <AdminLayout>
       <div className="space-y-6">
+        {/* Email Notification Info Banner */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <div className="flex-shrink-0">
+              <div className="p-2 bg-blue-100 rounded-full">
+                <Mail size={20} className="text-blue-600" />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-blue-900">Lead Notifications Active</h3>
+              <p className="text-sm text-blue-700">
+                New lead notifications are automatically sent to <strong>hallo@newagefotografie.com</strong> when leads are submitted via contact forms, waitlist, or created manually.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">New Leads</h1>
             <p className="text-gray-600">Manage and track your potential clients</p>
+            <div className="mt-2 flex items-center space-x-1 text-sm text-blue-600">
+              <Mail size={14} />
+              <span>Email notifications sent to: <strong>hallo@newagefotografie.com</strong></span>
+            </div>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
