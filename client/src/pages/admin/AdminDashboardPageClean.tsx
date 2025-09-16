@@ -92,6 +92,7 @@ const AdminDashboardPage: React.FC = () => {
       }
 
       // Fetch all data in parallel
+      // Fetch data from CRM API endpoints instead of Supabase
       const [
         invoicesResult,
         clientsResult,
@@ -99,41 +100,51 @@ const AdminDashboardPage: React.FC = () => {
         bookingsResult,
         previousInvoicesResult
       ] = await Promise.allSettled([
-        supabase.from('crm_invoices').select('*').gte('created_at', startDate.toISOString()),
-        supabase.from('crm_clients').select('*'),
-        supabase.from('leads').select('*').gte('created_at', startDate.toISOString()),
-        supabase.from('crm_bookings').select('*').gte('booking_date', now.toISOString()),
-        supabase.from('crm_invoices').select('*').gte('created_at', previousPeriodStart.toISOString()).lt('created_at', startDate.toISOString())
+        fetch('/api/crm/invoices', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+        fetch('/api/crm/clients', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+        fetch('/api/crm/leads', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+        fetch('/api/crm/bookings', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+        fetch('/api/crm/invoices', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
       ]);
 
       // Process data
-      const invoices = invoicesResult.status === 'fulfilled' ? invoicesResult.value.data || [] : [];
-      const clients = clientsResult.status === 'fulfilled' ? clientsResult.value.data || [] : [];
-      const leads = leadsResult.status === 'fulfilled' ? leadsResult.value.data || [] : [];
-      const bookings = bookingsResult.status === 'fulfilled' ? bookingsResult.value.data || [] : [];
-      const previousInvoices = previousInvoicesResult.status === 'fulfilled' ? previousInvoicesResult.value.data || [] : [];
+      const invoices = invoicesResult.status === 'fulfilled' && invoicesResult.value.ok ? await invoicesResult.value.json() : [];
+      const clientsData = clientsResult.status === 'fulfilled' && clientsResult.value.ok ? await clientsResult.value.json() : { clients: [] };
+      const clients = clientsData.clients || [];
+      const leadsData = leadsResult.status === 'fulfilled' && leadsResult.value.ok ? await leadsResult.value.json() : { leads: [] };
+      const leads = leadsData.leads || [];
+      const bookingsData = bookingsResult.status === 'fulfilled' && bookingsResult.value.ok ? await bookingsResult.value.json() : { bookings: [] };
+      const bookings = bookingsData.bookings || [];
+      const previousInvoices = previousInvoicesResult.status === 'fulfilled' && previousInvoicesResult.value.ok ? await previousInvoicesResult.value.json() : [];
 
-      // Calculate metrics
-      const totalRevenue = invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
-      const previousRevenue = previousInvoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
+      // Filter invoices by date on client side since API doesn't support date filtering yet
+      const currentPeriodInvoices = invoices.filter((inv: any) => new Date(inv.created_at) >= startDate);
+      const previousPeriodInvoices = previousInvoices.filter((inv: any) => {
+        const invoiceDate = new Date(inv.created_at);
+        return invoiceDate >= previousPeriodStart && invoiceDate < startDate;
+      });
+
+      // Calculate metrics using filtered data
+      const totalRevenue = currentPeriodInvoices.reduce((sum: number, inv: any) => sum + (inv.total_amount || 0), 0);
+      const previousRevenue = previousPeriodInvoices.reduce((sum: number, inv: any) => sum + (inv.total_amount || 0), 0);
       const monthlyGrowth = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0;
       
-      const convertedLeads = leads.filter(lead => lead.status === 'CONVERTED').length;
+      const convertedLeads = leads.filter((lead: any) => lead.status === 'CONVERTED').length;
       const conversionRate = leads.length > 0 ? (convertedLeads / leads.length) * 100 : 0;
       
-      const averageOrderValue = invoices.length > 0 ? totalRevenue / invoices.length : 0;
+      const averageOrderValue = currentPeriodInvoices.length > 0 ? totalRevenue / currentPeriodInvoices.length : 0;
 
-      // Process chart data
-      const revenueChart = processRevenueChart(invoices);
+      // Process chart data using current period invoices
+      const revenueChart = processRevenueChart(currentPeriodInvoices);
       const leadConversionChart = processLeadChart(leads);
-      const serviceDistribution = processServiceDistribution(invoices);
+      const serviceDistribution = processServiceDistribution(currentPeriodInvoices);
 
       const dashboardData: DashboardData = {
         totalRevenue,
         monthlyRevenue: totalRevenue,
         totalClients: clients.length,
         newLeads: leads.length,
-        pendingInvoices: invoices.filter(inv => inv.status === 'PENDING').length,
+        pendingInvoices: currentPeriodInvoices.filter((inv: any) => inv.status === 'PENDING').length,
         upcomingBookings: bookings.length,
         revenueChart,
         leadConversionChart,

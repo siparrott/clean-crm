@@ -428,6 +428,7 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify(invoiceData),
       });
@@ -455,6 +456,7 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
           },
           body: JSON.stringify(paymentRecord),
         });
@@ -527,6 +529,7 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify(emailData),
       });

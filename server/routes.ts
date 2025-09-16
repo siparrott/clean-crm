@@ -3319,7 +3319,27 @@ Bitte versuchen Sie es später noch einmal.`;
   app.get("/api/crm/invoices", authenticateUser, async (req: Request, res: Response) => {
     try {
       const invoices = await storage.getCrmInvoices();
-      res.json(invoices);
+      
+      // Transform the data to match frontend expectations
+      const transformedInvoices = invoices.map(invoice => ({
+        id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        client_id: invoice.client_id,
+        issue_date: invoice.issue_date,
+        due_date: invoice.due_date,
+        subtotal_amount: parseFloat(invoice.subtotal || '0'),
+        tax_amount: parseFloat(invoice.tax_amount || '0'),
+        total_amount: parseFloat(invoice.total || '0'),
+        status: invoice.status,
+        notes: invoice.notes,
+        created_at: invoice.created_at,
+        client: {
+          name: invoice.client_name,
+          email: invoice.client_email
+        }
+      }));
+      
+      res.json(transformedInvoices);
     } catch (error) {
       console.error("Error fetching invoices:", error);
       res.status(500).json({ error: "Internal server error" });
