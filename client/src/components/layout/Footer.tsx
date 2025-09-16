@@ -118,7 +118,14 @@ const Footer: React.FC = () => {
                 <span className="text-sm">{t('contact.addressNote')}</span>
               </li>
               <li>
-                <span className="text-sm">Tel/WhatsApp: +43 677 633 99210</span>
+                <a 
+                  href="https://wa.me/43677633992210" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm hover:text-purple-300 transition-colors"
+                >
+                  Tel/WhatsApp: +43 677 633 99210
+                </a>
               </li>
               <li>
                 <Link 

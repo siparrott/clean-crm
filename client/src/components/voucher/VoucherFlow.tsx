@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import VoucherPersonalization, { type VoucherPersonalizationData } from './VoucherPersonalization';
 import EnhancedCheckoutPage from './EnhancedCheckoutPage';
 import { ArrowLeft } from 'lucide-react';
@@ -18,8 +18,63 @@ const VoucherFlow: React.FC<VoucherFlowProps> = ({
   onComplete,
   onBack
 }) => {
-  const [currentStep, setCurrentStep] = useState<FlowStep>('personalization');
-  const [voucherData, setVoucherData] = useState<VoucherPersonalizationData | null>(null);
+  // Use sessionStorage to persist voucher flow state
+  const getStoredStep = (): FlowStep => {
+    try {
+      const stored = sessionStorage.getItem(`voucher_flow_step_${voucherType}`);
+      return (stored as FlowStep) || 'personalization';
+    } catch {
+      return 'personalization';
+    }
+  };
+
+  const getStoredVoucherData = (): VoucherPersonalizationData | null => {
+    try {
+      const stored = sessionStorage.getItem(`voucher_flow_data_${voucherType}`);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const [currentStep, setCurrentStep] = useState<FlowStep>(getStoredStep);
+  const [voucherData, setVoucherData] = useState<VoucherPersonalizationData | null>(getStoredVoucherData);
+
+  // Save state to sessionStorage whenever it changes
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(`voucher_flow_step_${voucherType}`, currentStep);
+    } catch (error) {
+      console.warn('Failed to save voucher flow step to sessionStorage:', error);
+    }
+  }, [currentStep, voucherType]);
+
+  useEffect(() => {
+    try {
+      if (voucherData) {
+        sessionStorage.setItem(`voucher_flow_data_${voucherType}`, JSON.stringify(voucherData));
+      } else {
+        sessionStorage.removeItem(`voucher_flow_data_${voucherType}`);
+      }
+    } catch (error) {
+      console.warn('Failed to save voucher flow data to sessionStorage:', error);
+    }
+  }, [voucherData, voucherType]);
+
+  // Cleanup session storage if user navigates away from voucher flow entirely
+  useEffect(() => {
+    return () => {
+      // Only cleanup if we're not in checkout step (to preserve during Stripe redirect)
+      if (currentStep !== 'checkout') {
+        try {
+          sessionStorage.removeItem(`voucher_flow_step_${voucherType}`);
+          sessionStorage.removeItem(`voucher_flow_data_${voucherType}`);
+        } catch (error) {
+          console.warn('Failed to cleanup voucher flow data from sessionStorage:', error);
+        }
+      }
+    };
+  }, [currentStep, voucherType]);
 
   const handlePersonalizationComplete = (data: VoucherPersonalizationData) => {
     setVoucherData(data);
@@ -31,6 +86,14 @@ const VoucherFlow: React.FC<VoucherFlowProps> = ({
     // this might not be called. But if it is, we handle it gracefully.
     console.log('Checkout initiated with Stripe:', checkoutData);
     
+    // Clear session storage when checkout is complete
+    try {
+      sessionStorage.removeItem(`voucher_flow_step_${voucherType}`);
+      sessionStorage.removeItem(`voucher_flow_data_${voucherType}`);
+    } catch (error) {
+      console.warn('Failed to clear voucher flow data from sessionStorage:', error);
+    }
+    
     // The actual completion will happen on the Stripe success page
     // For now, we can just show a loading state or redirect
     setCurrentStep('confirmation');
@@ -41,6 +104,14 @@ const VoucherFlow: React.FC<VoucherFlowProps> = ({
   };
 
   const handleBackToCart = () => {
+    // Clear session storage when going back to cart
+    try {
+      sessionStorage.removeItem(`voucher_flow_step_${voucherType}`);
+      sessionStorage.removeItem(`voucher_flow_data_${voucherType}`);
+    } catch (error) {
+      console.warn('Failed to clear voucher flow data from sessionStorage:', error);
+    }
+    
     if (onBack) {
       onBack();
     }

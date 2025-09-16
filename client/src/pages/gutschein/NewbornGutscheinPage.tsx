@@ -391,7 +391,7 @@ const NewbornGutscheinPage: React.FC = () => {
         <div className="bg-white rounded-lg shadow-lg p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Wichtige Informationen</h2>
           <ul className="space-y-2 text-gray-700">
-            <li>• Gutscheine sind ab Kaufdatum 1 Jahr gültig</li>
+            <li>• Gutscheine sind ab Kaufdatum 2 Jahre gültig</li>
             <li>• Sonderpreise für begrenzte Zeit</li>
             <li>• Termine flexibel vereinbar</li>
             <li>• Beheiztes Studio für das Wohlbefinden des Babys</li>

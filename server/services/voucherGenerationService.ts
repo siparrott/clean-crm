@@ -202,7 +202,7 @@ export class VoucherGenerationService {
           <div class="footer">
             <p>Einlösbar bei New Age Fotografie<br>
             Online unter www.newage-fotografie.de oder in unserem Studio<br>
-            Gültig bis 3 Jahre nach Ausstellungsdatum</p>
+            Gültig bis 2 Jahre nach Ausstellungsdatum</p>
           </div>
         </div>
       </body>

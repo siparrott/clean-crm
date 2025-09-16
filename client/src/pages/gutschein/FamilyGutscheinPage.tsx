@@ -24,7 +24,7 @@ const FamilyGutscheinPage: React.FC = () => {
         '1 bearbeitete Fotos',
         'Begrüßungsgetränk',
         'Outfit-Wechsel möglich',
-        'Bis zu 12 Erwachsene und 4 Kinder möglich, Haustiere willkommen'
+        'Bis zu 16 Personen insgesamt möglich, Haustiere willkommen'
       ]
     },
     {
@@ -37,7 +37,7 @@ const FamilyGutscheinPage: React.FC = () => {
         '5 bearbeitete Fotos',
         'Begrüßungsgetränk',
         'Outfit-Wechsel möglich',
-        'Bis zu 12 Erwachsene und 4 Kinder möglich, Haustiere willkommen'
+        'Bis zu 16 Personen insgesamt möglich, Haustiere willkommen'
       ],
       isFeatured: true
     },
@@ -52,7 +52,7 @@ const FamilyGutscheinPage: React.FC = () => {
         'Begrüßungsgetränk',
         'Outfit-Wechsel möglich',
         'Alle Kombinationen',
-        'Bis zu 12 Erwachsene und 4 Kinder möglich, Haustiere willkommen'
+        'Bis zu 16 Personen insgesamt möglich, Haustiere willkommen'
       ]
     }
   ];
@@ -340,7 +340,7 @@ const FamilyGutscheinPage: React.FC = () => {
               <ul className="space-y-4">
                 <li className="flex items-center text-gray-700">
                   <Heart className="text-purple-600 mr-3" size={20} />
-                  Individuell & persönlich: Jedes Shooting wird auf Ihre Familie zugeschnitten – mit Platz für bis zu 15 Personen und Haustiere.
+                  Individuell & persönlich: Jedes Shooting wird auf Ihre Familie zugeschnitten – mit Platz für bis zu 16 Personen und Haustiere.
                 </li>
                 <li className="flex items-center text-gray-700">
                   <Heart className="text-purple-600 mr-3" size={20} />
@@ -391,7 +391,7 @@ const FamilyGutscheinPage: React.FC = () => {
         <div className="bg-white rounded-lg shadow-lg p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Wichtige Informationen</h2>
           <ul className="space-y-2 text-gray-700">
-            <li>• Gutscheine sind ab Kaufdatum 1 Jahr gültig</li>
+            <li>• Gutscheine sind ab Kaufdatum 2 Jahre gültig</li>
             <li>• Sonderpreise für begrenzte Zeit</li>
             <li>• Termine flexibel vereinbar</li>
             <li>• Shooting-Locations in Wien und Umgebung</li>
