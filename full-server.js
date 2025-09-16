@@ -178,217 +178,10 @@ async function handleFilesAPI(req, res, pathname, query) {
     } catch (error) {
       console.error('Failed to fetch digital files:', error);
       res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Failed to fetch digital files' }));
-    }
-    return;
-  }
-  
-  if (req.method === 'POST' && fileEndpoint === '') {
-    // POST /api/files - Upload new file
-    let body = '';
-    req.on('data', chunk => { body += chunk.toString(); });
-    req.on('end', async () => {
-      try {
-        const {
-          folder_name,
-          file_name,
-          file_type,
-          file_size,
-          client_id,
-          session_id,
-          description = '',
-          tags = [],
-          is_public = false
-        } = JSON.parse(body);
+      res.end(JSON.stringify({ error: 'Files API error' }));
+      return;
+}
 
-        // Validate required fields
-        if (!folder_name || !file_name || !file_type || !file_size) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ 
-            error: 'Missing required fields: folder_name, file_name, file_type, file_size' 
-          }));
-          return;
-        }
-
-        const fileId = crypto.randomUUID();
-        
-        const result = await sql`
-          INSERT INTO digital_files (
-            id, folder_name, file_name, file_type, file_size, 
-            client_id, session_id, description, tags, is_public, 
-            uploaded_at, created_at, updated_at
-          ) VALUES (
-            ${fileId}, ${folder_name}, ${file_name}, ${file_type}, ${file_size},
-            ${client_id || null}, ${session_id || null}, ${description}, 
-            ${JSON.stringify(tags)}, ${is_public}, NOW(), NOW(), NOW()
-          ) RETURNING *
-        `;
-
-        res.writeHead(201, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(result[0]));
-      } catch (error) {
-        console.error('Failed to upload file:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Failed to upload file' }));
-      }
-    });
-    return;
-  }
-  
-  if (req.method === 'GET' && fileEndpoint === 'folders') {
-    // GET /api/files/folders - Get folder organization and statistics
-    try {
-      const { folder_name } = query || {};
-
-      let folderStatsQuery = `
-        SELECT 
-          folder_name,
-          COUNT(*) as file_count,
-          SUM(file_size) as total_size,
-          COUNT(CASE WHEN file_type = 'image' THEN 1 END) as image_count,
-          COUNT(CASE WHEN file_type = 'document' THEN 1 END) as document_count,
-          COUNT(CASE WHEN file_type = 'video' THEN 1 END) as video_count,
-          MAX(uploaded_at) as last_uploaded
-        FROM digital_files
-      `;
-
-      const values = [];
-      if (folder_name) {
-        folderStatsQuery += ` WHERE folder_name = $1`;
-        values.push(folder_name);
-      }
-
-      folderStatsQuery += ` GROUP BY folder_name ORDER BY file_count DESC`;
-
-      const folders = await sql(folderStatsQuery, values);
-
-      // Get recent files
-      const recentFiles = await sql`
-        SELECT folder_name, file_name, file_type, uploaded_at
-        FROM digital_files
-        ORDER BY uploaded_at DESC
-        LIMIT 10
-      `;
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        total_folders: folders.length,
-        folders: folders.map(folder => ({
-          name: folder.folder_name,
-          file_count: folder.file_count,
-          total_size: `${(folder.total_size / 1024 / 1024).toFixed(2)} MB`,
-          breakdown: {
-            images: folder.image_count,
-            documents: folder.document_count,
-            videos: folder.video_count
-          },
-          last_uploaded: folder.last_uploaded
-        })),
-        recent_files: recentFiles.map(file => ({
-          folder: file.folder_name,
-          name: file.file_name,
-          type: file.file_type,
-          uploaded: file.uploaded_at
-        }))
-      }));
-    } catch (error) {
-      console.error('Failed to get folder organization:', error);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Failed to get folder organization' }));
-    }
-    return;
-  }
-  
-  // Handle file ID-specific operations
-  const fileId = pathParts[3];
-  if (fileId && req.method === 'PUT') {
-    // PUT /api/files/:id - Update file metadata
-    let body = '';
-    req.on('data', chunk => { body += chunk.toString(); });
-    req.on('end', async () => {
-      try {
-        const updateData = JSON.parse(body);
-        
-        // Remove ID from update data
-        delete updateData.id;
-        
-        // Convert tags to JSON string if provided
-        if (updateData.tags && Array.isArray(updateData.tags)) {
-          updateData.tags = JSON.stringify(updateData.tags);
-        }
-        
-        // Build update query dynamically
-        const updateFields = [];
-        const values = [];
-        let paramIndex = 1;
-        
-        for (const [key, value] of Object.entries(updateData)) {
-          updateFields.push(`${key} = $${paramIndex}`);
-          values.push(value);
-          paramIndex++;
-        }
-        
-        if (updateFields.length === 0) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'No fields to update' }));
-          return;
-        }
-        
-        updateFields.push(`updated_at = NOW()`);
-        values.push(fileId);
-        
-        const result = await sql(`
-          UPDATE digital_files 
-          SET ${updateFields.join(', ')}
-          WHERE id = $${paramIndex}
-          RETURNING *
-        `, values);
-
-        if (result.length === 0) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'File not found' }));
-          return;
-        }
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(result[0]));
-      } catch (error) {
-        console.error('Failed to update file:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Failed to update file' }));
-      }
-    });
-    return;
-  }
-  
-  if (fileId && req.method === 'DELETE') {
-    // DELETE /api/files/:id - Delete file
-    try {
-      const result = await sql`
-        DELETE FROM digital_files 
-        WHERE id = ${fileId}
-        RETURNING *
-      `;
-
-      if (result.length === 0) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'File not found' }));
-        return;
-      }
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ 
-        message: 'File deleted successfully', 
-        file: result[0] 
-      }));
-    } catch (error) {
-      console.error('Failed to delete file:', error);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Failed to delete file' }));
-    }
-    return;
-  }
-  
   // If no matching endpoint found
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Files API endpoint not found' }));
@@ -1048,7 +841,7 @@ const server = http.createServer(async (req, res) => {
   
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   
   if (req.method === 'OPTIONS') {
@@ -1074,6 +867,19 @@ const server = http.createServer(async (req, res) => {
     // Handle login specifically
     if (pathname === '/api/auth/login' && req.method === 'POST') {
       handleLogin(req, res);
+      return;
+    }
+    // Auth verify (stateless demo) and logout endpoints used by frontend
+    if (pathname === '/api/auth/verify' && req.method === 'GET') {
+      // No server session tracking here; return not authenticated
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false }));
+      return;
+    }
+    if (pathname === '/api/auth/logout' && req.method === 'POST') {
+      // Clear cookies if any existed; currently stateless
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
       return;
     }
     
@@ -2225,6 +2031,100 @@ This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
         return;
       }
 
+      // Legacy-compatible CRM Inbox endpoints used by frontend
+      if (pathname === '/api/crm/messages' && req.method === 'GET') {
+        try {
+          if (database && typeof database.getCrmMessages === 'function') {
+            const messages = await database.getCrmMessages();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(messages));
+            return;
+          }
+          if (!sql) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify([]));
+            return;
+          }
+          const rows = await sql`
+            SELECT 
+              id,
+              COALESCE(sender_name, '') AS "senderName",
+              COALESCE(sender_email, '') AS "senderEmail",
+              COALESCE(subject, '') AS subject,
+              COALESCE(content, '') AS content,
+              COALESCE(status, 'unread') AS status,
+              client_id AS "clientId",
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
+            FROM crm_messages
+            ORDER BY created_at DESC
+          `;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(rows));
+        } catch (error) {
+          console.error('❌ GET /api/crm/messages error:', error);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Failed to load messages' }));
+        }
+        return;
+      }
+
+      // Update message status
+      if (pathname.match(/^\/api\/crm\/messages\/[A-Za-z0-9\-]+$/) && req.method === 'PUT') {
+        try {
+          const id = pathname.split('/').pop();
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const data = body ? JSON.parse(body) : {};
+              const updates = {
+                status: data.status,
+                replied_at: data.repliedAt || null,
+              };
+              if (database && typeof database.updateCrmMessage === 'function') {
+                await database.updateCrmMessage(id, { status: updates.status, repliedAt: data.repliedAt });
+              } else if (sql) {
+                await sql`
+                  UPDATE crm_messages
+                  SET status = ${updates.status}, replied_at = ${updates.replied_at}, updated_at = NOW()
+                  WHERE id = ${id}
+                `;
+              }
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: true }));
+            } catch (err) {
+              console.error('❌ PUT /api/crm/messages/:id error:', err);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Failed to update message' }));
+            }
+          });
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Failed to update message' }));
+        }
+        return;
+      }
+
+      // Delete message
+      if (pathname.match(/^\/api\/crm\/messages\/[A-Za-z0-9\-]+$/) && req.method === 'DELETE') {
+        try {
+          const id = pathname.split('/').pop();
+          if (database && typeof database.deleteCrmMessage === 'function') {
+            await database.deleteCrmMessage(id);
+          } else if (sql) {
+            await sql`DELETE FROM crm_messages WHERE id = ${id}`;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } catch (error) {
+          console.error('❌ DELETE /api/crm/messages/:id error:', error);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Failed to delete message' }));
+        }
+        return;
+      }
+
       // Assign email to client endpoint
       if (pathname === '/api/emails/assign' && req.method === 'POST') {
         try {
@@ -3169,7 +3069,7 @@ New Age Fotografie Team`;
 
               // Initialize nodemailer with EasyName SMTP
               const nodemailer = require('nodemailer');
-              const transporter = nodemailer.createTransporter({
+              const transporter = nodemailer.createTransport({
                 host: 'mail.easyname.com',
                 port: 587,
                 secure: false,
@@ -3341,6 +3241,53 @@ New Age Fotografie Team`;
           });
         } catch (error) {
           console.error('❌ Invoice payment API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // List Invoice Payments API endpoint
+      if (pathname.match(/^\/api\/invoices\/[^\/]+\/payments$/) && req.method === 'GET') {
+        try {
+          const invoiceId = pathname.split('/')[3];
+          const rows = await sql`
+            SELECT id, invoice_id, amount, payment_method, payment_reference,
+                   payment_date, notes, created_at
+            FROM crm_invoice_payments
+            WHERE invoice_id = ${invoiceId}
+            ORDER BY payment_date DESC, created_at DESC
+          `;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(rows));
+        } catch (error) {
+          console.error('❌ List invoice payments error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Delete Invoice Payment API endpoint
+      if (pathname.match(/^\/api\/invoices\/[^\/]+\/payments\/[^\/]+$/) && req.method === 'DELETE') {
+        try {
+          const parts = pathname.split('/');
+          const invoiceId = parts[3];
+          const paymentId = parts[5];
+          const result = await sql`
+            DELETE FROM crm_invoice_payments
+            WHERE id = ${paymentId} AND invoice_id = ${invoiceId}
+            RETURNING id
+          `;
+          if (result.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Payment not found' }));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, deleted: paymentId }));
+        } catch (error) {
+          console.error('❌ Delete invoice payment error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
         }
@@ -3826,6 +3773,170 @@ New Age Fotografie Team`;
       }
     }
     
+    // Compatibility shim for legacy CRM invoice routes
+    if (pathname.startsWith('/api/crm/invoices')) {
+      try {
+        // Map legacy paths to new endpoints
+        // GET /api/crm/invoices -> /api/invoices
+        if (pathname === '/api/crm/invoices' && req.method === 'GET') {
+          req.url = req.url.replace('/api/crm/invoices', '/api/invoices');
+          parsedUrl.pathname = '/api/invoices';
+        }
+        // POST /api/crm/invoices -> /api/invoices
+        if (pathname === '/api/crm/invoices' && req.method === 'POST') {
+          req.url = req.url.replace('/api/crm/invoices', '/api/invoices');
+          parsedUrl.pathname = '/api/invoices';
+        }
+        // DELETE or PATCH specific invoice maps to DELETE /api/invoices/:id or PUT /api/invoices/:id/status
+        const legacyIdMatch = pathname.match(/^\/api\/crm\/invoices\/([^\/]+)$/);
+        if (legacyIdMatch && req.method === 'DELETE') {
+          req.url = req.url.replace('/api/crm/invoices/', '/api/invoices/');
+          parsedUrl.pathname = req.url;
+        }
+        if (legacyIdMatch && req.method === 'PATCH') {
+          // Transform PATCH body { status } into PUT /status
+          const invoiceId = legacyIdMatch[1];
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const data = body ? JSON.parse(body) : {};
+              const newReq = { status: data.status, paid_date: data.paid_date };
+              // Re-dispatch to status endpoint
+              const statusPath = `/api/invoices/${invoiceId}/status`;
+              // Manually handle here to avoid re-entering routing
+              try {
+                const status = String(newReq.status || '').toLowerCase();
+                await sql`
+                  UPDATE crm_invoices 
+                  SET 
+                    status = ${status},
+                    sent_date = ${status === 'sent' ? new Date().toISOString() : null},
+                    paid_date = ${status === 'paid' ? (newReq.paid_date || new Date().toISOString()) : null},
+                    updated_at = NOW()
+                  WHERE id = ${invoiceId}
+                `;
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, message: 'Invoice status updated' }));
+              } catch (err) {
+                console.error('❌ Legacy PATCH status error:', err.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+              }
+            } catch (parseErr) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: 'Invalid request body' }));
+            }
+          });
+          return;
+        }
+        // GET /api/crm/invoices/:id/pdf -> /api/invoices/:id/download
+        const pdfMatch = pathname.match(/^\/api\/crm\/invoices\/([^\/]+)\/pdf$/);
+        if (pdfMatch && req.method === 'GET') {
+          const newPath = `/api/invoices/${pdfMatch[1]}/download`;
+          req.url = newPath;
+          parsedUrl.pathname = newPath;
+        }
+        // POST /api/crm/invoices/:id/email -> /api/invoices/send-email
+        const emailMatch = pathname.match(/^\/api\/crm\/invoices\/([^\/]+)\/email$/);
+        if (emailMatch && req.method === 'POST') {
+          // We will read body, append invoice_id field, and call handler directly
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const data = body ? JSON.parse(body) : {};
+              const payload = {
+                invoice_id: emailMatch[1],
+                email_address: data.to || data.email || data.email_address,
+                subject: data.subject,
+                message: data.message
+              };
+              // Call the same logic as /api/invoices/send-email by simulating a new request
+              req.method = 'POST';
+              req.url = '/api/invoices/send-email';
+              // Reconstruct a minimal flow by writing to the existing handler block
+              // Delegate by re-entering the server function is complex; instead, duplicate minimal logic here
+              try {
+                const invoices = await sql`
+                  SELECT i.*, c.name as client_name, c.email as client_email, c.firstname, c.lastname
+                  FROM crm_invoices i
+                  LEFT JOIN crm_clients c ON i.client_id = c.id
+                  WHERE i.id = ${payload.invoice_id}
+                `;
+                if (invoices.length === 0) {
+                  res.writeHead(404, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({ error: 'Invoice not found' }));
+                  return;
+                }
+                const invoice = invoices[0];
+                const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
+                const invoiceUrl = `${baseUrl}/invoice/public/${payload.invoice_id}`;
+                const items = await sql`
+                  SELECT * FROM crm_invoice_items WHERE invoice_id = ${payload.invoice_id} ORDER BY sort_order
+                `;
+                const clientName = invoice.firstname && invoice.lastname ? `${invoice.firstname} ${invoice.lastname}` : invoice.client_name || 'Kunde';
+                const emailSubject = payload.subject || `Rechnung ${invoice.invoice_number} - New Age Fotografie`;
+                const itemsHtml = items.map(item => `
+                  <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.description}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">€${parseFloat(item.unit_price).toFixed(2)}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">€${(parseFloat(item.quantity) * parseFloat(item.unit_price)).toFixed(2)}</td>
+                  </tr>`).join('');
+                const emailHtml = `<!DOCTYPE html><html><body><div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">${clientName}<br/>Rechnung ${invoice.invoice_number}<br/>${invoiceUrl}<table style="width:100%; border-collapse: collapse;">${itemsHtml}</table></div></body></html>`;
+                const nodemailer = require('nodemailer');
+                const transporter = nodemailer.createTransport({
+                  host: 'mail.easyname.com',
+                  port: 587,
+                  secure: false,
+                  auth: { user: process.env.SMTP_USER || 'hallo@newagefotografie.com', pass: process.env.SMTP_PASS || 'your-email-password' },
+                  tls: { rejectUnauthorized: false }
+                });
+                await transporter.sendMail({
+                  from: 'hallo@newagefotografie.com',
+                  to: payload.email_address || invoice.client_email,
+                  subject: emailSubject,
+                  html: emailHtml
+                });
+                await sql`
+                  UPDATE crm_invoices SET status = 'sent', sent_date = NOW(), updated_at = NOW() WHERE id = ${payload.invoice_id}
+                `;
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+              } catch (err) {
+                console.error('❌ Legacy email send error:', err.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+              }
+            } catch (e) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: 'Invalid request body' }));
+            }
+          });
+          return;
+        }
+        // Payments: GET/POST/DELETE legacy paths -> new ones
+        const legacyPaymentsBase = pathname.match(/^\/api\/crm\/invoices\/([^\/]+)\/payments$/);
+        if (legacyPaymentsBase && (req.method === 'GET' || req.method === 'POST')) {
+          const invoiceId = legacyPaymentsBase[1];
+          // delegate directly to the implemented handlers above by mapping path
+          req.url = `/api/invoices/${invoiceId}/payments`;
+          parsedUrl.pathname = req.url;
+        }
+        const legacyPaymentDelete = pathname.match(/^\/api\/crm\/invoices\/([^\/]+)\/payments\/([^\/]+)$/);
+        if (legacyPaymentDelete && req.method === 'DELETE') {
+          const invoiceId = legacyPaymentDelete[1];
+          const paymentId = legacyPaymentDelete[2];
+          req.url = `/api/invoices/${invoiceId}/payments/${paymentId}`;
+          parsedUrl.pathname = req.url;
+        }
+      } catch (shimErr) {
+        console.error('❌ CRM invoices compatibility shim error:', shimErr.message);
+      }
+      // Continue processing after URL rewrite; fall through
+    }
+
     // Handle other API endpoints with fallback
     res.writeHead(200, { 'Content-Type': 'application/json' });
     const response = mockApiResponses[pathname] || {
@@ -3884,3 +3995,5 @@ server.on('error', (err) => {
 });
 
 module.exports = server;
+}
+
