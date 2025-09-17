@@ -26,7 +26,7 @@ import AdminDashboardPageDev from './pages/admin/AdminDashboardPageDev';
 import AdminLoginPage from './pages/admin/AdminLoginPage';
 import NeonAdminLoginPage from './pages/admin/NeonAdminLoginPage';
 import AdminLeadsPage from './pages/admin/AdminLeadsPage';
-import AdminVoucherSalesPageV3 from './pages/admin/AdminVoucherSalesPageV3';
+import AdminVoucherSalesPageV2 from './pages/admin/AdminVoucherSalesPageV2';
 import AdminClientsPage from './pages/admin/ClientsPage';
 import ClientDetailPage from './pages/admin/ClientDetailPage';
 import ClientProfilePage from './pages/admin/ClientProfilePage';
@@ -160,7 +160,7 @@ function App() {
                   path="/admin/voucher-sales"
                   element={
                     <NeonProtectedRoute>
-                      <AdminVoucherSalesPageV3 />
+                      <AdminVoucherSalesPageV2 />
                     </NeonProtectedRoute>
                   }
                 />
