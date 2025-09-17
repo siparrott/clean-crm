@@ -131,17 +131,47 @@ export class StripeVoucherService {
       const successUrl = data.successUrl || `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = data.cancelUrl || `${baseUrl}/cart`;
 
-      const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = data.items.map(item => ({
-        price_data: {
-          currency: 'eur',
-          product_data: {
-            name: item.name || item.title || 'Fotoshooting Gutschein',
-            description: item.description,
+      // Prefer preconfigured Stripe Prices for specific Basic vouchers so promotion codes scoped by product apply
+      const PRICE_ID_PREGNANCY = process.env.STRIPE_PRICE_ID_PREGNANCY_BASIC || process.env.VCWIEN_PRICE_ID_PREGNANCY_BASIC;
+      const PRICE_ID_FAMILY = process.env.STRIPE_PRICE_ID_FAMILY_BASIC || process.env.VCWIEN_PRICE_ID_FAMILY_BASIC;
+      const PRICE_ID_NEWBORN = process.env.STRIPE_PRICE_ID_NEWBORN_BASIC || process.env.VCWIEN_PRICE_ID_NEWBORN_BASIC;
+
+      const normalize = (s?: string) => (s || '').toLowerCase().replace(/[\u2013\u2014]/g, '-').trim();
+      const matchesPregnancy = (n: string) => {
+        const name = normalize(n);
+        return name.includes('schwangerschaft') && name.includes('basic');
+      };
+      const matchesFamily = (n: string) => normalize(n) === 'family basic' || (normalize(n).includes('family') && normalize(n).includes('basic'));
+      const matchesNewborn = (n: string) => {
+        const name = normalize(n);
+        return name.includes('newborn') && name.includes('basic');
+      };
+
+      const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = data.items.map(item => {
+        const name = item.name || item.title || '';
+        const qty = item.quantity;
+        if (PRICE_ID_PREGNANCY && matchesPregnancy(name)) {
+          return { price: PRICE_ID_PREGNANCY, quantity: qty } as Stripe.Checkout.SessionCreateParams.LineItem;
+        }
+        if (PRICE_ID_FAMILY && matchesFamily(name)) {
+          return { price: PRICE_ID_FAMILY, quantity: qty } as Stripe.Checkout.SessionCreateParams.LineItem;
+        }
+        if (PRICE_ID_NEWBORN && matchesNewborn(name)) {
+          return { price: PRICE_ID_NEWBORN, quantity: qty } as Stripe.Checkout.SessionCreateParams.LineItem;
+        }
+        // Fallback: dynamic price_data for all other items
+        return {
+          price_data: {
+            currency: 'eur',
+            product_data: {
+              name: item.name || item.title || 'Fotoshooting Gutschein',
+              description: item.description,
+            },
+            unit_amount: Math.round(item.price),
           },
-          unit_amount: Math.round(item.price), // Already in cents from frontend
-        },
-        quantity: item.quantity,
-      }));
+          quantity: item.quantity,
+        } as Stripe.Checkout.SessionCreateParams.LineItem;
+      });
 
       // Configure payment methods based on user selection
       let paymentMethodTypes: string[] = ['card']; // Default to card

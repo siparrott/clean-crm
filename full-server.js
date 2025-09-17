@@ -181,6 +181,7 @@ async function handleFilesAPI(req, res, pathname, query) {
       res.end(JSON.stringify({ error: 'Files API error' }));
       return;
 }
+  }
 
   // If no matching endpoint found
   res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -3307,18 +3308,34 @@ New Age Fotografie Team`;
               // Handle different data formats (items array or direct data)
               let lineItems = [];
               if (checkoutData.items && Array.isArray(checkoutData.items)) {
-                // New format with items array
-                lineItems = checkoutData.items.map(item => ({
-                  price_data: {
-                    currency: 'eur',
-                    product_data: {
-                      name: item.name || 'Photography Service',
-                      description: item.description || 'Professional photography service',
+                // Prefer real Stripe Prices for BASIC vouchers so product-scoped promo codes apply
+                const PRICE_ID_PREGNANCY = process.env.STRIPE_PRICE_ID_PREGNANCY_BASIC || process.env.VCWIEN_PRICE_ID_PREGNANCY_BASIC;
+                const PRICE_ID_FAMILY = process.env.STRIPE_PRICE_ID_FAMILY_BASIC || process.env.VCWIEN_PRICE_ID_FAMILY_BASIC;
+                const PRICE_ID_NEWBORN = process.env.STRIPE_PRICE_ID_NEWBORN_BASIC || process.env.VCWIEN_PRICE_ID_NEWBORN_BASIC;
+                const norm = s => (s || '').toLowerCase().replace(/[\u2013\u2014]/g, '-').trim();
+                const isPregnancy = n => { const m = norm(n); return m.includes('schwangerschaft') && m.includes('basic'); };
+                const isFamily = n => { const m = norm(n); return m.includes('family') && m.includes('basic'); };
+                const isNewborn = n => { const m = norm(n); return m.includes('newborn') && m.includes('basic'); };
+
+                lineItems = checkoutData.items.map(item => {
+                  const name = item.name || 'Photography Service';
+                  const qty = item.quantity || 1;
+                  if (PRICE_ID_PREGNANCY && isPregnancy(name)) return { price: PRICE_ID_PREGNANCY, quantity: qty };
+                  if (PRICE_ID_FAMILY && isFamily(name)) return { price: PRICE_ID_FAMILY, quantity: qty };
+                  if (PRICE_ID_NEWBORN && isNewborn(name)) return { price: PRICE_ID_NEWBORN, quantity: qty };
+                  // Fallback: dynamic price_data
+                  return ({
+                    price_data: {
+                      currency: 'eur',
+                      product_data: {
+                        name,
+                        description: item.description || 'Professional photography service',
+                      },
+                      unit_amount: item.price || 0,
                     },
-                    unit_amount: item.price || 0, // Already in cents
-                  },
-                  quantity: item.quantity || 1,
-                }));
+                    quantity: qty,
+                  });
+                });
               } else {
                 // Legacy format
                 lineItems = [{
@@ -3364,6 +3381,7 @@ New Age Fotografie Team`;
                 mode: 'payment',
                 success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
                 cancel_url: `${baseUrl}/checkout/cancel`,
+                allow_promotion_codes: true,
                 metadata: {
                   client_id: checkoutData.client_id || '',
                   invoice_id: checkoutData.invoice_id || '',
@@ -3997,5 +4015,4 @@ server.on('error', (err) => {
 
 module.exports = server;
 
-}
 
