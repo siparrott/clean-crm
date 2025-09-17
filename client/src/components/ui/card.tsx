@@ -64,3 +64,16 @@ export const CardDescription: React.FC<CardDescriptionProps> = ({ className = ''
     </p>
   );
 };
+
+interface CardFooterProps {
+  className?: string;
+  children: React.ReactNode;
+}
+
+export const CardFooter: React.FC<CardFooterProps> = ({ className = '', children }) => {
+  return (
+    <div className={`p-6 pt-0 ${className}`}>
+      {children}
+    </div>
+  );
+};
