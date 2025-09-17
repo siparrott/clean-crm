@@ -21,21 +21,36 @@ const CartPage: React.FC = () => {
   };
 
   const handleApplyVoucher = async (code: string) => {
-    const totalInCents = Math.round(total * 100);
-    const result = await VoucherService.validateVoucherCode(code, totalInCents);
-    
-    if (result.success && result.voucher && result.discount) {
-      const stripePromotionCodeId = await VoucherService.createStripePromotionCode(result.voucher.id);
-      
+    // Ask backend to validate taking into account product-specific restrictions
+    const response = await fetch('/api/vouchers/coupons/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        orderAmount: Math.round(total * 100) / 100,
+        items: items.map(i => ({
+          productId: (i as any).productId,
+          productSlug: (i as any).productSlug,
+          name: i.title || i.name,
+          price: i.price,
+          quantity: i.quantity,
+        }))
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.valid && result.coupon) {
+      const discountAmount = Math.round(parseFloat(result.coupon.discountAmount) * 100);
       setAppliedVoucher({
-        code: result.voucher.code,
-        discount: result.discount,
-        type: result.voucher.type,
-        stripePromotionCodeId: stripePromotionCodeId || undefined
+        code: result.coupon.code,
+        discount: discountAmount,
+        type: result.coupon.discountType === 'percentage' ? 'percentage' : 'fixed',
       });
+      return { success: true, discount: discountAmount, message: 'Gutscheincode erfolgreich angewendet!' };
     }
-    
-    return result;
+
+    return { success: false, message: result.error || 'Ungültiger Gutscheincode' };
   };
 
   const handleRemoveVoucher = () => {
@@ -288,7 +303,7 @@ const CartPage: React.FC = () => {
                   
                   return (
                     <button
-                      onClick={handleCheckout}
+                      onClick={() => handleCheckout()}
                       className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
                     >
                       {hasVouchers ? 'Gutschein personalisieren' : 'Zur Kasse'}

@@ -127,8 +127,11 @@ const MaternityGutscheinPage: React.FC = () => {
   ];
 
   const handleAddToCart = (pkg: typeof packages[0]) => {
+    const slug = `maternity-${pkg.title.toLowerCase()}`;
     addItem({
       title: `Schwangerschafts Fotoshooting - ${pkg.title}`,
+      name: `Schwangerschafts Fotoshooting - ${pkg.title}`,
+      productSlug: slug,
       price: pkg.price,
       quantity: 1,
       packageType: pkg.subtitle,

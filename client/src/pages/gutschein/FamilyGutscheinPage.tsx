@@ -131,6 +131,10 @@ const FamilyGutscheinPage: React.FC = () => {
 
   const handleAddToCart = (pkg: typeof packages[0]) => {
     addItem({
+      name: `Family ${pkg.title}`,
+      productSlug: pkg.title.toLowerCase().includes('basic') ? 'family-basic' : (pkg.title.toLowerCase().includes('premium') ? 'family-premium' : 'family-deluxe'),
+      // Use slug-like identifier to support product-specific coupons
+      // Note: Cart context doesn't persist productId; we embed in title for server validation via name
       title: `Familien Fotoshooting - ${pkg.title}`,
       price: pkg.price,
       quantity: 1,

@@ -58,7 +58,7 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
         body: JSON.stringify({
           items: [{
             name: `Fotoshooting Gutschein - ${voucherData.selectedDesign?.occasion || 'Personalisiert'}`,
-            price: Math.round(total * 100), // Convert to cents
+            price: Math.round(total * 100),
             quantity: 1,
             description: `Lieferung: ${voucherData.deliveryOption.name}`
           }],

@@ -3,6 +3,9 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 interface CartItem {
   id: string;
   title: string;
+  name?: string;
+  productId?: string;
+  productSlug?: string;
   price: number;
   quantity: number;
   packageType: string;

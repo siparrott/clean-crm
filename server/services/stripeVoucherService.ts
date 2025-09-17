@@ -30,6 +30,7 @@ if (!stripeSecretKey) {
 
 export interface CheckoutSessionData {
   items: Array<{
+    productId?: string;
     name?: string;
     title?: string;
     price: number;

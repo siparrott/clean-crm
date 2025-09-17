@@ -127,6 +127,8 @@ const NewbornGutscheinPage: React.FC = () => {
 
   const handleAddToCart = (pkg: typeof packages[0]) => {
     addItem({
+      name: `Newborn ${pkg.title}`,
+      productSlug: pkg.title.toLowerCase() === 'basic' ? 'newborn-basic' : (pkg.title.toLowerCase() === 'premium' ? 'newborn-premium' : 'newborn-deluxe'),
       title: `Neugeborenen Fotoshooting - ${pkg.title}`,
       price: pkg.price,
       quantity: 1,

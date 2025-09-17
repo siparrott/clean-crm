@@ -69,6 +69,7 @@ const discountCouponFormSchema = insertDiscountCouponSchema.extend({
   usageLimit: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  applicableProductSlug: z.string().optional(),
 });
 
 type VoucherProductFormData = z.infer<typeof voucherProductFormSchema>;
@@ -109,6 +110,7 @@ export default function AdminVoucherSalesPageV3() {
       discountType: "percentage",
       discountValue: "",
       isActive: true,
+      applicableProductSlug: "",
     },
   });
 
@@ -229,6 +231,7 @@ export default function AdminVoucherSalesPageV3() {
           minOrderAmount: data.minOrderAmount || undefined,
           maxDiscountAmount: data.maxDiscountAmount || undefined,
           usageLimit: data.usageLimit ? parseInt(data.usageLimit) : undefined,
+          applicableProductSlug: data.applicableProductSlug || undefined,
         }),
       });
       if (!response.ok) throw new Error("Failed to create coupon");
@@ -335,6 +338,7 @@ export default function AdminVoucherSalesPageV3() {
       startDate: coupon.startDate ? coupon.startDate.toString() : "",
       endDate: coupon.endDate ? coupon.endDate.toString() : "",
       isActive: coupon.isActive,
+      applicableProductSlug: (coupon as any).applicableProducts?.[0] || "",
     });
     setIsCouponDialogOpen(true);
   };
@@ -1224,6 +1228,7 @@ const CouponDialog: React.FC<{
   onSubmit: (data: DiscountCouponFormData) => void;
   form: any;
 }> = ({ open, onOpenChange, coupon, onSubmit, form }) => {
+  const { data: products } = useQuery<VoucherProduct[]>({ queryKey: ['/api/vouchers/products'] });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
@@ -1299,6 +1304,29 @@ const CouponDialog: React.FC<{
                 defaultValue={coupon?.minOrderAmount || ''}
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Applicable Product (optional)</Label>
+            <Select
+              value={form.watch('applicableProductSlug') || ''}
+              onValueChange={(val) => form.setValue('applicableProductSlug', val)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="All products" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All products</SelectItem>
+                {products?.map((p) => (
+                  <SelectItem key={p.id} value={(p as any).slug || (p as any).productSlug || p.name.toLowerCase().replace(/\s+/g,'-')}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+                <SelectItem value="family-basic">Family Basic</SelectItem>
+                <SelectItem value="newborn-basic">Newborn Basic</SelectItem>
+                <SelectItem value="maternity-basic">Maternity Basic</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-gray-500">Leave empty for all products. Select one to restrict the coupon.</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
