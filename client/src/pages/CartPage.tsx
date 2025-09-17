@@ -125,10 +125,16 @@ const CartPage: React.FC = () => {
 
   // Show voucher flow if a voucher item is being processed
   if (showVoucherFlow && selectedVoucherItem) {
+    const slug = (selectedVoucherItem as any).productSlug as string | undefined;
+    const initialVoucher = appliedVoucher
+      ? { code: appliedVoucher.code, discountCents: appliedVoucher.discount }
+      : undefined;
     return (
       <VoucherFlow
         voucherType={selectedVoucherItem.name}
         baseAmount={selectedVoucherItem.price}
+        productSlug={slug}
+        initialVoucher={initialVoucher}
         onComplete={handleVoucherFlowComplete}
         onBack={handleBackFromVoucherFlow}
       />

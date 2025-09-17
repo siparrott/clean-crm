@@ -5994,7 +5994,36 @@ New Age Fotografie CRM System
         return res.status(400).json({ error: "Coupon code is required" });
       }
 
-  const coupon = await storage.getDiscountCouponByCode(code);
+      const codeTrimmed = String(code).trim();
+      const codeUpper = codeTrimmed.toUpperCase();
+
+      let coupon = await storage.getDiscountCouponByCode(codeTrimmed);
+      if (!coupon) {
+        // Fallback: static promo codes (allows cart discounts even if DB not populated)
+        const STATIC_COUPONS: Record<string, any> = {
+          VCWIEN: {
+            id: "static-VCWIEN",
+            code: "VCWIEN",
+            name: "Vienna 50% Promo",
+            description: "50% off eligible voucher",
+            discountType: "percentage",
+            discountValue: "50",
+            minOrderAmount: null,
+            maxDiscountAmount: null,
+            usageLimit: null,
+            usageCount: 0,
+            startDate: null,
+            endDate: null,
+            isActive: true,
+            applicableProducts: ["maternity-basic"],
+            excludedProducts: [],
+            firstTimeCustomersOnly: false,
+          },
+        };
+        if (STATIC_COUPONS[codeUpper]) {
+          coupon = STATIC_COUPONS[codeUpper];
+        }
+      }
       
       if (!coupon) {
         return res.status(404).json({ error: "Invalid coupon code" });

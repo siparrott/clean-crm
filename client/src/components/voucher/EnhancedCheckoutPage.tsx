@@ -7,6 +7,8 @@ interface EnhancedCheckoutPageProps {
   voucherData?: VoucherPersonalizationData;
   baseAmount: number;
   onCheckout: (checkoutData: CheckoutData) => void;
+  productSlug?: string;
+  initialVoucher?: { code: string; discountCents: number };
 }
 
 interface CheckoutData {
@@ -20,7 +22,9 @@ interface CheckoutData {
 const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
   voucherData,
   baseAmount,
-  onCheckout
+  onCheckout,
+  productSlug,
+  initialVoucher
 }) => {
   const [email, setEmail] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('card');
@@ -32,10 +36,68 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
   const subtotal = baseAmount + deliveryAmount;
   const total = subtotal - discount;
 
-  const handleVoucherApplied = (code: string, discountAmount: number) => {
-    setAppliedVoucherCode(code);
-    setDiscount(discountAmount);
-    setShowVoucherInput(false);
+  // Prefill from cart-applied voucher if provided
+  useEffect(() => {
+    if (initialVoucher && initialVoucher.code) {
+      setAppliedVoucherCode(initialVoucher.code);
+      setDiscount(Math.max(0, (initialVoucher.discountCents || 0) / 100));
+      setShowVoucherInput(false);
+    }
+  }, [initialVoucher]);
+
+  // Map productSlug to a clear product name for Stripe line item naming/matching
+  const productNameFromSlug = (slug?: string): string | undefined => {
+    if (!slug) return undefined;
+    const s = slug.toLowerCase();
+    if (s.startsWith('maternity-')) {
+      const tier = s.split('-')[1] || '';
+      const cap = tier.charAt(0).toUpperCase() + tier.slice(1);
+      return `Schwangerschafts Fotoshooting - ${cap}`;
+    }
+    if (s.startsWith('family-')) {
+      const tier = s.split('-')[1] || '';
+      const cap = tier.charAt(0).toUpperCase() + tier.slice(1);
+      return `Family Fotoshooting - ${cap}`;
+    }
+    if (s.startsWith('newborn-')) {
+      const tier = s.split('-')[1] || '';
+      const cap = tier.charAt(0).toUpperCase() + tier.slice(1);
+      return `Newborn Fotoshooting - ${cap}`;
+    }
+    return undefined;
+  };
+
+  // Backend validation for voucher codes using product context
+  const applyVoucherViaBackend = async (code: string): Promise<{ success: boolean; discount?: number; message: string }> => {
+    try {
+      const response = await fetch('/api/vouchers/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          orderAmount: Math.round(subtotal * 100) / 100,
+          items: [
+            {
+              productSlug: productSlug,
+              name: productNameFromSlug(productSlug) || `Fotoshooting Gutschein - ${voucherData?.selectedDesign?.occasion || 'Personalisiert'}`,
+              price: baseAmount,
+              quantity: 1,
+            },
+          ],
+        }),
+      });
+      const result = await response.json();
+      if (response.ok && result.valid && result.coupon) {
+        const discountAmount = Math.round(parseFloat(result.coupon.discountAmount) * 100);
+        setAppliedVoucherCode(result.coupon.code);
+        setDiscount(discountAmount / 100);
+        setShowVoucherInput(false);
+        return { success: true, discount: discountAmount, message: 'Gutscheincode erfolgreich angewendet!' };
+      }
+      return { success: false, message: result.error || 'Ungültiger Gutscheincode' };
+    } catch (err) {
+      return { success: false, message: 'Validierung fehlgeschlagen. Bitte erneut versuchen.' };
+    }
   };
 
   const handleVoucherRemoved = () => {
@@ -57,7 +119,7 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
         },
         body: JSON.stringify({
           items: [{
-            name: `Fotoshooting Gutschein - ${voucherData.selectedDesign?.occasion || 'Personalisiert'}`,
+            name: productNameFromSlug(productSlug) || `Fotoshooting Gutschein - ${voucherData.selectedDesign?.occasion || 'Personalisiert'}`,
             price: Math.round(total * 100),
             quantity: 1,
             description: `Lieferung: ${voucherData.deliveryOption.name}`
@@ -322,7 +384,7 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
                 {showVoucherInput && !appliedVoucherCode && (
                   <div className="mt-3">
                     <VoucherCodeInput
-                      onVoucherApplied={handleVoucherApplied}
+                      onApplyVoucher={async (code) => applyVoucherViaBackend(code)}
                       subtotal={subtotal}
                     />
                   </div>

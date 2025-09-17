@@ -8,6 +8,8 @@ interface VoucherFlowProps {
   baseAmount: number;
   onComplete: (checkoutData: any) => void;
   onBack?: () => void;
+  productSlug?: string;
+  initialVoucher?: { code: string; discountCents: number };
 }
 
 type FlowStep = 'personalization' | 'checkout' | 'confirmation';
@@ -16,7 +18,9 @@ const VoucherFlow: React.FC<VoucherFlowProps> = ({
   voucherType,
   baseAmount,
   onComplete,
-  onBack
+  onBack,
+  productSlug,
+  initialVoucher,
 }) => {
   // Use sessionStorage to persist voucher flow state
   const getStoredStep = (): FlowStep => {
@@ -148,6 +152,8 @@ const VoucherFlow: React.FC<VoucherFlowProps> = ({
         <EnhancedCheckoutPage
           voucherData={voucherData}
           baseAmount={baseAmount}
+          productSlug={productSlug}
+          initialVoucher={initialVoucher}
           onCheckout={handleCheckoutComplete}
         />
       )}
