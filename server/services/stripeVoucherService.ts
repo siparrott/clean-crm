@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { findCoupon, allowsSku, isCouponActive } from './coupons';
 import { VoucherGenerationService, GeneratedVoucher } from './voucherGenerationService';
 
 // Check if Stripe key is properly configured
@@ -182,10 +183,9 @@ export class StripeVoucherService {
       const successUrl = data.successUrl || `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = data.cancelUrl || `${baseUrl}/cart`;
 
-      // Prepare coupons from env and pick any matching the applied code (server-side authority)
-      const coupons = this.parseCustomCoupons();
-      const appliedCode = data.appliedVoucherCode?.toUpperCase();
-      const matchedCoupon = appliedCode ? coupons.find(c => c.code === appliedCode) : undefined;
+  // Use live-reloading coupons service to find a matching custom coupon
+  const appliedCode = data.appliedVoucherCode?.toUpperCase();
+  const matchedCoupon = appliedCode ? findCoupon(appliedCode) : null;
 
       // If a custom coupon applies, compute discounted unit amounts per applicable SKU and always use dynamic price_data
       const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = data.items.map(item => {
@@ -194,12 +194,13 @@ export class StripeVoucherService {
         const baseCents = Math.max(0, Math.round(Number(item.price) || 0));
         let unitCents = baseCents;
 
-        if (matchedCoupon) {
-          const skuRaw = item.sku || this.deriveSkuFromName(name);
-          const sku = skuRaw ? String(skuRaw).toLowerCase() : undefined;
-          const allowed = !matchedCoupon.skus || matchedCoupon.skus.length === 0 || (sku && matchedCoupon.skus.includes(sku));
-          if (allowed) {
-            unitCents = this.applyCustomCouponToAmount(baseCents, matchedCoupon);
+        if (matchedCoupon && isCouponActive(matchedCoupon)) {
+          const sku = item.sku || this.deriveSkuFromName(name);
+          if (allowsSku(matchedCoupon as any, sku)) {
+            unitCents = this.applyCustomCouponToAmount(baseCents, {
+              type: matchedCoupon.type === 'amount' ? 'amount' : 'percent',
+              value: matchedCoupon.value,
+            });
           }
         }
 

@@ -60,6 +60,7 @@ import galleryShopRouter from './routes/gallery-shop';
 import authRoutes from './routes/auth';
 import filesRouter from './routes/files';
 import { sessionConfig, requireAuth, requireAdmin } from './auth';
+import { findCoupon, isCouponActive, allowsSku, forceRefreshCoupons } from './services/coupons';
 
 // Modern PDF invoice generator with actual logo and all required sections
 async function generateModernInvoicePDF(invoice: any, client: any): Promise<Buffer> {
@@ -5997,29 +5998,8 @@ New Age Fotografie CRM System
       const codeTrimmed = String(code).trim();
       const codeUpper = codeTrimmed.toUpperCase();
 
-      // First: env-driven custom coupons (COUPONS_JSON)
-  type EnvCoupon = { code: string; type: 'percent' | 'amount'; value: number; skus?: string[] };
-      const parseEnvCoupons = (): EnvCoupon[] => {
-        try {
-          const raw = process.env.COUPONS_JSON;
-          if (!raw) return [];
-          const parsed = JSON.parse(raw);
-          if (!Array.isArray(parsed)) return [];
-          return parsed
-            .filter((c: any) => c && typeof c.code === 'string')
-            .map((c: any) => ({
-              code: String(c.code).toUpperCase(),
-              type: (String(c.type).toLowerCase() === 'amount' ? 'amount' : 'percent') as 'percent' | 'amount',
-              value: Number(c.value) || 0,
-              skus: Array.isArray(c.skus) ? c.skus.map((s: any) => String(s).toLowerCase()) : undefined,
-            }));
-        } catch {
-          return [];
-        }
-      };
-
-      const envCoupons = parseEnvCoupons();
-      const envCoupon = envCoupons.find(c => c.code === codeUpper);
+      // First: env-driven custom coupons (COUPONS_JSON) via coupons service
+      const envCoupon = findCoupon(codeUpper);
 
       let coupon = null as any;
       if (!envCoupon) {
@@ -6058,12 +6038,15 @@ New Age Fotografie CRM System
 
       // Determine applicable subtotal and discount
       if (envCoupon) {
+        if (!isCouponActive(envCoupon)) {
+          return res.status(400).json({ error: 'Coupon is not active', valid: false });
+        }
         // Calculate in cents; item.price expected in euros
         let applicableSubtotalCents = 0;
         if (Array.isArray(items) && items.length > 0) {
           for (const it of items) {
-            const sku = (it.sku || it.productSlug || '').toString().toLowerCase();
-            const matches = !envCoupon.skus || envCoupon.skus.length === 0 || (!!sku && envCoupon.skus.includes(sku));
+            const sku = (it.sku || it.productSlug || '').toString();
+            const matches = allowsSku(envCoupon, sku);
             if (matches) {
               const lineTotalCents = Math.round((Number(it.price) || 0) * 100) * (Number(it.quantity) || 1);
               applicableSubtotalCents += Math.max(0, lineTotalCents);
@@ -6143,6 +6126,20 @@ New Age Fotografie CRM System
     } catch (error) {
       console.error("Error validating coupon:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Optional: secure admin endpoint to force refresh coupons after Heroku config change
+  app.post("/__admin/refresh-coupons", async (req: Request, res: Response) => {
+    try {
+      const token = (req.headers["x-admin-token"] as string) || '';
+      if (token !== process.env.ADMIN_TOKEN) {
+        return res.status(401).json({ ok: false });
+      }
+      const count = forceRefreshCoupons();
+      return res.json({ ok: true, reloaded: count });
+    } catch (e) {
+      return res.status(500).json({ ok: false });
     }
   });
 
