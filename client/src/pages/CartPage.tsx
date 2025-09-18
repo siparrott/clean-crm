@@ -31,6 +31,7 @@ const CartPage: React.FC = () => {
         items: items.map(i => ({
           productId: (i as any).productId,
           productSlug: (i as any).productSlug,
+          sku: (i as any).sku || (i as any).productSlug,
           name: i.title || i.name,
           price: i.price,
           quantity: i.quantity,

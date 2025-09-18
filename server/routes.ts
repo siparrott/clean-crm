@@ -5986,8 +5986,8 @@ New Age Fotografie CRM System
     try {
       const { code, orderAmount, items } = req.body as {
         code: string;
-        orderAmount?: number | string;
-        items?: Array<{ productId?: string; productSlug?: string; name?: string; price: number; quantity: number }>;
+        orderAmount?: number | string; // in euros
+        items?: Array<{ productId?: string; productSlug?: string; sku?: string; name?: string; price: number; quantity: number }>;
       };
       
       if (!code) {
@@ -5997,35 +5997,36 @@ New Age Fotografie CRM System
       const codeTrimmed = String(code).trim();
       const codeUpper = codeTrimmed.toUpperCase();
 
-      let coupon = await storage.getDiscountCouponByCode(codeTrimmed);
-      if (!coupon) {
-        // Fallback: static promo codes (allows cart discounts even if DB not populated)
-        const STATIC_COUPONS: Record<string, any> = {
-          VCWIEN: {
-            id: "static-VCWIEN",
-            code: "VCWIEN",
-            name: "Vienna 50% Promo",
-            description: "50% off eligible voucher",
-            discountType: "percentage",
-            discountValue: "50",
-            minOrderAmount: null,
-            maxDiscountAmount: null,
-            usageLimit: null,
-            usageCount: 0,
-            startDate: null,
-            endDate: null,
-            isActive: true,
-            applicableProducts: ["maternity-basic"],
-            excludedProducts: [],
-            firstTimeCustomersOnly: false,
-          },
-        };
-        if (STATIC_COUPONS[codeUpper]) {
-          coupon = STATIC_COUPONS[codeUpper];
+      // First: env-driven custom coupons (COUPONS_JSON)
+  type EnvCoupon = { code: string; type: 'percent' | 'amount'; value: number; skus?: string[] };
+      const parseEnvCoupons = (): EnvCoupon[] => {
+        try {
+          const raw = process.env.COUPONS_JSON;
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) return [];
+          return parsed
+            .filter((c: any) => c && typeof c.code === 'string')
+            .map((c: any) => ({
+              code: String(c.code).toUpperCase(),
+              type: (String(c.type).toLowerCase() === 'amount' ? 'amount' : 'percent') as 'percent' | 'amount',
+              value: Number(c.value) || 0,
+              skus: Array.isArray(c.skus) ? c.skus.map((s: any) => String(s).toLowerCase()) : undefined,
+            }));
+        } catch {
+          return [];
         }
+      };
+
+      const envCoupons = parseEnvCoupons();
+      const envCoupon = envCoupons.find(c => c.code === codeUpper);
+
+      let coupon = null as any;
+      if (!envCoupon) {
+        coupon = await storage.getDiscountCouponByCode(codeTrimmed);
       }
       
-      if (!coupon) {
+      if (!envCoupon && !coupon) {
         return res.status(404).json({ error: "Invalid coupon code" });
       }
 
@@ -6033,30 +6034,68 @@ New Age Fotografie CRM System
       const now = new Date();
       const errors = [];
 
-      if (!coupon.isActive) {
-        errors.push("Coupon is not active");
-      }
-
-      if (coupon.startDate && new Date(coupon.startDate) > now) {
-        errors.push("Coupon is not yet valid");
-      }
-
-      if (coupon.endDate && new Date(coupon.endDate) < now) {
-        errors.push("Coupon has expired");
-      }
-
-      if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
-        errors.push("Coupon usage limit reached");
-      }
-
-      if (coupon.minOrderAmount && orderAmount && parseFloat(String(orderAmount)) < parseFloat(String(coupon.minOrderAmount))) {
-        errors.push(`Minimum order amount is €${coupon.minOrderAmount}`);
+      if (!envCoupon && coupon) {
+        if (!coupon.isActive) {
+          errors.push("Coupon is not active");
+        }
+        if (coupon.startDate && new Date(coupon.startDate) > now) {
+          errors.push("Coupon is not yet valid");
+        }
+        if (coupon.endDate && new Date(coupon.endDate) < now) {
+          errors.push("Coupon has expired");
+        }
+        if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
+          errors.push("Coupon usage limit reached");
+        }
+        if (coupon.minOrderAmount && orderAmount && parseFloat(String(orderAmount)) < parseFloat(String(coupon.minOrderAmount))) {
+          errors.push(`Minimum order amount is €${coupon.minOrderAmount}`);
+        }
       }
 
       if (errors.length > 0) {
         return res.status(400).json({ error: errors.join(", "), valid: false });
       }
 
+      // Determine applicable subtotal and discount
+      if (envCoupon) {
+        // Calculate in cents; item.price expected in euros
+        let applicableSubtotalCents = 0;
+        if (Array.isArray(items) && items.length > 0) {
+          for (const it of items) {
+            const sku = (it.sku || it.productSlug || '').toString().toLowerCase();
+            const matches = !envCoupon.skus || envCoupon.skus.length === 0 || (!!sku && envCoupon.skus.includes(sku));
+            if (matches) {
+              const lineTotalCents = Math.round((Number(it.price) || 0) * 100) * (Number(it.quantity) || 1);
+              applicableSubtotalCents += Math.max(0, lineTotalCents);
+            }
+          }
+        } else {
+          applicableSubtotalCents = Math.max(0, Math.round((Number(orderAmount) || 0) * 100));
+        }
+
+        let discountCents = 0;
+        if (envCoupon.type === 'percent') {
+          const pct = Math.max(0, Math.min(100, envCoupon.value));
+          discountCents = Math.round((applicableSubtotalCents * pct) / 100);
+        } else {
+          discountCents = Math.min(applicableSubtotalCents, Math.max(0, Math.round(envCoupon.value)));
+        }
+
+        return res.json({
+          valid: true,
+          coupon: {
+            id: envCoupon.code,
+            code: envCoupon.code,
+            name: envCoupon.code,
+            discountType: envCoupon.type === 'percent' ? 'percentage' : 'fixed',
+            discountValue: envCoupon.value,
+            discountAmount: (discountCents / 100).toFixed(2),
+            applicableProducts: envCoupon.skus || ['all']
+          }
+        });
+      }
+
+      // Fallback: DB coupons flow (legacy)
       // Determine applicable subtotal: restrict to applicableProducts if provided
       let applicableSubtotal = 0;
       const allProducts = !coupon.applicableProducts || coupon.applicableProducts.length === 0 || coupon.applicableProducts.includes('all');
@@ -6075,23 +6114,21 @@ New Age Fotografie CRM System
           }
         }
       } else {
-        applicableSubtotal = parseFloat((orderAmount as any) || "0");
+        applicableSubtotal = parseFloat((orderAmount as any) || '0');
       }
 
-      // Calculate discount against applicable subtotal
       let discountAmount = 0;
-      if (coupon.discountType === "percentage") {
+      if (coupon.discountType === 'percentage') {
         discountAmount = (applicableSubtotal * parseFloat(coupon.discountValue)) / 100;
         if (coupon.maxDiscountAmount) {
           discountAmount = Math.min(discountAmount, parseFloat(coupon.maxDiscountAmount));
         }
       } else {
         discountAmount = parseFloat(coupon.discountValue);
-        // Cap fixed amount to applicable subtotal
         discountAmount = Math.min(discountAmount, applicableSubtotal);
       }
 
-      res.json({
+      return res.json({
         valid: true,
         coupon: {
           id: coupon.id,

@@ -106,6 +106,41 @@ This application uses PostgreSQL. For production, we recommend [Neon](https://ne
 | `STRIPE_SECRET_KEY` | ⚠️ | For payment processing |
 | `VITE_STRIPE_PUBLIC_KEY` | ⚠️ | Stripe public key (frontend) |
 
+## Custom Voucher Coupons (Server-side)
+
+You can define custom coupon codes that are validated on the server and applied directly to the Stripe Checkout prices (no Stripe promotion codes used). Configure them via the `COUPONS_JSON` environment variable.
+
+Schema (JSON array):
+- code: string (case-insensitive)
+- type: "percent" | "amount" (amount is in cents)
+- value: number (percent 0-100, or amount in cents)
+- skus: optional array of strings; only items whose `sku` (or `productSlug`) matches will be discounted. Matching is case-insensitive.
+
+Example JSON:
+[
+	{ "code": "VCWIEN", "type": "percent", "value": 20, "skus": ["maternity-basic", "family-basic", "newborn-basic"] },
+	{ "code": "FAM20",  "type": "amount",  "value": 2000, "skus": ["family-basic"] },
+	{ "code": "NEWB95", "type": "percent", "value": 15, "skus": ["newborn-basic"] }
+]
+
+Heroku CLI (PowerShell) examples:
+
+Show current codes:
+
+```powershell
+heroku config:get COUPONS_JSON
+```
+
+Publish new set of codes (use a single-line JSON string; no comments):
+
+```powershell
+heroku config:set COUPONS_JSON='[{"code":"VCWIEN","type":"percent","value":20,"skus":["maternity-basic","family-basic","newborn-basic"]},{"code":"FAM20","type":"amount","value":2000,"skus":["family-basic"]},{"code":"NEWB95","type":"percent","value":15,"skus":["newborn-basic"]}]'
+```
+
+Notes:
+- The validator endpoint `/api/vouchers/coupons/validate` uses `COUPONS_JSON` first. If no match is found, it falls back to DB coupons (legacy).
+- During Stripe session creation, if a matching custom coupon is present, the server recalculates discounted unit amounts and disables Stripe promo codes at checkout.
+- Client sends an `sku` per voucher item (defaults to `productSlug`) to ensure accurate coupon targeting.
 ## 🔒 Security
 
 - Session-based authentication

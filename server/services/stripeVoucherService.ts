@@ -31,6 +31,7 @@ if (!stripeSecretKey) {
 export interface CheckoutSessionData {
   items: Array<{
     productId?: string;
+    sku?: string;
     name?: string;
     title?: string;
     price: number;
@@ -46,7 +47,7 @@ export interface CheckoutSessionData {
   customerEmail?: string;
   voucherData?: any; // Voucher personalization data
   appliedVoucherCode?: string;
-  discount?: number;
+  discount?: number; // ignored in favor of server-side coupon calc
   mode?: string;
   paymentMethod?: string; // 'paypal', 'card', 'sofort'
   successUrl?: string;
@@ -54,6 +55,55 @@ export interface CheckoutSessionData {
 }
 
 export class StripeVoucherService {
+  private static parseCustomCoupons(): Array<{
+    code: string;
+    type: 'percent' | 'amount';
+    value: number; // percent value or amount in cents
+    skus?: string[];
+  }> {
+    try {
+      const raw = process.env.COUPONS_JSON;
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((c: any) => c && typeof c.code === 'string')
+        .map((c: any) => ({
+          code: String(c.code).toUpperCase(),
+          type: (String(c.type).toLowerCase() === 'amount' ? 'amount' : 'percent') as 'percent' | 'amount',
+          value: Number(c.value) || 0,
+          skus: Array.isArray(c.skus) ? c.skus.map((s: any) => String(s).toLowerCase()) : undefined,
+        }));
+    } catch {
+      return [];
+    }
+  }
+
+  private static deriveSkuFromName(name?: string): string | undefined {
+    if (!name) return undefined;
+    const n = name.toLowerCase();
+    if (n.includes('schwangerschaft') && n.includes('basic')) return 'Maternity-Basic';
+    if (n.includes('family') && n.includes('basic')) return 'Family-Basic';
+    if (n.includes('newborn') && n.includes('basic')) return 'Newborn-Basic';
+    if (n.includes('schwangerschaft') && n.includes('premium')) return 'Maternity-Premium';
+    if (n.includes('family') && n.includes('premium')) return 'Family-Premium';
+    if (n.includes('newborn') && n.includes('premium')) return 'Newborn-Premium';
+    if (n.includes('schwangerschaft') && n.includes('deluxe')) return 'Maternity-Deluxe';
+    if (n.includes('family') && n.includes('deluxe')) return 'Family-Deluxe';
+    if (n.includes('newborn') && n.includes('deluxe')) return 'Newborn-Deluxe';
+    return undefined;
+  }
+
+  private static applyCustomCouponToAmount(
+    baseCents: number,
+    coupon: { type: 'percent' | 'amount'; value: number }
+  ): number {
+    if (coupon.type === 'percent') {
+      const pct = Math.max(0, Math.min(100, coupon.value));
+      return Math.max(0, Math.round((baseCents * (100 - pct)) / 100));
+    }
+    return Math.max(0, baseCents - Math.max(0, Math.round(coupon.value)));
+  }
   
   /**
    * Create a Stripe coupon for a voucher code
@@ -132,45 +182,37 @@ export class StripeVoucherService {
       const successUrl = data.successUrl || `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = data.cancelUrl || `${baseUrl}/cart`;
 
-      // Prefer preconfigured Stripe Prices for specific Basic vouchers so promotion codes scoped by product apply
-      const PRICE_ID_PREGNANCY = process.env.STRIPE_PRICE_ID_PREGNANCY_BASIC || process.env.VCWIEN_PRICE_ID_PREGNANCY_BASIC;
-      const PRICE_ID_FAMILY = process.env.STRIPE_PRICE_ID_FAMILY_BASIC || process.env.VCWIEN_PRICE_ID_FAMILY_BASIC;
-      const PRICE_ID_NEWBORN = process.env.STRIPE_PRICE_ID_NEWBORN_BASIC || process.env.VCWIEN_PRICE_ID_NEWBORN_BASIC;
+      // Prepare coupons from env and pick any matching the applied code (server-side authority)
+      const coupons = this.parseCustomCoupons();
+      const appliedCode = data.appliedVoucherCode?.toUpperCase();
+      const matchedCoupon = appliedCode ? coupons.find(c => c.code === appliedCode) : undefined;
 
-      const normalize = (s?: string) => (s || '').toLowerCase().replace(/[\u2013\u2014]/g, '-').trim();
-      const matchesPregnancy = (n: string) => {
-        const name = normalize(n);
-        return name.includes('schwangerschaft') && name.includes('basic');
-      };
-      const matchesFamily = (n: string) => normalize(n) === 'family basic' || (normalize(n).includes('family') && normalize(n).includes('basic'));
-      const matchesNewborn = (n: string) => {
-        const name = normalize(n);
-        return name.includes('newborn') && name.includes('basic');
-      };
-
+      // If a custom coupon applies, compute discounted unit amounts per applicable SKU and always use dynamic price_data
       const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = data.items.map(item => {
-        const name = item.name || item.title || '';
-        const qty = item.quantity;
-        if (PRICE_ID_PREGNANCY && matchesPregnancy(name)) {
-          return { price: PRICE_ID_PREGNANCY, quantity: qty } as Stripe.Checkout.SessionCreateParams.LineItem;
+        const name = item.name || item.title || 'Fotoshooting Gutschein';
+        const qty = Math.max(1, Number(item.quantity) || 1);
+        const baseCents = Math.max(0, Math.round(Number(item.price) || 0));
+        let unitCents = baseCents;
+
+        if (matchedCoupon) {
+          const skuRaw = item.sku || this.deriveSkuFromName(name);
+          const sku = skuRaw ? String(skuRaw).toLowerCase() : undefined;
+          const allowed = !matchedCoupon.skus || matchedCoupon.skus.length === 0 || (sku && matchedCoupon.skus.includes(sku));
+          if (allowed) {
+            unitCents = this.applyCustomCouponToAmount(baseCents, matchedCoupon);
+          }
         }
-        if (PRICE_ID_FAMILY && matchesFamily(name)) {
-          return { price: PRICE_ID_FAMILY, quantity: qty } as Stripe.Checkout.SessionCreateParams.LineItem;
-        }
-        if (PRICE_ID_NEWBORN && matchesNewborn(name)) {
-          return { price: PRICE_ID_NEWBORN, quantity: qty } as Stripe.Checkout.SessionCreateParams.LineItem;
-        }
-        // Fallback: dynamic price_data for all other items
+
         return {
           price_data: {
             currency: 'eur',
             product_data: {
-              name: item.name || item.title || 'Fotoshooting Gutschein',
+              name,
               description: item.description,
             },
-            unit_amount: Math.round(item.price),
+            unit_amount: unitCents,
           },
-          quantity: item.quantity,
+          quantity: qty,
         } as Stripe.Checkout.SessionCreateParams.LineItem;
       });
 
@@ -201,53 +243,12 @@ export class StripeVoucherService {
           allowed_countries: ['DE', 'AT', 'CH'],
         },
         billing_address_collection: 'required',
-        // Allow promotion codes to be entered in Stripe checkout
-        allow_promotion_codes: true,
+  // Never allow Stripe promo codes; prices are pre-discounted server-side
+  allow_promotion_codes: false,
         locale: 'de',
       };
 
-      // Handle voucher code discount
-      if (data.appliedVoucherCode && data.discount && data.discount > 0) {
-        try {
-          // Try to create or retrieve coupon for the discount
-          const coupon = await stripe.coupons.create({
-            id: `voucher_${data.appliedVoucherCode}_${Date.now()}`,
-            name: `Gutschein: ${data.appliedVoucherCode}`,
-            amount_off: Math.round(data.discount), // Already in cents
-            currency: 'eur',
-            duration: 'once',
-          });
-          sessionParams.discounts = [{ coupon: coupon.id }];
-        } catch (error) {
-          console.warn('Could not apply voucher discount:', error);
-        }
-      }
-
-      // If a voucher is pre-applied via the old method
-      if (data.appliedVoucher) {
-        try {
-          if (data.appliedVoucher.type === 'percentage') {
-            const coupon = await stripe.coupons.create({
-              id: `voucher_${data.appliedVoucher.code}_${Date.now()}`,
-              name: `Gutschein: ${data.appliedVoucher.code}`,
-              percent_off: data.appliedVoucher.discount,
-              duration: 'once',
-            });
-            sessionParams.discounts = [{ coupon: coupon.id }];
-          } else {
-            const coupon = await stripe.coupons.create({
-              id: `voucher_${data.appliedVoucher.code}_${Date.now()}`,
-              name: `Gutschein: ${data.appliedVoucher.code}`,
-              amount_off: data.appliedVoucher.discount,
-              currency: 'eur',
-              duration: 'once',
-            });
-            sessionParams.discounts = [{ coupon: coupon.id }];
-          }
-        } catch (error) {
-          console.warn('Could not apply voucher discount:', error);
-        }
-      }
+      // Never attach Stripe discounts when using custom coupons
 
       // Add metadata for tracking
       sessionParams.metadata = {

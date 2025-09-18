@@ -79,6 +79,7 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
           items: [
             {
               productSlug: productSlug,
+              sku: productSlug,
               name: productNameFromSlug(productSlug) || `Fotoshooting Gutschein - ${voucherData?.selectedDesign?.occasion || 'Personalisiert'}`,
               price: baseAmount,
               quantity: 1,
@@ -120,8 +121,9 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
         body: JSON.stringify({
           items: [{
             name: productNameFromSlug(productSlug) || `Fotoshooting Gutschein - ${voucherData.selectedDesign?.occasion || 'Personalisiert'}`,
-            price: Math.round(total * 100),
+            price: Math.round(subtotal * 100),
             quantity: 1,
+            sku: productSlug,
             description: `Lieferung: ${voucherData.deliveryOption.name}`
           }],
           customerEmail: email.trim(),
