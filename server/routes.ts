@@ -53,6 +53,7 @@ const z = { ZodError: class {} } as any;
 import fs from 'fs';
 import Stripe from 'stripe';
 import nodemailer from 'nodemailer';
+import PDFDocument from 'pdfkit';
 import { jsPDF } from 'jspdf';
 import OpenAI from 'openai';
 import websiteWizardRoutes from './routes/website-wizard';
@@ -6175,6 +6176,96 @@ New Age Fotografie CRM System
     } catch (error) {
       console.error("Error updating voucher sale:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ========= Voucher PDF Generation (no webhook required) =========
+  app.get('/voucher/pdf', async (req: Request, res: Response) => {
+    try {
+      const sessionId = String(req.query.session_id || '').trim();
+      if (!sessionId) return res.status(400).send('Missing session_id');
+
+      const { StripeVoucherService } = await import('./services/stripeVoucherService');
+      const stripeSession = await StripeVoucherService.retrieveSession(sessionId);
+
+      // We need the payment_status; if not present, re-fetch with expand
+      let isPaid = (stripeSession as any).payment_status === 'paid';
+      let session = stripeSession as any;
+      if (!isPaid) {
+        const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+        if (!stripeSecretKey) return res.status(500).send('Stripe not configured');
+        const StripeLib = (await import('stripe')).default;
+        const stripe = new StripeLib(stripeSecretKey, { apiVersion: '2025-08-27.basil' });
+        session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['payment_intent'] });
+        isPaid = session?.payment_status === 'paid';
+      }
+
+      if (!isPaid) return res.status(402).send('Payment not completed yet');
+
+      const m = session.metadata || {};
+      const sku = m.sku || 'Voucher';
+      const name = m.recipient_name || 'Beschenkte/r';
+      const from = m.from_name || '—';
+      const note = m.message || '';
+      const vId = m.voucher_id || session.id;
+      const exp = m.expiry_date || '12 Monate ab Kaufdatum';
+      const titleMap: Record<string, string> = {
+        'Maternity-Basic': 'Schwangerschafts Fotoshooting - Basic',
+        'Family-Basic': 'Family Fotoshooting - Basic',
+        'Newborn-Basic': 'Newborn Fotoshooting - Basic',
+        'Maternity-Premium': 'Schwangerschafts Fotoshooting - Premium',
+        'Family-Premium': 'Family Fotoshooting - Premium',
+        'Newborn-Premium': 'Newborn Fotoshooting - Premium',
+        'Maternity-Deluxe': 'Schwangerschafts Fotoshooting - Deluxe',
+        'Family-Deluxe': 'Family Fotoshooting - Deluxe',
+        'Newborn-Deluxe': 'Newborn Fotoshooting - Deluxe',
+      };
+      const title = titleMap[String(sku)] || 'Gutschein';
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${vId}.pdf"`);
+
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      doc.pipe(res);
+
+      doc.fontSize(22).text('New Age Fotografie', { align: 'right' });
+      doc.moveDown(0.5);
+      doc.fontSize(12).text('www.newagefotografie.com', { align: 'right' });
+      doc.moveDown(1.5);
+
+      doc.fontSize(26).text('PERSONALISIERTER GUTSCHEIN', { align: 'left' });
+      doc.moveDown(0.5);
+
+      doc.fontSize(18).text(title);
+      doc.moveDown(0.5);
+      doc.fontSize(12).text(`Gutschein-ID: ${vId}`);
+      doc.text(`SKU: ${sku}`);
+      doc.text(`Empfänger/in: ${name}`);
+      doc.text(`Von: ${from}`);
+      doc.text(`Gültig bis: ${exp}`);
+      doc.moveDown(0.5);
+
+      if (note) {
+        doc.fontSize(12).text('Nachricht:', { underline: true });
+        doc.moveDown(0.2);
+        doc.fontSize(12).text(note, { align: 'left' });
+        doc.moveDown(0.8);
+      }
+
+      doc.moveDown(1);
+      doc.fontSize(10).text(
+        'Einlösbar für die oben genannte Leistung in unserem Studio. ' +
+        'Nicht bar auszahlbar. Termin nach Verfügbarkeit. Bitte zur Einlösung Gutschein-ID angeben.',
+        { align: 'justify' }
+      );
+
+      doc.moveDown(2);
+      const paid = ((session.amount_total || 0) / 100).toFixed(2) + ' ' + String(session.currency || 'EUR').toUpperCase();
+      doc.fontSize(10).text(`Belegt durch Zahlung: ${paid} | Datum: ${new Date((session.created || Date.now()/1000)*1000).toLocaleDateString()}`);
+      doc.end();
+    } catch (e) {
+      console.error('Voucher PDF generation failed', e);
+      res.status(500).send('Failed to generate PDF');
     }
   });
 

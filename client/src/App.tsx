@@ -65,6 +65,7 @@ import WebsiteWizard from './pages/admin/WebsiteWizard';
 import PriceListSettingsPage from './pages/admin/settings/PriceListSettingsPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import NeonProtectedRoute from './components/auth/NeonProtectedRoute';
+import VoucherThankYouPage from './pages/VoucherThankYouPage';
 import CartPage from './pages/CartPage';
 import FamilyGutscheinPage from './pages/gutschein/FamilyGutscheinPage';
 import NewbornGutscheinPage from './pages/gutschein/NewbornGutscheinPage';
@@ -101,6 +102,7 @@ function App() {
                 <Route path="/gutschein/family" element={<FamilyGutscheinPage />} />
                 <Route path="/gutschein/newborn" element={<NewbornGutscheinPage />} />
                 <Route path="/gutschein/maternity" element={<MaternityGutscheinPage />} />
+                <Route path="/voucher/thank-you" element={<VoucherThankYouPage />} />
                 <Route path="/blog" element={<BlogPage />} />
                 <Route path="/blog/:slug" element={<BlogPostPage />} />
                 <Route path="/warteliste" element={<WartelistePage />} />

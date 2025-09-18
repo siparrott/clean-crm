@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { findCoupon, allowsSku, isCouponActive } from './coupons';
+import { v4 as uuidv4 } from 'uuid';
 import { VoucherGenerationService, GeneratedVoucher } from './voucherGenerationService';
 
 // Check if Stripe key is properly configured
@@ -178,16 +179,25 @@ export class StripeVoucherService {
     }
 
     try {
-      // Set default URLs if not provided
-      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      const successUrl = data.successUrl || `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = data.cancelUrl || `${baseUrl}/cart`;
+  // Set default URLs if not provided
+  const siteBase = process.env.SITE_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+  const voucherSuccess = `${siteBase}/voucher/thank-you?session_id={CHECKOUT_SESSION_ID}`;
+  const defaultSuccess = `${siteBase}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
+  const successUrl = data.mode === 'voucher' ? voucherSuccess : (data.successUrl || defaultSuccess);
+  const cancelUrl = data.cancelUrl || `${siteBase}/cart`;
 
   // Use live-reloading coupons service to find a matching custom coupon
   const appliedCode = data.appliedVoucherCode?.toUpperCase();
   const matchedCoupon = appliedCode ? findCoupon(appliedCode) : null;
 
       // If a custom coupon applies, compute discounted unit amounts per applicable SKU and always use dynamic price_data
+      // Precompute SKU and discount delta for first item (voucher flow is single-item)
+      const primary = data.items[0];
+      const primaryName = primary?.name || primary?.title || 'Fotoshooting Gutschein';
+      const primarySku = primary?.sku || this.deriveSkuFromName(primaryName);
+      const basePrimaryCents = Math.max(0, Math.round(Number(primary?.price || 0)));
+      let discountedPrimaryCents = basePrimaryCents;
+
       const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = data.items.map(item => {
         const name = item.name || item.title || 'Fotoshooting Gutschein';
         const qty = Math.max(1, Number(item.quantity) || 1);
@@ -202,6 +212,10 @@ export class StripeVoucherService {
               value: matchedCoupon.value,
             });
           }
+        }
+
+        if (item === primary) {
+          discountedPrimaryCents = unitCents;
         }
 
         return {
@@ -252,12 +266,35 @@ export class StripeVoucherService {
       // Never attach Stripe discounts when using custom coupons
 
       // Add metadata for tracking
+      const voucherId = (`V-` + uuidv4().slice(0, 8)).toUpperCase();
+      const personalization = data.voucherData || {};
+      const recipientName = String(personalization.recipientName || personalization.name || '').trim();
+      const fromName = String(personalization.fromName || personalization.sender || '').trim();
+      const message = String(personalization.message || '').trim();
+      const expiryDate = String(personalization.expiryDate || '').trim();
+
       sessionParams.metadata = {
         source: 'photography_website',
         voucher_used: data.appliedVoucherCode || data.appliedVoucher?.code || 'none',
         mode: data.mode || 'standard',
         payment_method_preference: data.paymentMethod || 'card',
-        voucher_data: data.voucherData ? JSON.stringify(data.voucherData).substring(0, 500) : '', // Stripe metadata limit
+        voucher_data: data.voucherData ? JSON.stringify(data.voucherData).substring(0, 500) : '',
+        // Voucher-specific metadata for PDF generation
+        sku: String(primarySku || ''),
+        voucher_id: voucherId,
+        recipient_name: recipientName,
+        from_name: fromName,
+        message,
+        expiry_date: expiryDate,
+        base_unit: String(basePrimaryCents),
+        discount_cents: String(Math.max(0, basePrimaryCents - discountedPrimaryCents)),
+      };
+
+      sessionParams.payment_intent_data = {
+        metadata: {
+          sku: String(primarySku || ''),
+          voucher_id: voucherId,
+        }
       };
 
       console.log('Creating Stripe checkout session with params:', {
