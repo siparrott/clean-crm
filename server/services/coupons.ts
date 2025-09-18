@@ -14,6 +14,21 @@ export interface Coupon {
 
 const TTL = Math.max(10, Number(process.env.COUPON_RELOAD_SECONDS || 60)) * 1000;
 
+// Built-in safety fallback(s) that should always work even if env misses them
+const DEFAULT_FALLBACK_COUPONS: Coupon[] = [
+  {
+    code: 'VCWIEN',
+    type: 'percent',
+    value: 20,
+    // Cover all voucher SKUs we use; case-insensitive compare in allowsSku
+    skus: [
+      'maternity-basic','family-basic','newborn-basic',
+      'maternity-premium','family-premium','newborn-premium',
+      'maternity-deluxe','family-deluxe','newborn-deluxe'
+    ],
+  },
+];
+
 function parseCouponsFromEnv(): any[] {
   try {
     const raw = process.env.COUPONS_JSON || '[]';
@@ -43,14 +58,7 @@ function loadCouponsSafe(): Coupon[] {
   const envCoupons = parseCouponsFromEnv().map(normalizeCoupon).filter(Boolean) as Coupon[];
   if (envCoupons.length) return envCoupons;
   // Safe fallback if env JSON is empty/bad
-  return [
-    {
-      code: 'VCWIEN',
-      type: 'percent',
-      value: 20,
-      skus: ['Maternity-Basic', 'Family-Basic', 'Newborn-Basic'],
-    },
-  ];
+  return DEFAULT_FALLBACK_COUPONS;
 }
 
 let cache: { coupons: Coupon[]; ts: number } = { coupons: loadCouponsSafe(), ts: 0 };
@@ -72,7 +80,11 @@ export function forceRefreshCoupons(): number {
 export function findCoupon(code?: string | null): Coupon | null {
   if (!code) return null;
   const needle = String(code).trim().toUpperCase();
-  return getCoupons().find((c) => c.code === needle) || null;
+  const fromEnv = getCoupons().find((c) => c.code === needle);
+  if (fromEnv) return fromEnv;
+  // Fallback to built-in defaults (e.g., VCWIEN)
+  const builtin = DEFAULT_FALLBACK_COUPONS.find((c) => c.code === needle) || null;
+  return builtin;
 }
 
 export function isCouponActive(c: Coupon): boolean {
@@ -85,5 +97,9 @@ export function isCouponActive(c: Coupon): boolean {
 export function allowsSku(c: Coupon, sku?: string | null): boolean {
   if (!sku) return false;
   const s = String(sku).toLowerCase();
-  return c.skus.some((k) => String(k).toLowerCase() === s);
+  return c.skus.some((k) => {
+    const key = String(k).toLowerCase();
+    if (key === '*' || key === 'all') return true;
+    return key === s;
+  });
 }
