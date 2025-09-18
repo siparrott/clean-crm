@@ -3637,22 +3637,25 @@ New Age Fotografie Team`;
         to: clientPhone,
         content: finalMessage,
         clientId: client.id,
-        campaignType: 'invoice_notification',
         messageType: 'sms'
       });
 
-      // Log SMS activity in client activity log
-      await storage.addCrmClientActivity({
-        clientId: client.id,
-        activityType: 'invoice_sent_sms',
-        description: `Invoice ${invoice.invoiceNumber} sent via SMS to ${clientPhone}`,
-        metadata: { 
-          invoiceId: invoice.id, 
+      // Log SMS activity as a CRM message
+      try {
+        await storage.createCrmMessage({
+          senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
+          senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || 'hallo@newagefotografie.com',
+          subject: `Invoice ${invoice.invoiceNumber} sent via SMS`,
+          content: `${finalMessage}\n\nLink: ${invoiceUrl}`,
+          messageType: 'sms',
+          status: result.success ? 'sent' : 'failed',
+          clientId: client.id,
           phoneNumber: clientPhone,
-          smsId: result.messageId,
-          invoiceUrl: invoiceUrl
-        }
-      });
+          smsMessageId: result.messageId,
+        } as any);
+      } catch (e) {
+        console.warn('Failed to log SMS as CRM message:', e);
+      }
 
       res.json({
         success: true,
@@ -3716,18 +3719,21 @@ New Age Fotografie Team`;
       const encodedMessage = encodeURIComponent(finalMessage);
       const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
 
-      // Log WhatsApp activity in client activity log
-      await storage.addCrmClientActivity({
-        clientId: client.id,
-        activityType: 'invoice_shared_whatsapp',
-        description: `Invoice ${invoice.invoiceNumber} shared via WhatsApp to ${clientPhone}`,
-        metadata: { 
-          invoiceId: invoice.id, 
+      // Log WhatsApp share as a CRM message entry
+      try {
+        await storage.createCrmMessage({
+          senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
+          senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || 'hallo@newagefotografie.com',
+          subject: `Invoice ${invoice.invoiceNumber} shared via WhatsApp`,
+          content: `${finalMessage}\n\nWhatsApp: ${whatsappUrl}\nInvoice: ${invoiceUrl}`,
+          messageType: 'whatsapp',
+          status: 'sent',
+          clientId: client.id,
           phoneNumber: clientPhone,
-          whatsappUrl: whatsappUrl,
-          invoiceUrl: invoiceUrl
-        }
-      });
+        } as any);
+      } catch (e) {
+        console.warn('Failed to log WhatsApp share as CRM message:', e);
+      }
 
       res.json({
         success: true,
@@ -7874,7 +7880,7 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
 
       // Send email notification to business
       try {
-        const transporter = nodemailer.createTransporter({
+        const transporter = nodemailer.createTransport({
           host: 'smtp.easyname.com',
           port: 465,
           secure: true,
@@ -7961,7 +7967,7 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
 
       // Send appointment request email to business
       try {
-        const transporter = nodemailer.createTransporter({
+        const transporter = nodemailer.createTransport({
           host: 'smtp.easyname.com',
           port: 465,
           secure: true,
@@ -8147,7 +8153,7 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
 
       // Send voucher email to customer
       try {
-        const transporter = nodemailer.createTransporter({
+        const transporter = nodemailer.createTransport({
           host: 'smtp.easyname.com',
           port: 465,
           secure: true,

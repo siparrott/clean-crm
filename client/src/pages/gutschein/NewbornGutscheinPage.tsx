@@ -242,7 +242,9 @@ const NewbornGutscheinPage: React.FC = () => {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
                     <div className="text-white">
                       <h3 className="font-bold text-lg mb-1">{image.title}</h3>
-                      <p className="text-sm opacity-90">{image.description}</p>
+                      {('description' in image) && (
+                        <p className="text-sm opacity-90">{(image as any).description}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -282,7 +284,7 @@ const NewbornGutscheinPage: React.FC = () => {
         
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {seasonalGrid.map((image, index) => (
+            {seasonalGrid.map((image: { url: string; title: string; description?: string }, index) => (
               <div key={index} className="bg-white rounded-lg shadow-lg overflow-hidden transform transition-all hover:-translate-y-1 hover:shadow-xl">
                 <div className="relative h-64">
                   <img 
@@ -290,12 +292,14 @@ const NewbornGutscheinPage: React.FC = () => {
                     alt={image.title}
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
-                    <div className="text-white">
-                      <h3 className="font-bold text-lg mb-1">{image.title}</h3>
-                      <p className="text-sm opacity-90">{image.description}</p>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
+                      <div className="text-white">
+                        <h3 className="font-bold text-lg mb-1">{image.title}</h3>
+                        {image.description && (
+                          <p className="text-sm opacity-90">{image.description}</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
                 </div>
               </div>
             ))}

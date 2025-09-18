@@ -213,5 +213,4 @@ export class VoucherGenerationService {
   }
 }
 
-// Export types for use in other files
-export type { GeneratedVoucher };
+// Type exported via interface above; no separate re-export needed

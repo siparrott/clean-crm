@@ -151,7 +151,26 @@ export default function InvoicesPage() {
       };
 
       console.log('Creating invoice with data:', invoiceData);
-      const createdInvoice = await createInvoice(invoiceData);
+      const payload = {
+        client_id: invoiceData.clientId,
+        issue_date: invoiceData.issueDate,
+        due_date: invoiceData.dueDate,
+        payment_terms: invoiceData.paymentTerms,
+        currency: invoiceData.currency,
+        notes: invoiceData.notes,
+        discount_amount: invoiceData.discountAmount,
+        subtotal: invoiceData.subtotal,
+        tax_amount: invoiceData.taxAmount,
+        total: invoiceData.total,
+        status: invoiceData.status,
+        items: invoiceData.items.map(it => ({
+          description: it.description,
+          quantity: it.quantity,
+          unit_price: it.unitPrice,
+          tax_rate: it.taxRate,
+        })),
+      } as any;
+      const createdInvoice = await createInvoice(payload);
       console.log('Invoice created successfully:', createdInvoice);
       
       setShowCreateModal(false);

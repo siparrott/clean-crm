@@ -832,9 +832,10 @@ export class DatabaseStorage implements IStorage {
     `);
 
     // Check if settings exist
-    const existing = await db.execute(sql`SELECT id FROM email_settings LIMIT 1`);
-    
-    if (existing && existing.length > 0) {
+    const existing = await db.execute(sql`SELECT id FROM email_settings LIMIT 1` as any);
+    const existingRows: any[] | undefined = (existing as any)?.rows ?? (Array.isArray(existing) ? existing : undefined);
+
+    if (existingRows && existingRows.length > 0) {
       // Update existing settings
       const result = await db.execute(sql`
         UPDATE email_settings 
@@ -845,27 +846,30 @@ export class DatabaseStorage implements IStorage {
             from_email = ${settings.from_email}, 
             from_name = ${settings.from_name}, 
             updated_at = NOW()
-        WHERE id = ${existing[0].id}
+        WHERE id = ${existingRows[0].id}
         RETURNING *
-      `);
-      return result[0];
+      ` as any);
+      const updateRows: any[] | undefined = (result as any)?.rows ?? (Array.isArray(result) ? result : undefined);
+      return updateRows ? updateRows[0] : (result as any);
     } else {
       // Insert new settings
       const result = await db.execute(sql`
         INSERT INTO email_settings (smtp_host, smtp_port, smtp_user, smtp_pass, from_email, from_name)
-        VALUES (${settings.smtp_host}, ${settings.smtp_port}, ${settings.smtp_user}, ${settings.smtp_pass}, ${settings.from_email}, ${settings.from_name})
+        VALUES (${settings.smtp_host}, ${settings.smtp_port}, ${settings.smtp_user}, ${settings.sms_pass}, ${settings.from_email}, ${settings.from_name})
         RETURNING *
-      `);
-      return result[0];
+      ` as any);
+      const insertRows: any[] | undefined = (result as any)?.rows ?? (Array.isArray(result) ? result : undefined);
+      return insertRows ? insertRows[0] : (result as any);
     }
   }
 
   async getEmailSettings(): Promise<any> {
     try {
-      const result = await db.execute(sql`SELECT * FROM email_settings ORDER BY updated_at DESC LIMIT 1`);
+      const result = await db.execute(sql`SELECT * FROM email_settings ORDER BY updated_at DESC LIMIT 1` as any);
+      const rows: any[] | undefined = (result as any)?.rows ?? (Array.isArray(result) ? result : undefined);
       
-      if (result && result.length > 0) {
-        return result[0];
+      if (rows && rows.length > 0) {
+        return rows[0];
       } else {
         // Return default EasyName settings if no custom settings exist
         return {

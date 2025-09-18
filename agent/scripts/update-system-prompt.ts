@@ -2,12 +2,12 @@ import { toolRegistry } from "../core/tools";
 import { writeFileSync } from "fs";
 import path from "path";
 
-// Access the actual tools from the registry structure
-const actualTools = toolRegistry.tools || {};
-console.log("🔍 Actual tools keys:", Object.keys(actualTools).length);
+// Access tools via the public API
+const toolCount = toolRegistry.list().length;
+console.log("🔍 Registered tools count:", toolCount);
 
 // Get all tools and create documentation lines
-const tools = Object.values(actualTools).filter(tool => tool && tool.name);
+const tools = toolRegistry.list().filter(tool => tool && tool.name);
 console.log("🔧 Valid tools found:", tools.length);
 
 const toolLines = tools.length > 0 
@@ -143,7 +143,7 @@ writeFileSync(
 );
 
 console.log("📝 prompts/system-updated.txt generated with 63 tools");
-console.log(`🔧 Tools included: ${Object.keys(toolRegistry).length}`);
+console.log(`🔧 Tools included: ${toolRegistry.list().length}`);
 console.log("📋 Next steps:");
 console.log("1. Run: node agent/update-assistant.js <studioId>");
 console.log("2. Restart server: npm run start");

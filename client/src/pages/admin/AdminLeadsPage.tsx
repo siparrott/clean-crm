@@ -181,9 +181,8 @@ const AdminLeadsPage: React.FC = () => {
           message: editFormData.message || null,
           status: editFormData.status
         })
-        .eq('id', editingLead.id)
-        .select()
-        .single();
+        .eq()
+        .select();
 
       if (error) throw error;
 

@@ -19,7 +19,7 @@ export async function sendStudioNotificationEmail(clientName: string, clientEmai
     }
 
     // Create transporter
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: emailSettings.host,
       port: emailSettings.port,
       secure: emailSettings.port === 465,
@@ -95,7 +95,7 @@ export async function sendClientConfirmationEmail(clientEmail: string, clientNam
       return;
     }
 
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: emailSettings.host,
       port: emailSettings.port,
       secure: emailSettings.port === 465,

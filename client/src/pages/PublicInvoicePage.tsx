@@ -213,7 +213,7 @@ const PublicInvoicePage: React.FC = () => {
       </div>
 
       {/* Print Styles */}
-      <style jsx>{`
+      <style>{`
         @media print {
           .no-print {
             display: none !important;

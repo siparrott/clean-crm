@@ -870,8 +870,8 @@ export const insertGallerySchema = createInsertSchema(galleries).pick({
   description: true,
   slug: true,
   coverImage: true,
-  isPublished: true,
-  tags: true,
+  isPublic: true,
+  isPasswordProtected: true,
   password: true,
 });
 

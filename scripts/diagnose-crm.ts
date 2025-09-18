@@ -22,14 +22,16 @@ import { db } from '../server/db';
         )
       ORDER BY table_name;
     `);
-    report.tables = (tables.rows as any[]).map(r => r.table_name);
+    const tableRows = (tables as any)?.rows ?? tables;
+    report.tables = (tableRows as any[]).map((r: any) => r.table_name);
 
     // Helper to count table rows if table exists
     const countIf = async (name: string) => {
       if (!report.tables.includes(name)) return { table: name, exists: false };
       try {
         const rows = await db.execute(sql`SELECT count(*)::int AS count FROM ${sql.raw(name)}`);
-        const count = (rows.rows as any[])[0]?.count ?? 0;
+        const r = (rows as any)?.rows ?? rows;
+        const count = (r as any[])[0]?.count ?? 0;
         return { table: name, exists: true, count };
       } catch (err: any) {
         return { table: name, exists: true, error: err.message };
@@ -47,7 +49,8 @@ import { db } from '../server/db';
     if (report.tables.includes('crm_clients')) {
       try {
         const sample = await db.execute(sql`SELECT id, first_name, last_name, email, created_at FROM crm_clients LIMIT 1`);
-        report.sampleClient = (sample && sample.length > 0) ? sample[0] : null;
+        const sampleRows = (sample as any)?.rows ?? sample;
+        report.sampleClient = (Array.isArray(sampleRows) && sampleRows.length > 0) ? sampleRows[0] : null;
       } catch {/* ignore */}
     }
   } catch (error: any) {

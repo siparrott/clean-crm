@@ -137,7 +137,18 @@ const PriceListSettingsPage: React.FC = () => {
 
   const handleAddItem = async () => {
     try {
-      await priceListService.createPriceListItem(formData);
+      const payload = {
+        name: formData.name,
+        description: formData.description,
+        category: formData.category,
+        price: parseFloat(formData.price || '0'),
+        currency: formData.currency,
+        tax_rate: parseFloat(formData.taxRate || '0'),
+        unit: formData.unit,
+        notes: formData.notes,
+        is_active: !!formData.isActive,
+      } as any;
+      await priceListService.createPriceListItem(payload);
       setShowAddModal(false);
       resetForm();
       fetchPriceList();
@@ -150,7 +161,18 @@ const PriceListSettingsPage: React.FC = () => {
     if (!editingItem) return;
     
     try {
-      await priceListService.updatePriceListItem(editingItem.id, formData);
+      const updates = {
+        name: formData.name,
+        description: formData.description,
+        category: formData.category,
+        price: parseFloat(formData.price || '0'),
+        currency: formData.currency,
+        tax_rate: parseFloat(formData.taxRate || '0'),
+        unit: formData.unit,
+        notes: formData.notes,
+        is_active: !!formData.isActive,
+      } as any;
+      await priceListService.updatePriceListItem(editingItem.id, updates);
       setEditingItem(null);
       resetForm();
       fetchPriceList();
@@ -188,14 +210,14 @@ const PriceListSettingsPage: React.FC = () => {
     setEditingItem(item);
     setFormData({
       name: item.name || '',
-      description: item.description || '',
+      description: (item as any).description || '',
       category: item.category || '',
-      price: item.price?.toString() || '',
-      currency: item.currency || 'EUR',
-      taxRate: item.taxRate?.toString() || '19.00',
-      unit: item.unit || 'piece',
-      notes: item.notes || '',
-      isActive: item.isActive !== false
+      price: (item.price as any)?.toString?.() || String(item.price ?? ''),
+      currency: (item as any).currency || 'EUR',
+      taxRate: ((item as any).taxRate ?? (item as any).tax_rate ?? 19).toString(),
+      unit: (item as any).unit || 'piece',
+      notes: (item as any).notes || '',
+      isActive: (item as any).isActive !== false && (item as any).is_active !== false
     });
   };
 
@@ -204,13 +226,13 @@ const PriceListSettingsPage: React.FC = () => {
       ['Name', 'Description', 'Category', 'Price', 'Currency', 'Tax Rate', 'Unit', 'Notes'].join(','),
       ...filteredItems.map(item => [
         item.name,
-        item.description,
+        (item as any).description,
         item.category,
-        item.price,
-        item.currency,
-        item.taxRate,
-        item.unit,
-        item.notes
+        String(item.price),
+        (item as any).currency,
+        (item as any).taxRate ?? (item as any).tax_rate,
+        (item as any).unit,
+        (item as any).notes
       ].map(field => `"${field || ''}"`).join(','))
     ].join('\\n');
 
@@ -355,11 +377,11 @@ const PriceListSettingsPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          item.isActive 
+                          (item as any).isActive ?? (item as any).is_active
                             ? 'bg-green-100 text-green-800' 
                             : 'bg-red-100 text-red-800'
                         }`}>
-                          {item.isActive ? 'Active' : 'Inactive'}
+                          {(item as any).isActive ?? (item as any).is_active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

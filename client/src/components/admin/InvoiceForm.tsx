@@ -299,7 +299,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({
       return;
     }
     
-    setWhatsAppPhone(selectedClient?.phone || selectedClient?.telephone || '');
+  setWhatsAppPhone((selectedClient as any)?.phone || '');
     setShowWhatsAppModal(true);
   };
 

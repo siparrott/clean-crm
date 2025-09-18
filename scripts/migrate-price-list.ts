@@ -9,7 +9,7 @@ if (!connectionString) {
 }
 
 const sql = neon(connectionString);
-const db = drizzle(sql);
+const db = drizzle({ client: sql } as any);
 
 async function main() {
   console.log('🔄 Creating price_list_items table...');

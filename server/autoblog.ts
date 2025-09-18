@@ -357,8 +357,10 @@ Key Features: High-quality photography, professional editing, personal service
       for (const image of images) {
         try {
           const formData = new FormData();
-          const blob = new Blob([image.buffer], { type: 'image/jpeg' });
-          formData.append('file', blob, `session-image-${uploadedFiles.length + 1}.jpg`);
+          formData.append('file', image.buffer as any, {
+            filename: `session-image-${uploadedFiles.length + 1}.jpg`,
+            contentType: 'image/jpeg'
+          } as any);
           formData.append('purpose', 'vision');
 
           const uploadResponse = await fetch('https://api.openai.com/v1/files', {
@@ -2150,7 +2152,10 @@ Die Bearbeitung dauert 1-2 Wochen. Alle finalen Bilder erhaltet ihr in einer pra
       const { storage } = await import('./storage');
       const createdPost = await storage.createBlogPost(result.blogPost);
       
-      return createdPost;
+      return {
+        success: true,
+        post: createdPost
+      };
 
     } catch (error) {
       console.error('AutoBlog generation failed:', error);
