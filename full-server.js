@@ -86,6 +86,89 @@ initializeStripe();
 
 console.log('🚀 Starting PRODUCTION server with Neon database...');
 
+// ===== Coupon Engine (env-driven with VCWIEN fallback) =====
+const COUPON_TTL_SECONDS = parseInt(process.env.COUPON_RELOAD_SECONDS || '60', 10);
+let __couponCache = { coupons: null, expiresAt: 0 };
+
+const DEFAULT_FALLBACK_COUPONS = [
+  {
+    code: 'VCWIEN',
+    type: 'percentage',
+    percent: 20,
+    allowedSkus: [
+      'maternity-basic', 'family-basic', 'newborn-basic',
+      'maternity-premium', 'family-premium', 'newborn-premium',
+      'maternity-deluxe', 'family-deluxe', 'newborn-deluxe'
+    ]
+  }
+];
+
+function parseCouponsFromEnv() {
+  const raw = process.env.COUPONS_JSON;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && Array.isArray(parsed.coupons)) return parsed.coupons;
+    return null;
+  } catch (e) {
+    console.warn('⚠️ Failed to parse COUPONS_JSON:', e.message);
+    return null;
+  }
+}
+
+function getCoupons() {
+  const now = Date.now();
+  if (__couponCache.coupons && now < __couponCache.expiresAt) return __couponCache.coupons;
+  const fromEnv = parseCouponsFromEnv();
+  const coupons = fromEnv && fromEnv.length ? fromEnv : DEFAULT_FALLBACK_COUPONS;
+  __couponCache = {
+    coupons,
+    expiresAt: now + COUPON_TTL_SECONDS * 1000,
+  };
+  return coupons;
+}
+
+function forceRefreshCoupons() {
+  __couponCache.expiresAt = 0;
+  const coupons = getCoupons();
+  return Array.isArray(coupons) ? coupons.length : 0;
+}
+
+function findCouponByCode(code) {
+  if (!code) return null;
+  const target = String(code).trim().toUpperCase();
+  const coupons = getCoupons();
+  const match = coupons.find(c => String(c.code || '').trim().toUpperCase() === target);
+  if (match) return match;
+  // Also search in fallback if env was present but missing this code
+  const fb = DEFAULT_FALLBACK_COUPONS.find(c => String(c.code || '').trim().toUpperCase() === target);
+  return fb || null;
+}
+
+function isCouponActive(coupon) {
+  if (!coupon) return false;
+  const now = Date.now();
+  if (coupon.startDate) {
+    const start = new Date(coupon.startDate).getTime();
+    if (!isNaN(start) && now < start) return false;
+  }
+  if (coupon.endDate) {
+    const end = new Date(coupon.endDate).getTime();
+    if (!isNaN(end) && now > end) return false;
+  }
+  return true;
+}
+
+function allowsSku(coupon, skuOrSlug) {
+  if (!coupon) return false;
+  const sku = String(skuOrSlug || '').toLowerCase();
+  const list = Array.isArray(coupon.allowedSkus) ? coupon.allowedSkus.map(s => String(s).toLowerCase()) : [];
+  if (list.includes('*') || list.includes('all')) return true;
+  if (!list.length) return true; // if not specified, allow all
+  return list.includes(sku);
+}
+
 // Files API handler function
 async function handleFilesAPI(req, res, pathname, query) {
   let neon, sql;
@@ -3509,6 +3592,80 @@ New Age Fotografie Team`;
         return;
       }
 
+      // New coupon validation endpoint aligned with client CartPage and EnhancedCheckout
+      if (pathname === '/api/vouchers/coupons/validate' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', chunk => { body += chunk.toString(); });
+          req.on('end', async () => {
+            try {
+              const { code, orderAmount, items } = JSON.parse(body || '{}');
+              if (!code) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ valid: false, error: 'Coupon code required' }));
+                return;
+              }
+
+              const coupon = findCouponByCode(code);
+              if (!coupon || !isCouponActive(coupon)) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ valid: false, error: 'Ungültiger Gutscheincode' }));
+                return;
+              }
+
+              const cartItems = Array.isArray(items) ? items : [];
+              let applicableSubtotal = 0;
+              for (const it of cartItems) {
+                const sku = it?.sku || it?.productSlug || it?.name;
+                const qty = Number(it?.quantity || 1);
+                const price = Number(it?.price || 0);
+                if (allowsSku(coupon, sku)) {
+                  applicableSubtotal += price * qty;
+                }
+              }
+
+              if (applicableSubtotal <= 0) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ valid: false, error: 'Gutschein nicht für diese Produkte' }));
+                return;
+              }
+
+              let discountAmount = 0;
+              let discountType = 'fixed';
+              if (String(coupon.type).toLowerCase() === 'percentage') {
+                discountType = 'percentage';
+                const pct = Number(coupon.percent || coupon.value || 0);
+                discountAmount = Math.max(0, (applicableSubtotal * pct) / 100);
+              } else {
+                const fixed = Number(coupon.amount || coupon.value || 0);
+                discountAmount = Math.min(applicableSubtotal, Math.max(0, fixed));
+              }
+
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                valid: true,
+                coupon: {
+                  code: String(coupon.code).toUpperCase(),
+                  discountType,
+                  discountValue: discountType === 'percentage' ? (coupon.percent || coupon.value || 0) : (coupon.amount || coupon.value || 0),
+                  discountAmount: discountAmount.toFixed(2),
+                  applicableProducts: coupon.allowedSkus || ['*']
+                }
+              }));
+            } catch (err) {
+              console.error('❌ Coupon validation error:', err.message);
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ valid: false, error: 'Ungültiger Gutscheincode' }));
+            }
+          });
+        } catch (error) {
+          console.error('❌ Coupon validation API error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
       // Surveys/Questionnaires API endpoints
       if (pathname.startsWith('/api/surveys')) {
         try {
@@ -3789,6 +3946,26 @@ New Age Fotografie Team`;
         }
         return;
       }
+    }
+
+    // Admin endpoint to force-refresh coupon cache after env changes
+    if (pathname === '/__admin/refresh-coupons' && req.method === 'POST') {
+      try {
+        const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+        const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+        if (!expected || token !== expected) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+          return;
+        }
+        const count = forceRefreshCoupons();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, reloaded: count }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false }));
+      }
+      return;
     }
     
     // Compatibility shim for legacy CRM invoice routes
