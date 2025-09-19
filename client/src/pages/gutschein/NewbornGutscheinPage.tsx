@@ -20,10 +20,9 @@ const NewbornGutscheinPage: React.FC = () => {
       price: 95,
       originalPrice: 195,
       features: [
-        '30min Shooting',
-        '1 bearbeitete Fotos',
-        '2 Setups',
-        'Requisiten inklusive'
+        '60 Minuten Shooting',
+        '1 bearbeitetes Foto als A3 Leinwand (40x30cm) + gleiches Portrait digital',
+        '2 Outfits'
       ]
     },
     {
@@ -32,10 +31,8 @@ const NewbornGutscheinPage: React.FC = () => {
       price: 195,
       originalPrice: 295,
       features: [
-        '45min Shooting',
-        '5 bearbeitete Fotos',
-        'Familienfotos inklusive',
-        'Requisiten & Outfits inklusive'
+        '5 bearbeitete Fotos digital (Porträts nach Wahl)',
+        'A3 Leinwand (40x30cm)'
       ],
       isFeatured: true
     },
@@ -45,10 +42,8 @@ const NewbornGutscheinPage: React.FC = () => {
       price: 295,
       originalPrice: 395,
       features: [
-        '1 Stunden Shooting',
-        '10 bearbeitete Fotos',
-        'Familienfotos inklusive',
-        'Alle Requisiten & Outfits'
+        'A2 Leinwand (60x40cm)',
+        '10 bearbeitete Fotos digital (Porträts nach Wahl)'
       ]
     }
   ];

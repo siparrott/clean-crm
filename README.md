@@ -118,7 +118,7 @@ Schema (JSON array):
 
 Example JSON:
 [
-	{ "code": "VCWIEN", "type": "percent", "value": 20, "skus": ["maternity-basic", "family-basic", "newborn-basic"] },
+	{ "code": "VCWIEN", "type": "percent", "value": 50, "skus": ["maternity-basic", "family-basic", "newborn-basic"] },
 	{ "code": "FAM20",  "type": "amount",  "value": 2000, "skus": ["family-basic"] },
 	{ "code": "NEWB95", "type": "percent", "value": 15, "skus": ["newborn-basic"] }
 ]
@@ -134,7 +134,7 @@ heroku config:get COUPONS_JSON
 Publish new set of codes (use a single-line JSON string; no comments):
 
 ```powershell
-heroku config:set COUPONS_JSON='[{"code":"VCWIEN","type":"percent","value":20,"skus":["maternity-basic","family-basic","newborn-basic"]},{"code":"FAM20","type":"amount","value":2000,"skus":["family-basic"]},{"code":"NEWB95","type":"percent","value":15,"skus":["newborn-basic"]}]'
+heroku config:set COUPONS_JSON='[{"code":"VCWIEN","type":"percent","value":50,"skus":["maternity-basic","family-basic","newborn-basic"]},{"code":"FAM20","type":"amount","value":2000,"skus":["family-basic"]},{"code":"NEWB95","type":"percent","value":15,"skus":["newborn-basic"]}]'
 ```
 
 Notes:

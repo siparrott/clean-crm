@@ -1,9 +1,10 @@
 import { neon } from "@neondatabase/serverless";
 import { scrapeSite } from "./webscrape";
-import { runLighthouse } from "./lighthouse";
 
 export async function analyzeAndStoreWebsite(studioId: string, url: string) {
   const scrape = await scrapeSite(url);
+  // Lazy-load Lighthouse to avoid initializing it during general server startup
+  const { runLighthouse } = await import("./lighthouse");
   const lighthouse = await runLighthouse(url);
 
   const websiteProfile = {

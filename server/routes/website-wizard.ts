@@ -1,5 +1,4 @@
 import express from "express";
-import { runLighthouse } from "../../agent/integrations/lighthouse";
 import { scrapeSite } from "../../agent/integrations/webscrape";
 import { analyzeAndStoreWebsite } from "../../agent/integrations/website-profile";
 
@@ -27,12 +26,13 @@ router.post("/analyze", async (req, res) => {
     };
 
     try {
-      // Run Lighthouse performance analysis
+      // Run Lighthouse performance analysis (lazy-load to avoid startup crashes)
       console.log('Running Lighthouse analysis...');
+      const { runLighthouse } = await import("../../agent/integrations/lighthouse");
       results.lighthouse = await runLighthouse(url);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Lighthouse analysis failed:', error);
-      results.lighthouse = { error: error.message };
+      results.lighthouse = { error: error?.message || 'Unknown error' };
     }
 
     try {

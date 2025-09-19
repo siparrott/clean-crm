@@ -20,11 +20,9 @@ const FamilyGutscheinPage: React.FC = () => {
       price: 95,
       originalPrice: 195,
       features: [
-        '30 Minuten Shooting',
-        '1 bearbeitete Fotos',
-        'Begrüßungsgetränk',
-        'Outfit-Wechsel möglich',
-        'Bis zu 16 Personen insgesamt möglich, Haustiere willkommen'
+        '60 Minuten Shooting',
+        '1 bearbeitetes Foto als A3 Leinwand (40x30cm) + gleiches Portrait digital',
+        '2 Outfits'
       ]
     },
     {
@@ -33,11 +31,8 @@ const FamilyGutscheinPage: React.FC = () => {
       price: 195,
       originalPrice: 295,
       features: [
-        '45 Minuten Shooting',
-        '5 bearbeitete Fotos',
-        'Begrüßungsgetränk',
-        'Outfit-Wechsel möglich',
-        'Bis zu 16 Personen insgesamt möglich, Haustiere willkommen'
+        '5 bearbeitete Fotos digital (Porträts nach Wahl)',
+        'A3 Leinwand (40x30cm)'
       ],
       isFeatured: true
     },
@@ -47,12 +42,8 @@ const FamilyGutscheinPage: React.FC = () => {
       price: 295,
       originalPrice: 395,
       features: [
-        '60 Minuten Shooting',
-        '10 bearbeitete Fotos',
-        'Begrüßungsgetränk',
-        'Outfit-Wechsel möglich',
-        'Alle Kombinationen',
-        'Bis zu 16 Personen insgesamt möglich, Haustiere willkommen'
+        'A2 Leinwand (60x40cm)',
+        '10 bearbeitete Fotos digital (Porträts nach Wahl)'
       ]
     }
   ];
