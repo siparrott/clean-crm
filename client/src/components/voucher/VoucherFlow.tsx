@@ -154,6 +154,7 @@ const VoucherFlow: React.FC<VoucherFlowProps> = ({
           baseAmount={baseAmount}
           productSlug={productSlug}
           initialVoucher={initialVoucher}
+          onBack={handleBackToPersonalization}
           onCheckout={handleCheckoutComplete}
         />
       )}

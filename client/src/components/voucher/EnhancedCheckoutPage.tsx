@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, CreditCard, Mail, MapPin, Gift, Edit2, ChevronDown } from 'lucide-react';
+import { ShoppingCart, CreditCard, Mail, MapPin, Gift, Edit2, ChevronDown, ArrowLeft } from 'lucide-react';
 import VoucherCodeInput from '../cart/VoucherCodeInput';
 import type { VoucherPersonalizationData } from './VoucherPersonalization';
 
@@ -9,6 +9,7 @@ interface EnhancedCheckoutPageProps {
   onCheckout: (checkoutData: CheckoutData) => void;
   productSlug?: string;
   initialVoucher?: { code: string; discountCents: number };
+  onBack?: () => void;
 }
 
 interface CheckoutData {
@@ -24,7 +25,8 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
   baseAmount,
   onCheckout,
   productSlug,
-  initialVoucher
+  initialVoucher,
+  onBack
 }) => {
   const [email, setEmail] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('card');
@@ -197,12 +199,22 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
         </div>
       </header>
 
-      {/* Breadcrumb */}
+      {/* Breadcrumb + Back */}
       <div className="max-w-6xl mx-auto px-4 py-3">
-        <div className="flex items-center space-x-2 text-sm text-gray-600">
-          <span>Warenkorb</span>
-          <ChevronDown size={16} className="rotate-[-90deg]" />
-          <span className="text-gray-900 font-medium">Kasse</span>
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center text-purple-600 hover:text-purple-700 text-sm"
+          >
+            <ArrowLeft size={18} className="mr-1" />
+            Zurück zur Personalisierung
+          </button>
+          <div className="flex items-center space-x-2 text-sm text-gray-600">
+            <span>Warenkorb</span>
+            <ChevronDown size={16} className="rotate-[-90deg]" />
+            <span className="text-gray-900 font-medium">Kasse</span>
+          </div>
         </div>
       </div>
 
