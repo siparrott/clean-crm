@@ -14,6 +14,7 @@ import {
   AlertCircle,
   X
 } from 'lucide-react';
+import { Tag, RefreshCcw, ShieldCheck, Clock } from 'lucide-react';
 import { priceListService, PriceListItem } from '../../../lib/invoicing';
 
 const PriceListSettingsPage: React.FC = () => {
@@ -28,6 +29,13 @@ const PriceListSettingsPage: React.FC = () => {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importStatus, setImportStatus] = useState<string>('');
   const [importResults, setImportResults] = useState<any>(null);
+
+  // Coupons diagnostics state (admin only)
+  const [adminToken, setAdminToken] = useState<string>(() => localStorage.getItem('ADMIN_TOKEN') || '');
+  const [showToken, setShowToken] = useState<boolean>(false);
+  const [couponStatus, setCouponStatus] = useState<any>(null);
+  const [couponLoading, setCouponLoading] = useState<boolean>(false);
+  const [couponError, setCouponError] = useState<string>('');
 
   // Form state for adding/editing items
   const [formData, setFormData] = useState({
@@ -54,6 +62,59 @@ const PriceListSettingsPage: React.FC = () => {
   useEffect(() => {
     fetchPriceList();
   }, []);
+
+  const saveAdminToken = (val: string) => {
+    setAdminToken(val);
+    if (val) localStorage.setItem('ADMIN_TOKEN', val); else localStorage.removeItem('ADMIN_TOKEN');
+  };
+
+  const fetchCouponStatus = async () => {
+    try {
+      setCouponLoading(true);
+      setCouponError('');
+      const res = await fetch('/__admin/coupons/status', {
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (res.status === 401) {
+        setCouponError('Unauthorized: please enter a valid admin token.');
+        setCouponStatus(null);
+        return;
+      }
+      const data = await res.json();
+      if (!data?.success) {
+        setCouponError('Failed to load coupon status');
+        setCouponStatus(null);
+        return;
+      }
+      setCouponStatus(data);
+    } catch (e: any) {
+      setCouponError(e?.message || 'Error fetching coupon status');
+      setCouponStatus(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const refreshCouponsCache = async () => {
+    try {
+      setCouponLoading(true);
+      setCouponError('');
+      const res = await fetch('/__admin/refresh-coupons', {
+        method: 'POST',
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (res.status === 401) {
+        setCouponError('Unauthorized: please enter a valid admin token.');
+        return;
+      }
+      // Reload status after refresh
+      await fetchCouponStatus();
+    } catch (e: any) {
+      setCouponError(e?.message || 'Error refreshing coupons');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
 
   const fetchPriceList = async () => {
     try {
@@ -288,6 +349,100 @@ const PriceListSettingsPage: React.FC = () => {
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          {/* Coupons Status (Admin) */}
+          <div className="mb-8">
+            <div className="flex items-center mb-3">
+              <Tag className="h-5 w-5 text-purple-600 mr-2" />
+              <h2 className="text-lg font-semibold text-gray-900">Coupons Status</h2>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+              <div className="col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Admin Token</label>
+                <div className="flex gap-2">
+                  <input
+                    type={showToken ? 'text' : 'password'}
+                    value={adminToken}
+                    onChange={(e) => saveAdminToken(e.target.value)}
+                    placeholder="Enter admin token"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                  <button
+                    onClick={() => setShowToken(s => !s)}
+                    className="px-3 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  >
+                    {showToken ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={fetchCouponStatus}
+                    disabled={!adminToken || couponLoading}
+                    className="px-4 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    Check Status
+                  </button>
+                  <button
+                    onClick={refreshCouponsCache}
+                    disabled={!adminToken || couponLoading}
+                    className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    <RefreshCcw className="h-4 w-4 mr-2" /> Refresh Cache
+                  </button>
+                </div>
+                {couponError && (
+                  <p className="mt-2 text-sm text-red-600">{couponError}</p>
+                )}
+              </div>
+              <div className="col-span-2">
+                <div className="border border-gray-200 rounded-lg p-4">
+                  {!couponStatus && !couponLoading && (
+                    <p className="text-sm text-gray-500">No status loaded yet.</p>
+                  )}
+                  {couponLoading && (
+                    <p className="text-sm text-gray-500">Loading...</p>
+                  )}
+                  {couponStatus && (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Active: {couponStatus.count}
+                        </span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Source: {couponStatus.source}
+                        </span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          <Clock className="h-3.5 w-3.5 mr-1" /> TTL: {Math.ceil((couponStatus?.cache?.millisRemaining || 0)/1000)}s
+                        </span>
+                      </div>
+                      <div className="max-h-40 overflow-auto border border-gray-100 rounded-md">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="text-left px-3 py-2 text-gray-600">Code</th>
+                              <th className="text-left px-3 py-2 text-gray-600">Type</th>
+                              <th className="text-left px-3 py-2 text-gray-600">Value</th>
+                              <th className="text-left px-3 py-2 text-gray-600">Allowed SKUs</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(couponStatus.coupons || []).map((c: any) => (
+                              <tr key={c.code} className="border-t border-gray-100">
+                                <td className="px-3 py-1.5 font-medium text-gray-900">{c.code}</td>
+                                <td className="px-3 py-1.5 text-gray-700">{c.type || '-'}</td>
+                                <td className="px-3 py-1.5 text-gray-700">{c.percent ?? c.amount ?? '-'}</td>
+                                <td className="px-3 py-1.5 text-gray-700 truncate max-w-[260px]">{(c.allowedSkus || ['*']).join(', ')}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
