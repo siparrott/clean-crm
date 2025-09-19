@@ -188,7 +188,16 @@ export class StripeVoucherService {
 
   // Use live-reloading coupons service to find a matching custom coupon
   const appliedCode = data.appliedVoucherCode?.toUpperCase();
-  const matchedCoupon = appliedCode ? findCoupon(appliedCode) : null;
+  let matchedCoupon = appliedCode ? findCoupon(appliedCode) : null;
+
+      // If the frontend already computed an exact discount (in cents), we will honor it verbatim
+      // to guarantee Stripe total matches the cart. This avoids edge cases where SKU mapping or
+      // timing would otherwise produce a slightly different amount in Stripe.
+      const clientDiscountCents = Math.max(0, Math.round(Number((data as any).discount) || 0));
+      if (clientDiscountCents > 0) {
+        // Keep coupon code only for metadata/analytics but skip re-applying a percentage/amount rule
+        matchedCoupon = null;
+      }
 
       // If a custom coupon applies, compute discounted unit amounts per applicable SKU and always use dynamic price_data
       // Precompute SKU and discount delta for first item (voucher flow is single-item)
@@ -198,6 +207,7 @@ export class StripeVoucherService {
       const basePrimaryCents = Math.max(0, Math.round(Number(primary?.price || 0)));
       let discountedPrimaryCents = basePrimaryCents;
 
+      let remainingClientDiscount = clientDiscountCents;
       const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = data.items.map(item => {
         const name = item.name || item.title || 'Fotoshooting Gutschein';
         const qty = Math.max(1, Number(item.quantity) || 1);
@@ -211,6 +221,19 @@ export class StripeVoucherService {
               type: matchedCoupon.type === 'amount' ? 'amount' : 'percent',
               value: matchedCoupon.value,
             });
+          }
+        } else if (remainingClientDiscount > 0) {
+          // Apply the explicit client-side discount to the main voucher item(s) only.
+          // We avoid discounting delivery or non-voucher items by checking description/sku.
+          const looksLikeDelivery = (item.sku || '').toString().toLowerCase().startsWith('delivery-')
+            || (item.description || '').toLowerCase().includes('liefer');
+          if (!looksLikeDelivery) {
+            // Discount is applied against the extended line (per unit). We reduce unit amount
+            // proportionally, but since voucher flow uses qty=1 this will simply subtract once.
+            const maxReducible = unitCents; // per unit
+            const reduceBy = Math.min(maxReducible, remainingClientDiscount);
+            unitCents = Math.max(0, unitCents - reduceBy);
+            remainingClientDiscount = Math.max(0, remainingClientDiscount - reduceBy);
           }
         }
 
@@ -287,7 +310,8 @@ export class StripeVoucherService {
         message,
         expiry_date: expiryDate,
         base_unit: String(basePrimaryCents),
-        discount_cents: String(Math.max(0, basePrimaryCents - discountedPrimaryCents)),
+        // If client sent discount, reflect it here; otherwise use computed delta
+        discount_cents: String(Math.max(0, (Number((data as any).discount) || 0) || (basePrimaryCents - discountedPrimaryCents))),
       };
 
       sessionParams.payment_intent_data = {
