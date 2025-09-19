@@ -3592,7 +3592,7 @@ New Age Fotografie Team`;
         return;
       }
 
-      // New coupon validation endpoint aligned with client CartPage and EnhancedCheckout
+  // New coupon validation endpoint aligned with client CartPage and EnhancedCheckout
       if (pathname === '/api/vouchers/coupons/validate' && req.method === 'POST') {
         try {
           let body = '';
@@ -3663,6 +3663,46 @@ New Age Fotografie Team`;
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
         }
+        return;
+      }
+
+      // Admin endpoints (API-prefixed variants)
+      if (pathname === '/api/__admin/refresh-coupons' && req.method === 'POST') {
+        try {
+          const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+          const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+          if (!expected || token !== expected) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+            return;
+          }
+          const count = forceRefreshCoupons();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, reloaded: count }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false }));
+        }
+        return;
+      }
+      if (pathname === '/api/__admin/coupons/status' && req.method === 'GET') {
+        const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+        const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+        if (!expected || token !== expected) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+          return;
+        }
+        const coupons = getCoupons();
+        const now = Date.now();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          count: coupons.length,
+          coupons: coupons.map(c => ({ code: c.code, type: c.type, percent: c.percent, amount: c.amount, allowedSkus: c.allowedSkus })),
+          cache: { expiresAt: __couponCache.expiresAt, millisRemaining: Math.max(0, __couponCache.expiresAt - now), ttlSeconds: COUPON_TTL_SECONDS },
+          source: process.env.COUPONS_JSON ? 'env' : 'fallback'
+        }));
         return;
       }
 
@@ -3965,6 +4005,28 @@ New Age Fotografie Team`;
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false }));
       }
+      return;
+    }
+
+    // Admin diagnostics: list coupons and cache state
+    if (pathname === '/__admin/coupons/status' && req.method === 'GET') {
+      const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+      const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+      if (!expected || token !== expected) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+        return;
+      }
+      const coupons = getCoupons();
+      const now = Date.now();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        count: coupons.length,
+        coupons: coupons.map(c => ({ code: c.code, type: c.type, percent: c.percent, amount: c.amount, allowedSkus: c.allowedSkus })),
+        cache: { expiresAt: __couponCache.expiresAt, millisRemaining: Math.max(0, __couponCache.expiresAt - now), ttlSeconds: COUPON_TTL_SECONDS },
+        source: process.env.COUPONS_JSON ? 'env' : 'fallback'
+      }));
       return;
     }
     
