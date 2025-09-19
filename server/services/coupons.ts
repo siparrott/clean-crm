@@ -19,13 +19,9 @@ const DEFAULT_FALLBACK_COUPONS: Coupon[] = [
   {
     code: 'VCWIEN',
     type: 'percent',
-    value: 20,
-    // Cover all voucher SKUs we use; case-insensitive compare in allowsSku
-    skus: [
-      'maternity-basic','family-basic','newborn-basic',
-      'maternity-premium','family-premium','newborn-premium',
-      'maternity-deluxe','family-deluxe','newborn-deluxe'
-    ],
+    value: 50,
+    // Apply STRICTLY to BASIC vouchers only (case-insensitive)
+    skus: ['maternity-basic', 'family-basic', 'newborn-basic'],
   },
 ];
 
