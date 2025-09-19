@@ -94,11 +94,9 @@ const DEFAULT_FALLBACK_COUPONS = [
   {
     code: 'VCWIEN',
     type: 'percentage',
-    percent: 20,
+    percent: 50,
     allowedSkus: [
-      'maternity-basic', 'family-basic', 'newborn-basic',
-      'maternity-premium', 'family-premium', 'newborn-premium',
-      'maternity-deluxe', 'family-deluxe', 'newborn-deluxe'
+      'maternity-basic', 'family-basic', 'newborn-basic'
     ]
   }
 ];
