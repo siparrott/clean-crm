@@ -119,13 +119,24 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          items: [{
-            name: productNameFromSlug(productSlug) || `Fotoshooting Gutschein - ${voucherData.selectedDesign?.occasion || 'Personalisiert'}`,
-            price: Math.round(subtotal * 100),
-            quantity: 1,
-            sku: productSlug,
-            description: `Lieferung: ${voucherData.deliveryOption.name}`
-          }],
+          items: [
+            // Voucher item (eligible for discount)
+            {
+              name: productNameFromSlug(productSlug) || `Fotoshooting Gutschein - ${voucherData.selectedDesign?.occasion || 'Personalisiert'}`,
+              price: Math.round(baseAmount * 100),
+              quantity: 1,
+              sku: productSlug,
+              description: 'Gutschein'
+            },
+            // Delivery item (NOT eligible for discount)
+            ...(deliveryAmount > 0 ? [{
+              name: `Gutschein Lieferung - ${voucherData.deliveryOption.name}`,
+              price: Math.round(deliveryAmount * 100),
+              quantity: 1,
+              sku: `delivery-${(voucherData.deliveryOption.name || 'standard').toLowerCase()}`,
+              description: 'Lieferkosten'
+            }] : [])
+          ],
           customerEmail: email.trim(),
           voucherData: {
             ...voucherData,
