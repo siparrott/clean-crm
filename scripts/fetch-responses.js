@@ -4,7 +4,7 @@
 require('dotenv').config();
 
 async function main() {
-  const base = (process.env.APP_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
+  const base = (process.env.Q_BASE || process.env.APP_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
   const slug = process.env.Q_SLUG;
   if (!base || !slug) {
     console.error('Missing APP_URL/APP_BASE_URL or Q_SLUG');

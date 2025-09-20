@@ -26,7 +26,7 @@ async function main() {
     RETURNING id, slug, title, description, fields, notify_email, created_at
   `;
 
-  const base = String(process.env.APP_BASE_URL || process.env.APP_URL || '').replace(/\/$/,'');
+  const base = String(process.env.Q_BASE || process.env.APP_BASE_URL || process.env.APP_URL || '').replace(/\/$/,'');
   const link = `${base}/q/${rows[0].slug}`;
   console.log(JSON.stringify({ ok: true, questionnaire: rows[0], link }, null, 2));
 }
