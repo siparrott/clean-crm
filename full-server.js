@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 const crypto = require('crypto');
+const PDFDocument = require('pdfkit');
 
 // Import database functions - with error handling
 let database = null;
@@ -943,6 +944,202 @@ const server = http.createServer(async (req, res) => {
     }));
     return;
   }
+  
+  // Voucher PDF endpoints (public, before /api routing)
+  if (pathname === '/voucher/pdf' && req.method === 'GET') {
+    try {
+      const sessionId = String(parsedUrl.query?.session_id || '').trim();
+      if (!sessionId) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        res.end('Missing session_id');
+        return;
+      }
+
+      if (!stripe) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Stripe not configured');
+        return;
+      }
+
+      let session = await stripe.checkout.sessions.retrieve(sessionId);
+      let isPaid = session?.payment_status === 'paid';
+      if (!isPaid) {
+        session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['payment_intent'] });
+        isPaid = session?.payment_status === 'paid';
+      }
+
+      if (!isPaid) {
+        res.writeHead(402, { 'Content-Type': 'text/plain' });
+        res.end('Payment not completed yet');
+        return;
+      }
+
+      const m = session.metadata || {};
+      const sku = m.sku || 'Voucher';
+      const name = m.recipient_name || 'Beschenkte/r';
+      const from = m.from_name || '—';
+      const note = m.message || m.personal_message || '';
+      const vId = m.voucher_id || session.id;
+      const exp = m.expiry_date || '12 Monate ab Kaufdatum';
+      const titleMap = {
+        'Maternity-Basic': 'Schwangerschafts Fotoshooting - Basic',
+        'Family-Basic': 'Family Fotoshooting - Basic',
+        'Newborn-Basic': 'Newborn Fotoshooting - Basic',
+        'Maternity-Premium': 'Schwangerschafts Fotoshooting - Premium',
+        'Family-Premium': 'Family Fotoshooting - Premium',
+        'Newborn-Premium': 'Newborn Fotoshooting - Premium',
+        'Maternity-Deluxe': 'Schwangerschafts Fotoshooting - Deluxe',
+        'Family-Deluxe': 'Family Fotoshooting - Deluxe',
+        'Newborn-Deluxe': 'Newborn Fotoshooting - Deluxe',
+      };
+      const title = titleMap[String(sku)] || 'Gutschein';
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${vId}.pdf"`);
+
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      doc.pipe(res);
+
+      try {
+        const logoUrl = process.env.VOUCHER_LOGO_URL || 'https://i.postimg.cc/j55DNmbh/frontend-logo.jpg';
+        const resp = await fetch(logoUrl);
+        if (resp && resp.ok) {
+          const arr = await resp.arrayBuffer();
+          const imgBuf = Buffer.from(arr);
+          doc.image(imgBuf, 50, 50, { fit: [160, 60] });
+        }
+      } catch {}
+      doc.moveDown(2);
+
+      doc.fontSize(22).text('New Age Fotografie', { align: 'right' });
+      doc.moveDown(0.5);
+      doc.fontSize(12).text('www.newagefotografie.com', { align: 'right' });
+      doc.moveDown(1.5);
+
+      doc.fontSize(26).text('PERSONALISIERTER GUTSCHEIN', { align: 'left' });
+      doc.moveDown(0.5);
+
+      doc.fontSize(18).text(title);
+      doc.moveDown(0.5);
+      doc.fontSize(12).text(`Gutschein-ID: ${vId}`);
+      doc.text(`SKU: ${sku}`);
+      doc.text(`Empfänger/in: ${name}`);
+      doc.text(`Von: ${from}`);
+      doc.text(`Gültig bis: ${exp}`);
+      doc.moveDown(0.5);
+
+      if (note) {
+        doc.fontSize(12).text('Nachricht:', { underline: true });
+        doc.moveDown(0.2);
+        doc.fontSize(12).text(note, { align: 'left' });
+        doc.moveDown(0.8);
+      }
+
+      doc.moveDown(1);
+      doc.fontSize(10).text(
+        'Einlösbar für die oben genannte Leistung in unserem Studio. ' +
+        'Nicht bar auszahlbar. Termin nach Verfügbarkeit. Bitte zur Einlösung Gutschein-ID angeben.',
+        { align: 'justify' }
+      );
+
+      doc.moveDown(2);
+      const paid = ((session.amount_total || 0) / 100).toFixed(2) + ' ' + String(session.currency || 'EUR').toUpperCase();
+      const createdMs = (session.created ? Number(session.created) * 1000 : Date.now());
+      doc.fontSize(10).text(`Belegt durch Zahlung: ${paid} | Datum: ${new Date(createdMs).toLocaleDateString('de-AT')}`);
+      doc.end();
+    } catch (e) {
+      console.error('Voucher PDF generation failed', e);
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Failed to generate PDF');
+    }
+    return;
+  }
+
+  if (pathname === '/voucher/pdf/preview' && req.method === 'GET') {
+    try {
+      const qp = parsedUrl.query || {};
+      const sku = String(qp.sku || 'Family-Basic');
+      const name = String(qp.name || qp.recipient_name || 'Anna Muster');
+      const from = String(qp.from || qp.from_name || 'Max Beispiel');
+      const note = String(qp.message || 'Alles Gute zum besonderen Anlass!');
+      const vId = String(qp.voucher_id || 'VCHR-PREVIEW-1234');
+      const exp = String(qp.expiry_date || '12 Monate ab Kaufdatum');
+      const amount = parseFloat(String(qp.amount || '95.00'));
+      const currency = String(qp.currency || 'EUR');
+
+      const titleMap = {
+        'Maternity-Basic': 'Schwangerschafts Fotoshooting - Basic',
+        'Family-Basic': 'Family Fotoshooting - Basic',
+        'Newborn-Basic': 'Newborn Fotoshooting - Basic',
+        'Maternity-Premium': 'Schwangerschafts Fotoshooting - Premium',
+        'Family-Premium': 'Family Fotoshooting - Premium',
+        'Newborn-Premium': 'Newborn Fotoshooting - Premium',
+        'Maternity-Deluxe': 'Schwangerschafts Fotoshooting - Deluxe',
+        'Family-Deluxe': 'Family Fotoshooting - Deluxe',
+        'Newborn-Deluxe': 'Newborn Fotoshooting - Deluxe',
+      };
+      const title = titleMap[sku] || 'Gutschein';
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${vId}.pdf"`);
+
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      doc.pipe(res);
+
+      try {
+        const logoUrl = process.env.VOUCHER_LOGO_URL || 'https://i.postimg.cc/j55DNmbh/frontend-logo.jpg';
+        const resp = await fetch(logoUrl);
+        if (resp && resp.ok) {
+          const arr = await resp.arrayBuffer();
+          const imgBuf = Buffer.from(arr);
+          doc.image(imgBuf, 50, 50, { fit: [160, 60] });
+        }
+      } catch {}
+      doc.moveDown(2);
+
+      doc.fontSize(22).text('New Age Fotografie', { align: 'right' });
+      doc.moveDown(0.5);
+      doc.fontSize(12).text('www.newagefotografie.com', { align: 'right' });
+      doc.moveDown(1.5);
+
+      doc.fontSize(26).text('PERSONALISIERTER GUTSCHEIN', { align: 'left' });
+      doc.moveDown(0.5);
+
+      doc.fontSize(18).text(title);
+      doc.moveDown(0.5);
+      doc.fontSize(12).text(`Gutschein-ID: ${vId}`);
+      doc.text(`SKU: ${sku}`);
+      doc.text(`Empfänger/in: ${name}`);
+      doc.text(`Von: ${from}`);
+      doc.text(`Gültig bis: ${exp}`);
+      doc.moveDown(0.5);
+
+      if (note) {
+        doc.fontSize(12).text('Nachricht:', { underline: true });
+        doc.moveDown(0.2);
+        doc.fontSize(12).text(note, { align: 'left' });
+        doc.moveDown(0.8);
+      }
+
+      doc.moveDown(1);
+      doc.fontSize(10).text(
+        'Einlösbar für die oben genannte Leistung in unserem Studio. ' +
+        'Nicht bar auszahlbar. Termin nach Verfügbarkeit. Bitte zur Einlösung Gutschein-ID angeben.',
+        { align: 'justify' }
+      );
+
+      doc.moveDown(2);
+      const paid = amount.toFixed(2) + ' ' + currency.toUpperCase();
+      doc.fontSize(10).text(`Vorschau der Zahlung: ${paid} | Datum: ${new Date().toLocaleDateString('de-AT')}`);
+      doc.end();
+    } catch (e) {
+      console.error('Voucher PDF preview failed', e);
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Failed to generate preview PDF');
+    }
+    return;
+  }
+
   
   // API endpoints
   if (pathname.startsWith('/api/')) {
@@ -3476,11 +3673,13 @@ New Age Fotografie Team`;
               console.log('💳 Creating LIVE Stripe checkout session...');
               const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
               
+              const isVoucherMode = !!(checkoutData?.voucherData || String(checkoutData?.mode || '').toLowerCase() === 'voucher' || String(checkoutData?.order_type || '').toLowerCase() === 'voucher');
+              const successPath = isVoucherMode ? '/voucher/thank-you' : '/checkout/success';
               const sessionParams = {
                 payment_method_types: ['card'],
                 line_items: lineItems,
                 mode: 'payment',
-                success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+                success_url: `${baseUrl}${successPath}?session_id={CHECKOUT_SESSION_ID}`,
                 cancel_url: `${baseUrl}/checkout/cancel`,
                 allow_promotion_codes: false,
                 metadata: {
@@ -3508,6 +3707,35 @@ New Age Fotografie Team`;
                     sessionParams.metadata.shipping_address = JSON.stringify(checkoutData.voucherData.shippingAddress).substring(0, 500);
                   } catch (e) {}
                 }
+                // Extra metadata to support post-payment voucher PDF
+                try {
+                  const firstItem = (Array.isArray(itemsArray) && itemsArray[0]) ? itemsArray[0] : null;
+                  const deriveSku = (name) => {
+                    const n = String(name || '').toLowerCase();
+                    if (n.includes('schwangerschaft') && n.includes('basic')) return 'Maternity-Basic';
+                    if (n.includes('family') && n.includes('basic')) return 'Family-Basic';
+                    if (n.includes('newborn') && n.includes('basic')) return 'Newborn-Basic';
+                    if (n.includes('schwangerschaft') && n.includes('premium')) return 'Maternity-Premium';
+                    if (n.includes('family') && n.includes('premium')) return 'Family-Premium';
+                    if (n.includes('newborn') && n.includes('premium')) return 'Newborn-Premium';
+                    if (n.includes('schwangerschaft') && n.includes('deluxe')) return 'Maternity-Deluxe';
+                    if (n.includes('family') && n.includes('deluxe')) return 'Family-Deluxe';
+                    if (n.includes('newborn') && n.includes('deluxe')) return 'Newborn-Deluxe';
+                    return undefined;
+                  };
+                  const sku = firstItem?.sku || deriveSku(firstItem?.name || firstItem?.title);
+                  if (sku) sessionParams.metadata.sku = String(sku);
+                  // Generate a simple voucher id when not provided
+                  const vid = checkoutData.voucherData.voucherId || `V-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+                  sessionParams.metadata.voucher_id = String(vid);
+                  const recipientName = checkoutData.voucherData.recipientName || checkoutData.voucherData.name;
+                  const fromName = checkoutData.voucherData.fromName || checkoutData.voucherData.sender;
+                  const message = checkoutData.voucherData.message || checkoutData.voucherData.personalMessage;
+                  if (recipientName) sessionParams.metadata.recipient_name = String(recipientName).substring(0, 120);
+                  if (fromName) sessionParams.metadata.from_name = String(fromName).substring(0, 120);
+                  if (message) sessionParams.metadata.message = String(message).substring(0, 500);
+                  if (checkoutData.voucherData.expiryDate) sessionParams.metadata.expiry_date = String(checkoutData.voucherData.expiryDate);
+                } catch {}
               }
 
               // Collect shipping address in Stripe Checkout when a delivery line is present
@@ -3541,6 +3769,202 @@ New Age Fotografie Team`;
           console.error('❌ Checkout API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // ========= Voucher PDF Generation (no webhook required) =========
+      if (pathname === '/voucher/pdf' && req.method === 'GET') {
+        try {
+          const sessionId = String(parsedUrl.query?.session_id || '').trim();
+          if (!sessionId) {
+            res.writeHead(400, { 'Content-Type': 'text/plain' });
+            res.end('Missing session_id');
+            return;
+          }
+
+          if (!stripe) {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('Stripe not configured');
+            return;
+          }
+
+          let session = await stripe.checkout.sessions.retrieve(sessionId);
+          let isPaid = session?.payment_status === 'paid';
+          if (!isPaid) {
+            session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['payment_intent'] });
+            isPaid = session?.payment_status === 'paid';
+          }
+
+          if (!isPaid) {
+            res.writeHead(402, { 'Content-Type': 'text/plain' });
+            res.end('Payment not completed yet');
+            return;
+          }
+
+          const m = session.metadata || {};
+          const sku = m.sku || 'Voucher';
+          const name = m.recipient_name || 'Beschenkte/r';
+          const from = m.from_name || '—';
+          const note = m.message || m.personal_message || '';
+          const vId = m.voucher_id || session.id;
+          const exp = m.expiry_date || '12 Monate ab Kaufdatum';
+          const titleMap = {
+            'Maternity-Basic': 'Schwangerschafts Fotoshooting - Basic',
+            'Family-Basic': 'Family Fotoshooting - Basic',
+            'Newborn-Basic': 'Newborn Fotoshooting - Basic',
+            'Maternity-Premium': 'Schwangerschafts Fotoshooting - Premium',
+            'Family-Premium': 'Family Fotoshooting - Premium',
+            'Newborn-Premium': 'Newborn Fotoshooting - Premium',
+            'Maternity-Deluxe': 'Schwangerschafts Fotoshooting - Deluxe',
+            'Family-Deluxe': 'Family Fotoshooting - Deluxe',
+            'Newborn-Deluxe': 'Newborn Fotoshooting - Deluxe',
+          };
+          const title = titleMap[String(sku)] || 'Gutschein';
+
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', `attachment; filename="${vId}.pdf"`);
+
+          const doc = new PDFDocument({ size: 'A4', margin: 50 });
+          doc.pipe(res);
+
+          try {
+            const logoUrl = process.env.VOUCHER_LOGO_URL || 'https://i.postimg.cc/j55DNmbh/frontend-logo.jpg';
+            const resp = await fetch(logoUrl);
+            if (resp && resp.ok) {
+              const arr = await resp.arrayBuffer();
+              const imgBuf = Buffer.from(arr);
+              doc.image(imgBuf, 50, 50, { fit: [160, 60] });
+            }
+          } catch {}
+          doc.moveDown(2);
+
+          doc.fontSize(22).text('New Age Fotografie', { align: 'right' });
+          doc.moveDown(0.5);
+          doc.fontSize(12).text('www.newagefotografie.com', { align: 'right' });
+          doc.moveDown(1.5);
+
+          doc.fontSize(26).text('PERSONALISIERTER GUTSCHEIN', { align: 'left' });
+          doc.moveDown(0.5);
+
+          doc.fontSize(18).text(title);
+          doc.moveDown(0.5);
+          doc.fontSize(12).text(`Gutschein-ID: ${vId}`);
+          doc.text(`SKU: ${sku}`);
+          doc.text(`Empfänger/in: ${name}`);
+          doc.text(`Von: ${from}`);
+          doc.text(`Gültig bis: ${exp}`);
+          doc.moveDown(0.5);
+
+          if (note) {
+            doc.fontSize(12).text('Nachricht:', { underline: true });
+            doc.moveDown(0.2);
+            doc.fontSize(12).text(note, { align: 'left' });
+            doc.moveDown(0.8);
+          }
+
+          doc.moveDown(1);
+          doc.fontSize(10).text(
+            'Einlösbar für die oben genannte Leistung in unserem Studio. ' +
+            'Nicht bar auszahlbar. Termin nach Verfügbarkeit. Bitte zur Einlösung Gutschein-ID angeben.',
+            { align: 'justify' }
+          );
+
+          doc.moveDown(2);
+          const paid = ((session.amount_total || 0) / 100).toFixed(2) + ' ' + String(session.currency || 'EUR').toUpperCase();
+          const createdMs = (session.created ? Number(session.created) * 1000 : Date.now());
+          doc.fontSize(10).text(`Belegt durch Zahlung: ${paid} | Datum: ${new Date(createdMs).toLocaleDateString('de-AT')}`);
+          doc.end();
+        } catch (e) {
+          console.error('Voucher PDF generation failed', e);
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end('Failed to generate PDF');
+        }
+        return;
+      }
+
+      // Voucher PDF Preview: generate a sample personalized voucher PDF without requiring payment
+      if (pathname === '/voucher/pdf/preview' && req.method === 'GET') {
+        try {
+          const qp = parsedUrl.query || {};
+          const sku = String(qp.sku || 'Family-Basic');
+          const name = String(qp.name || qp.recipient_name || 'Anna Muster');
+          const from = String(qp.from || qp.from_name || 'Max Beispiel');
+          const note = String(qp.message || 'Alles Gute zum besonderen Anlass!');
+          const vId = String(qp.voucher_id || 'VCHR-PREVIEW-1234');
+          const exp = String(qp.expiry_date || '12 Monate ab Kaufdatum');
+          const amount = parseFloat(String(qp.amount || '95.00'));
+          const currency = String(qp.currency || 'EUR');
+
+          const titleMap = {
+            'Maternity-Basic': 'Schwangerschafts Fotoshooting - Basic',
+            'Family-Basic': 'Family Fotoshooting - Basic',
+            'Newborn-Basic': 'Newborn Fotoshooting - Basic',
+            'Maternity-Premium': 'Schwangerschafts Fotoshooting - Premium',
+            'Family-Premium': 'Family Fotoshooting - Premium',
+            'Newborn-Premium': 'Newborn Fotoshooting - Premium',
+            'Maternity-Deluxe': 'Schwangerschafts Fotoshooting - Deluxe',
+            'Family-Deluxe': 'Family Fotoshooting - Deluxe',
+            'Newborn-Deluxe': 'Newborn Fotoshooting - Deluxe',
+          };
+          const title = titleMap[sku] || 'Gutschein';
+
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', `attachment; filename="${vId}.pdf"`);
+
+          const doc = new PDFDocument({ size: 'A4', margin: 50 });
+          doc.pipe(res);
+
+          try {
+            const logoUrl = process.env.VOUCHER_LOGO_URL || 'https://i.postimg.cc/j55DNmbh/frontend-logo.jpg';
+            const resp = await fetch(logoUrl);
+            if (resp && resp.ok) {
+              const arr = await resp.arrayBuffer();
+              const imgBuf = Buffer.from(arr);
+              doc.image(imgBuf, 50, 50, { fit: [160, 60] });
+            }
+          } catch {}
+          doc.moveDown(2);
+
+          doc.fontSize(22).text('New Age Fotografie', { align: 'right' });
+          doc.moveDown(0.5);
+          doc.fontSize(12).text('www.newagefotografie.com', { align: 'right' });
+          doc.moveDown(1.5);
+
+          doc.fontSize(26).text('PERSONALISIERTER GUTSCHEIN', { align: 'left' });
+          doc.moveDown(0.5);
+
+          doc.fontSize(18).text(title);
+          doc.moveDown(0.5);
+          doc.fontSize(12).text(`Gutschein-ID: ${vId}`);
+          doc.text(`SKU: ${sku}`);
+          doc.text(`Empfänger/in: ${name}`);
+          doc.text(`Von: ${from}`);
+          doc.text(`Gültig bis: ${exp}`);
+          doc.moveDown(0.5);
+
+          if (note) {
+            doc.fontSize(12).text('Nachricht:', { underline: true });
+            doc.moveDown(0.2);
+            doc.fontSize(12).text(note, { align: 'left' });
+            doc.moveDown(0.8);
+          }
+
+          doc.moveDown(1);
+          doc.fontSize(10).text(
+            'Einlösbar für die oben genannte Leistung in unserem Studio. ' +
+            'Nicht bar auszahlbar. Termin nach Verfügbarkeit. Bitte zur Einlösung Gutschein-ID angeben.',
+            { align: 'justify' }
+          );
+
+          doc.moveDown(2);
+          const paid = amount.toFixed(2) + ' ' + currency.toUpperCase();
+          doc.fontSize(10).text(`Vorschau der Zahlung: ${paid} | Datum: ${new Date().toLocaleDateString('de-AT')}`);
+          doc.end();
+        } catch (e) {
+          console.error('Voucher PDF preview failed', e);
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end('Failed to generate preview PDF');
         }
         return;
       }
@@ -4029,6 +4453,7 @@ New Age Fotografie Team`;
         return;
       }
     }
+      // End of /api/* handling
 
     // Admin endpoint to force-refresh coupon cache after env changes
     if (pathname === '/__admin/refresh-coupons' && req.method === 'POST') {

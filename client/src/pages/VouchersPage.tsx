@@ -127,6 +127,9 @@ const VouchersPage: React.FC = () => {
                 <p className="text-lg text-purple-600 font-medium">
                   {vouchersTitle}
                 </p>
+                <p className="text-sm mt-1 font-semibold text-red-600">
+                  click Jetzt Buchen for options available
+                </p>
               </div>
             </div>
           </div>
