@@ -6308,6 +6308,90 @@ New Age Fotografie CRM System
     }
   });
 
+  // Voucher PDF Preview: generate a sample personalized voucher PDF without requiring payment
+  app.get('/voucher/pdf/preview', async (req: Request, res: Response) => {
+    try {
+      const qp = req.query || {};
+      const sku = String(qp.sku || 'Family-Basic');
+      const name = String(qp.name || qp.recipient_name || 'Anna Muster');
+      const from = String(qp.from || qp.from_name || 'Max Beispiel');
+      const note = String(qp.message || 'Alles Gute zum besonderen Anlass!');
+      const vId = String(qp.voucher_id || 'VCHR-PREVIEW-1234');
+      const exp = String(qp.expiry_date || '12 Monate ab Kaufdatum');
+      const amount = parseFloat(String(qp.amount || '95.00'));
+      const currency = String(qp.currency || 'EUR');
+
+      const titleMap: Record<string, string> = {
+        'Maternity-Basic': 'Schwangerschafts Fotoshooting - Basic',
+        'Family-Basic': 'Family Fotoshooting - Basic',
+        'Newborn-Basic': 'Newborn Fotoshooting - Basic',
+        'Maternity-Premium': 'Schwangerschafts Fotoshooting - Premium',
+        'Family-Premium': 'Family Fotoshooting - Premium',
+        'Newborn-Premium': 'Newborn Fotoshooting - Premium',
+        'Maternity-Deluxe': 'Schwangerschafts Fotoshooting - Deluxe',
+        'Family-Deluxe': 'Family Fotoshooting - Deluxe',
+        'Newborn-Deluxe': 'Newborn Fotoshooting - Deluxe',
+      };
+      const title = titleMap[sku] || 'Gutschein';
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${vId}.pdf"`);
+
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      doc.pipe(res);
+
+      try {
+        const logoUrl = process.env.VOUCHER_LOGO_URL || 'https://i.postimg.cc/j55DNmbh/frontend-logo.jpg';
+        const resp = await fetch(logoUrl);
+        if (resp && resp.ok) {
+          const arr = await resp.arrayBuffer();
+          const imgBuf = Buffer.from(arr);
+          doc.image(imgBuf, 50, 50, { fit: [160, 60] });
+        }
+      } catch {}
+      doc.moveDown(2);
+
+      doc.fontSize(22).text('New Age Fotografie', { align: 'right' });
+      doc.moveDown(0.5);
+      doc.fontSize(12).text('www.newagefotografie.com', { align: 'right' });
+      doc.moveDown(1.5);
+
+      doc.fontSize(26).text('PERSONALISIERTER GUTSCHEIN', { align: 'left' });
+      doc.moveDown(0.5);
+
+      doc.fontSize(18).text(title);
+      doc.moveDown(0.5);
+      doc.fontSize(12).text(`Gutschein-ID: ${vId}`);
+      doc.text(`SKU: ${sku}`);
+      doc.text(`Empfänger/in: ${name}`);
+      doc.text(`Von: ${from}`);
+      doc.text(`Gültig bis: ${exp}`);
+      doc.moveDown(0.5);
+
+      if (note) {
+        doc.fontSize(12).text('Nachricht:', { underline: true });
+        doc.moveDown(0.2);
+        doc.fontSize(12).text(note, { align: 'left' });
+        doc.moveDown(0.8);
+      }
+
+      doc.moveDown(1);
+      doc.fontSize(10).text(
+        'Einlösbar für die oben genannte Leistung in unserem Studio. ' +
+        'Nicht bar auszahlbar. Termin nach Verfügbarkeit. Bitte zur Einlösung Gutschein-ID angeben.',
+        { align: 'justify' }
+      );
+
+      doc.moveDown(2);
+      const paid = amount.toFixed(2) + ' ' + currency.toUpperCase();
+      doc.fontSize(10).text(`Vorschau der Zahlung: ${paid} | Datum: ${new Date().toLocaleDateString()}`);
+      doc.end();
+    } catch (e) {
+      console.error('Voucher PDF preview failed', e);
+      res.status(500).send('Failed to generate preview PDF');
+    }
+  });
+
   // ==================== PRICE LIST ROUTES ====================
   app.get("/api/crm/price-list", async (req: Request, res: Response) => {
     try {

@@ -3,10 +3,23 @@ import React, { useEffect } from 'react';
 const VoucherThankYouPage: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const preview = params.get('preview');
     const sid = params.get('session_id');
-    if (!sid) return;
     const apiBase = import.meta.env.VITE_API_URL || '';
-    const href = `${apiBase}/voucher/pdf?session_id=${encodeURIComponent(sid)}`;
+
+    let href: string | null = null;
+    if (preview === '1') {
+      const sku = params.get('sku') || 'Family-Basic';
+      const name = params.get('name') || 'Anna Muster';
+      const from = params.get('from') || 'Max Beispiel';
+      const message = params.get('message') || 'Alles Gute zum besonderen Anlass!';
+      const amount = params.get('amount') || '95.00';
+      href = `${apiBase}/voucher/pdf/preview?sku=${encodeURIComponent(sku)}&name=${encodeURIComponent(name)}&from=${encodeURIComponent(from)}&message=${encodeURIComponent(message)}&amount=${encodeURIComponent(amount)}`;
+    } else if (sid) {
+      href = `${apiBase}/voucher/pdf?session_id=${encodeURIComponent(sid)}`;
+    }
+
+    if (!href) return;
     const link = document.createElement('a');
     link.href = href;
     link.download = '';
