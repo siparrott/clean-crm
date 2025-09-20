@@ -44,7 +44,7 @@
     "db:init:questionnaires": "tsx scripts/init-questionnaires.ts",
     "q:create": "node scripts/create-questionnaire.js",
     "q:submit": "node scripts/submit-questionnaire.js",
-    "q:e2e": "node scripts/create-questionnaire.js && node scripts/submit-questionnaire.js"
+    "q:responses": "node scripts/get-responses.js"
   },
   "keywords": [
     "photography",

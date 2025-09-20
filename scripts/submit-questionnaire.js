@@ -1,4 +1,48 @@
 #!/usr/bin/env node
+require('dotenv').config();
+
+function arg(name, def = undefined) {
+  const i = process.argv.indexOf(`--${name}`);
+  if (i !== -1 && process.argv[i + 1]) return process.argv[i + 1];
+  return def;
+}
+
+async function main() {
+  const base = arg('base', process.env.TEST_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
+  const slug = arg('slug') || process.env.Q_SLUG;
+  if (!base || !slug) {
+    console.error('Usage: node scripts/submit-questionnaire.js --base <BASE_URL> --slug <SLUG> [--name "Name"] [--email you@example.com] [--shoot Family] [--date "Next week"]');
+    process.exit(2);
+  }
+
+  const name = arg('name', 'E2E Tester');
+  const email = arg('email', 'e2e.tester@example.com');
+  const shoot = arg('shoot', 'Family');
+  const datewin = arg('date', 'Next week afternoon');
+
+  const body = {
+    client_name: name,
+    client_email: email,
+    shoot_type: shoot,
+    date_window: datewin,
+    people: '2 Adults, 1 Newborn',
+    phone: '+43 660 0000000'
+  };
+
+  const url = `${base}/api/questionnaires/${slug}/submit`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const text = await res.text();
+  try { console.log(JSON.stringify(JSON.parse(text), null, 2)); }
+  catch { console.log(text); }
+  if (!res.ok) process.exit(1);
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
+#!/usr/bin/env node
 // Submits a test response to a questionnaire
 
 require('dotenv').config();
