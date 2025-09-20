@@ -3402,9 +3402,16 @@ New Age Fotografie Team`;
 
                   // Apply discount only to non-delivery items
                   if (remainingDiscount > 0 && !looksLikeDelivery(item)) {
-                    const reduceBy = Math.min(unitCents, remainingDiscount);
-                    unitCents = Math.max(0, unitCents - reduceBy);
-                    remainingDiscount -= reduceBy;
+                    // For VCWIEN, enforce that item unit price is exactly 9500 cents
+                    const isVCWIEN = String(checkoutData.appliedVoucherCode || '').toUpperCase() === 'VCWIEN';
+                    const vcwienEligible = baseCents === 9500;
+                    if (isVCWIEN && !vcwienEligible) {
+                      // Skip discount for this item
+                    } else {
+                      const reduceBy = Math.min(unitCents, remainingDiscount);
+                      unitCents = Math.max(0, unitCents - reduceBy);
+                      remainingDiscount -= reduceBy;
+                    }
                   }
 
                   return ({
@@ -3593,7 +3600,7 @@ New Age Fotografie Team`;
       }
 
   // New coupon validation endpoint aligned with client CartPage and EnhancedCheckout
-      if (pathname === '/api/vouchers/coupons/validate' && req.method === 'POST') {
+  if (pathname === '/api/vouchers/coupons/validate' && req.method === 'POST') {
         try {
           let body = '';
           req.on('data', chunk => { body += chunk.toString(); });
@@ -3615,13 +3622,25 @@ New Age Fotografie Team`;
 
               const cartItems = Array.isArray(items) ? items : [];
               let applicableSubtotal = 0;
+              let hasExact95 = false;
               for (const it of cartItems) {
                 const sku = it?.sku || it?.productSlug || it?.name;
                 const qty = Number(it?.quantity || 1);
                 const price = Number(it?.price || 0);
                 if (allowsSku(coupon, sku)) {
                   applicableSubtotal += price * qty;
+                  // Track if any eligible line has unit price exactly €95.00
+                  if (Math.abs(price - 95) < 1e-6) {
+                    hasExact95 = true;
+                  }
                 }
+              }
+
+              // Special constraint: VCWIEN only valid for €95 vouchers
+              if (String(code).toUpperCase() === 'VCWIEN' && !hasExact95) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ valid: false, error: 'Gutschein nur für 95€ Gutscheine gültig' }));
+                return;
               }
 
               if (applicableSubtotal <= 0) {
