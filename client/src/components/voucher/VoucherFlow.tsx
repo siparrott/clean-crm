@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import VoucherPersonalization, { type VoucherPersonalizationData } from './VoucherPersonalization';
 import EnhancedCheckoutPage from './EnhancedCheckoutPage';
 import { ArrowLeft } from 'lucide-react';
@@ -43,6 +43,28 @@ const VoucherFlow: React.FC<VoucherFlowProps> = ({
 
   const [currentStep, setCurrentStep] = useState<FlowStep>(getStoredStep);
   const [voucherData, setVoucherData] = useState<VoucherPersonalizationData | null>(getStoredVoucherData);
+  const initialUrlSynced = useRef(false);
+
+  // On mount, read vf query param and sync initial step
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const vf = (url.searchParams.get('vf') || '').toLowerCase();
+      let desired: FlowStep | null = null;
+      if (vf === 'personalization' || vf === 'checkout' || vf === 'confirmation') {
+        desired = vf as FlowStep;
+      }
+      if (desired) {
+        // Guard: cannot be in checkout without data
+        if (desired === 'checkout' && !getStoredVoucherData()) {
+          desired = 'personalization';
+        }
+        setCurrentStep(desired);
+      }
+      initialUrlSynced.current = true;
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Save state to sessionStorage whenever it changes
   useEffect(() => {
@@ -65,23 +87,66 @@ const VoucherFlow: React.FC<VoucherFlowProps> = ({
     }
   }, [voucherData, voucherType]);
 
-  // Cleanup session storage if user navigates away from voucher flow entirely
+  // Reflect current step into URL (?vf=...) so browser back navigates within flow without hard reset
   useEffect(() => {
-    return () => {
-      // Only cleanup if we're not in checkout step (to preserve during Stripe redirect)
-      if (currentStep !== 'checkout') {
-        try {
-          sessionStorage.removeItem(`voucher_flow_step_${voucherType}`);
-          sessionStorage.removeItem(`voucher_flow_data_${voucherType}`);
-        } catch (error) {
-          console.warn('Failed to cleanup voucher flow data from sessionStorage:', error);
+    try {
+      const url = new URL(window.location.href);
+      const existing = (url.searchParams.get('vf') || '').toLowerCase();
+      if (existing !== currentStep) {
+        url.searchParams.set('vf', currentStep);
+        // Avoid pushing before initial sync to keep history clean
+        if (initialUrlSynced.current) {
+          window.history.pushState({ vf: currentStep }, '', url.toString());
+        } else {
+          window.history.replaceState({ vf: currentStep }, '', url.toString());
+          initialUrlSynced.current = true;
         }
       }
+    } catch {}
+  }, [currentStep]);
+
+  // Handle browser back/forward to switch steps without reloading or resetting
+  useEffect(() => {
+    const onPop = () => {
+      try {
+        const url = new URL(window.location.href);
+        const vf = (url.searchParams.get('vf') || '').toLowerCase();
+        if (vf === 'personalization' || vf === 'checkout' || vf === 'confirmation') {
+          // Guard: if checkout requested but no data, fallback to personalization
+          if (vf === 'checkout' && !getStoredVoucherData()) {
+            setCurrentStep('personalization');
+          } else {
+            setCurrentStep(vf as FlowStep);
+          }
+        }
+      } catch {}
     };
-  }, [currentStep, voucherType]);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  // Handle browser back/forward to navigate within the flow without hard reset
+  useEffect(() => {
+    const onPopState = (ev: PopStateEvent) => {
+      const state = (ev.state || {}) as any;
+      if (state && state.voucherFlow === voucherType) {
+        // Move back to personalization if we were in checkout
+        setCurrentStep(state.step === 'checkout' ? 'personalization' : 'personalization');
+      } else {
+        // If unrelated history navigation, preserve flow by defaulting to personalization
+        setCurrentStep('personalization');
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [voucherType]);
 
   const handlePersonalizationComplete = (data: VoucherPersonalizationData) => {
     setVoucherData(data);
+    // Push a history state so browser Back returns to personalization, not previous route
+    try {
+      window.history.pushState({ voucherFlow: voucherType, step: 'checkout' }, '', window.location.href);
+    } catch {}
     setCurrentStep('checkout');
   };
 
@@ -115,6 +180,12 @@ const VoucherFlow: React.FC<VoucherFlowProps> = ({
     } catch (error) {
       console.warn('Failed to clear voucher flow data from sessionStorage:', error);
     }
+    // Also clean query param
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('vf');
+      window.history.pushState({}, '', url.toString());
+    } catch {}
     
     if (onBack) {
       onBack();
