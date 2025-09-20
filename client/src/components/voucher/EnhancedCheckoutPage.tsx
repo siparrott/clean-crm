@@ -37,6 +37,8 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
   const deliveryAmount = voucherData?.deliveryOption.price || 0;
   const subtotal = baseAmount + deliveryAmount;
   const total = subtotal - discount;
+  const needsShipping = !!(voucherData && (voucherData.deliveryOption.price > 0 || (voucherData.deliveryOption.id || '').startsWith('post-')));
+  const hasShippingAddress = !!(voucherData && voucherData.shippingAddress && voucherData.shippingAddress.address1 && voucherData.shippingAddress.city && voucherData.shippingAddress.zip && voucherData.shippingAddress.country);
 
   // Prefill from cart-applied voucher if provided
   useEffect(() => {
@@ -110,6 +112,11 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
 
   const handleCheckout = async (selectedPaymentMethod?: string) => {
     if (!email.trim() || !voucherData) return;
+    if (needsShipping && !hasShippingAddress) {
+      // Prevent checkout if shipping required but address missing
+      alert('Bitte geben Sie die Lieferadresse ein, bevor Sie zur Kasse gehen.');
+      return;
+    }
 
     const finalPaymentMethod = selectedPaymentMethod || paymentMethod;
 
@@ -243,11 +250,14 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
                   e.preventDefault();
                   handleCheckout();
                 }}
-                disabled={!email.trim() || !voucherData}
+                disabled={!email.trim() || !voucherData || (needsShipping && !hasShippingAddress)}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center space-x-2"
               >
                 <span>Weiter</span>
               </button>
+              {needsShipping && !hasShippingAddress && (
+                <p className="text-sm text-red-600 mt-2">Für die gewählte Versandart ist eine Lieferadresse erforderlich. Bitte gehen Sie zurück und füllen Sie die Adresse aus.</p>
+              )}
             </div>
 
             {/* Payment Methods */}
@@ -256,7 +266,7 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
               <div className="space-y-3">
                 <label 
                   className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                  onClick={() => email.trim() && voucherData && handleCheckout('card')}
+                  onClick={() => email.trim() && voucherData && (!needsShipping || hasShippingAddress) && handleCheckout('card')}
                 >
                   <input
                     type="radio"
@@ -268,7 +278,7 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
                   />
                   <CreditCard size={20} className="text-gray-600" />
                   <span>Kreditkarte / Debitkarte / Klarna</span>
-                  {paymentMethod === 'card' && email.trim() && voucherData && (
+                  {paymentMethod === 'card' && email.trim() && voucherData && (!needsShipping || hasShippingAddress) && (
                     <span className="ml-auto text-sm text-green-600">✓ Bereit zum Checkout</span>
                   )}
                 </label>
@@ -278,6 +288,9 @@ const EnhancedCheckoutPage: React.FC<EnhancedCheckoutPageProps> = ({
                 <p className="text-sm text-gray-500 mt-3">
                   Bitte geben Sie Ihre E-Mail-Adresse ein, um eine Zahlungsart zu wählen.
                 </p>
+              )}
+              {needsShipping && !hasShippingAddress && (
+                <p className="text-sm text-red-600 mt-2">Lieferadresse fehlt: Bitte zur Personalisierung zurückkehren und Adresse ergänzen.</p>
               )}
             </div>
           </div>

@@ -281,6 +281,7 @@ export class StripeVoucherService {
         paymentMethodTypes = ['card', 'klarna'];
       }
 
+      const needsShipping = Array.isArray(data.items) && data.items.some(i => (i.sku || '').toString().toLowerCase().startsWith('delivery-') || (i.description || '').toLowerCase().includes('liefer'));
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: paymentMethodTypes as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
         line_items: lineItems,
@@ -288,9 +289,7 @@ export class StripeVoucherService {
         success_url: successUrl,
         cancel_url: cancelUrl,
         customer_email: data.customerEmail,
-        shipping_address_collection: {
-          allowed_countries: ['DE', 'AT', 'CH'],
-        },
+        shipping_address_collection: needsShipping ? { allowed_countries: ['DE', 'AT', 'CH'] } : undefined,
         billing_address_collection: 'required',
   // Never allow Stripe promo codes; prices are pre-discounted server-side
   allow_promotion_codes: false,
@@ -324,6 +323,7 @@ export class StripeVoucherService {
         // If client sent discount, reflect it here; otherwise use computed delta
         discount_cents: String(Math.max(0, (Number((data as any).discount) || 0) || (basePrimaryCents - discountedPrimaryCents))),
         discount_strict_95: String(strict95Codes.has(appliedCodeUpper)),
+        shipping_address: data.voucherData?.shippingAddress ? JSON.stringify(data.voucherData.shippingAddress).substring(0, 500) : '',
       };
 
       sessionParams.payment_intent_data = {

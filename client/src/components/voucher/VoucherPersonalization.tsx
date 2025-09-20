@@ -31,6 +31,13 @@ export interface VoucherPersonalizationData {
   personalMessage: string;
   recipientName?: string;
   senderName?: string;
+  shippingAddress?: {
+    address1: string;
+    address2?: string;
+    city: string;
+    zip: string;
+    country: string;
+  };
 }
 
 const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({ 
@@ -44,6 +51,14 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
   const [personalMessage, setPersonalMessage] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [senderName, setSenderName] = useState('');
+  const [shippingAddress, setShippingAddress] = useState({
+    address1: '',
+    address2: '',
+    city: '',
+    zip: '',
+    country: 'AT',
+  });
+  const [addressTouched, setAddressTouched] = useState(false);
 
   const deliveryOptions: DeliveryOption[] = [
     {
@@ -111,13 +126,26 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
 
   const handleComplete = () => {
     if (selectedDelivery) {
+      const needsShipping = selectedDelivery.price > 0 || selectedDelivery.id.startsWith('post-');
+      if (needsShipping) {
+        setAddressTouched(true);
+        const ok = shippingAddress.address1.trim() && shippingAddress.city.trim() && shippingAddress.zip.trim() && shippingAddress.country.trim();
+        if (!ok) return;
+      }
       const personalizationData: VoucherPersonalizationData = {
         deliveryOption: selectedDelivery,
         selectedDesign: selectedDesign || undefined,
         customPhoto: customPhoto || undefined,
         personalMessage,
         recipientName,
-        senderName
+        senderName,
+        shippingAddress: (selectedDelivery.price > 0 || selectedDelivery.id.startsWith('post-')) ? {
+          address1: shippingAddress.address1.trim(),
+          address2: shippingAddress.address2?.trim() || undefined,
+          city: shippingAddress.city.trim(),
+          zip: shippingAddress.zip.trim(),
+          country: shippingAddress.country.trim() || 'AT',
+        } : undefined,
       };
       onComplete(personalizationData);
     }
@@ -421,6 +449,71 @@ const VoucherPersonalization: React.FC<VoucherPersonalizationProps> = ({
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
+
+            {/* Shipping Address for postal delivery */}
+            {selectedDelivery && (selectedDelivery.price > 0 || selectedDelivery.id.startsWith('post-')) && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold">Lieferadresse</h3>
+                <p className="text-sm text-gray-600">Bitte geben Sie die Postadresse für den Versand des Gutscheins ein.</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Straße und Hausnummer *</label>
+                  <input
+                    type="text"
+                    value={shippingAddress.address1}
+                    onChange={(e) => setShippingAddress(prev => ({ ...prev, address1: e.target.value }))}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${addressTouched && !shippingAddress.address1.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                    placeholder="z.B. Schönbrunner Str. 25"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Adresszusatz</label>
+                  <input
+                    type="text"
+                    value={shippingAddress.address2}
+                    onChange={(e) => setShippingAddress(prev => ({ ...prev, address2: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Stiege, Tür, Etage (optional)"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">PLZ *</label>
+                    <input
+                      type="text"
+                      value={shippingAddress.zip}
+                      onChange={(e) => setShippingAddress(prev => ({ ...prev, zip: e.target.value }))}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${addressTouched && !shippingAddress.zip.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                      placeholder="z.B. 1050"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ort *</label>
+                    <input
+                      type="text"
+                      value={shippingAddress.city}
+                      onChange={(e) => setShippingAddress(prev => ({ ...prev, city: e.target.value }))}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${addressTouched && !shippingAddress.city.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                      placeholder="z.B. Wien"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Land *</label>
+                  <select
+                    value={shippingAddress.country}
+                    onChange={(e) => setShippingAddress(prev => ({ ...prev, country: e.target.value }))}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${addressTouched && !shippingAddress.country.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                  >
+                    <option value="AT">Österreich</option>
+                    <option value="DE">Deutschland</option>
+                    <option value="CH">Schweiz</option>
+                  </select>
+                </div>
+                {addressTouched && (!shippingAddress.address1.trim() || !shippingAddress.city.trim() || !shippingAddress.zip.trim()) && (
+                  <p className="text-sm text-red-600">Bitte füllen Sie alle Pflichtfelder der Lieferadresse aus.</p>
+                )}
+              </div>
+            )}
 
             {personalMessage.trim() && (
               <div className="text-center">

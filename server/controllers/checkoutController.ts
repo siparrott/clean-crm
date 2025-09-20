@@ -12,6 +12,20 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No items provided' });
     }
 
+    // If a delivery (non-PDF) line is present, require shipping address in voucherData
+    const hasDelivery = Array.isArray(checkoutData.items) && checkoutData.items.some(i => {
+      const sku = (i.sku || '').toString().toLowerCase();
+      const desc = (i.description || '').toLowerCase();
+      return sku.startsWith('delivery-') || desc.includes('liefer');
+    });
+    if (hasDelivery) {
+      const addr = (checkoutData as any)?.voucherData?.shippingAddress || {};
+      const missing = !addr.address1 || !addr.city || !addr.zip || !addr.country;
+      if (missing) {
+        return res.status(400).json({ error: 'Shipping address required for postal delivery' });
+      }
+    }
+
     // Add base URLs - fix the URL to match the frontend
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     checkoutData.successUrl = `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
