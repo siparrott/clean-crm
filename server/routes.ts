@@ -6004,6 +6004,12 @@ New Age Fotografie CRM System
 
       const codeTrimmed = String(code).trim();
       const codeUpper = codeTrimmed.toUpperCase();
+      const strict95Codes = new Set(
+        (process.env.COUPONS_95_ONLY || 'VCWIEN')
+          .split(',')
+          .map(s => s.trim().toUpperCase())
+          .filter(Boolean)
+      );
 
       // First: env-driven custom coupons (COUPONS_JSON) via coupons service
       const envCoupon = findCoupon(codeUpper);
@@ -6050,6 +6056,7 @@ New Age Fotografie CRM System
         }
         // Calculate in cents; item.price expected in euros
         let applicableSubtotalCents = 0;
+        let hasExact95Eligible = false;
         if (Array.isArray(items) && items.length > 0) {
           for (const it of items) {
             const sku = (it.sku || it.productSlug || '').toString();
@@ -6057,10 +6064,18 @@ New Age Fotografie CRM System
             if (matches) {
               const lineTotalCents = Math.round((Number(it.price) || 0) * 100) * (Number(it.quantity) || 1);
               applicableSubtotalCents += Math.max(0, lineTotalCents);
+              if (Math.abs(Number(it.price || 0) - 95) < 1e-6) {
+                hasExact95Eligible = true;
+              }
             }
           }
         } else {
           applicableSubtotalCents = Math.max(0, Math.round((Number(orderAmount) || 0) * 100));
+        }
+
+        // Enforce €95-only constraint for strict codes
+        if (strict95Codes.has(codeUpper) && !hasExact95Eligible) {
+          return res.status(200).json({ valid: false, error: 'Gutschein nur für 95€ Gutscheine gültig' });
         }
 
         let discountCents = 0;

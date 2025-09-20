@@ -208,6 +208,14 @@ export class StripeVoucherService {
       let discountedPrimaryCents = basePrimaryCents;
 
       let remainingClientDiscount = clientDiscountCents;
+      const strict95Codes = new Set(
+        (process.env.COUPONS_95_ONLY || 'VCWIEN')
+          .split(',')
+          .map(s => s.trim().toUpperCase())
+          .filter(Boolean)
+      );
+      const appliedCodeUpper = String(data.appliedVoucherCode || data.appliedVoucher?.code || '').toUpperCase();
+
       const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = data.items.map(item => {
         const name = item.name || item.title || 'Fotoshooting Gutschein';
         const qty = Math.max(1, Number(item.quantity) || 1);
@@ -228,12 +236,15 @@ export class StripeVoucherService {
           const looksLikeDelivery = (item.sku || '').toString().toLowerCase().startsWith('delivery-')
             || (item.description || '').toLowerCase().includes('liefer');
           if (!looksLikeDelivery) {
-            // Discount is applied against the extended line (per unit). We reduce unit amount
-            // proportionally, but since voucher flow uses qty=1 this will simply subtract once.
-            const maxReducible = unitCents; // per unit
-            const reduceBy = Math.min(maxReducible, remainingClientDiscount);
-            unitCents = Math.max(0, unitCents - reduceBy);
-            remainingClientDiscount = Math.max(0, remainingClientDiscount - reduceBy);
+            // If code is in strict €95-only list, require baseCents == 9500
+            if (strict95Codes.has(appliedCodeUpper) && baseCents !== 9500) {
+              // skip applying discount for this line
+            } else {
+              const maxReducible = unitCents; // per unit
+              const reduceBy = Math.min(maxReducible, remainingClientDiscount);
+              unitCents = Math.max(0, unitCents - reduceBy);
+              remainingClientDiscount = Math.max(0, remainingClientDiscount - reduceBy);
+            }
           }
         }
 
@@ -312,6 +323,7 @@ export class StripeVoucherService {
         base_unit: String(basePrimaryCents),
         // If client sent discount, reflect it here; otherwise use computed delta
         discount_cents: String(Math.max(0, (Number((data as any).discount) || 0) || (basePrimaryCents - discountedPrimaryCents))),
+        discount_strict_95: String(strict95Codes.has(appliedCodeUpper)),
       };
 
       sessionParams.payment_intent_data = {
