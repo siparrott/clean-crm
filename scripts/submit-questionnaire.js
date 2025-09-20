@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Clean submit script supporting both flags and positional args
 require('dotenv').config();
 
 function arg(name, def = undefined) {
@@ -8,17 +9,35 @@ function arg(name, def = undefined) {
 }
 
 async function main() {
-  const base = arg('base', process.env.TEST_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
-  const slug = arg('slug') || process.env.Q_SLUG;
+  // Accept either flags or positional: base slug name email shoot date
+  let base = arg('base');
+  let slug = arg('slug');
+  let name = arg('name');
+  let email = arg('email');
+  let shoot = arg('shoot');
+  let datewin = arg('date');
+
+  // Positional fallback if flags missing
+  const pos = process.argv.slice(2).filter((t) => !String(t).startsWith('--'));
+  if (!base && pos[0]) base = pos[0];
+  if (!slug && pos[1]) slug = pos[1];
+  if (!name && pos[2]) name = pos.slice(2, 3).join(' ');
+  if (!email && pos[3]) email = pos[3];
+  if (!shoot && pos[4]) shoot = pos[4];
+  if (!datewin && pos[5]) datewin = pos.slice(5).join(' ');
+
+  base = (base || process.env.TEST_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
+  slug = slug || process.env.Q_SLUG;
   if (!base || !slug) {
     console.error('Usage: node scripts/submit-questionnaire.js --base <BASE_URL> --slug <SLUG> [--name "Name"] [--email you@example.com] [--shoot Family] [--date "Next week"]');
+    console.error('Or positional: node scripts/submit-questionnaire.js <base> <slug> <name> <email> <shoot> <date...>');
     process.exit(2);
   }
 
-  const name = arg('name', 'E2E Tester');
-  const email = arg('email', 'e2e.tester@example.com');
-  const shoot = arg('shoot', 'Family');
-  const datewin = arg('date', 'Next week afternoon');
+  name = name || 'E2E Tester';
+  email = email || 'e2e.tester@example.com';
+  shoot = shoot || 'Family';
+  datewin = datewin || 'Next week afternoon';
 
   const body = {
     client_name: name,
@@ -42,80 +61,3 @@ async function main() {
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
-#!/usr/bin/env node
-// Submits a test response to a questionnaire
-
-require('dotenv').config();
-
-async function main() {
-  const appUrl = (process.env.APP_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
-  if (!appUrl) throw new Error('APP_URL or APP_BASE_URL not set');
-
-  const slugEnv = process.env.Q_SLUG;
-  let slug = slugEnv;
-
-  if (!slug) {
-    // load latest
-    const neonModule = require('@neondatabase/serverless');
-    const sql = neonModule.neon(process.env.DATABASE_URL);
-    const rows = await sql`SELECT slug FROM questionnaires WHERE is_active = true ORDER BY created_at DESC LIMIT 1`;
-    if (!rows.length) throw new Error('No questionnaires found');
-    slug = rows[0].slug;
-  }
-
-  // Build payload matching dynamic fields
-  const neonModule = require('@neondatabase/serverless');
-  const sql = neonModule.neon(process.env.DATABASE_URL);
-  const [qn] = await sql`SELECT fields FROM questionnaires WHERE slug = ${slug}`;
-  const fields = qn?.fields || [];
-  const payload = {
-    client_name: process.env.Q_NAME || 'QA Test User',
-    client_email: process.env.Q_EMAIL || 'qa+questionnaire@newagefotografie.com',
-  };
-  for (const f of fields) {
-    if (f.type === 'select' && Array.isArray(f.options) && f.options.length) {
-      payload[f.key] = f.options[0];
-    } else if (f.type === 'checkbox') {
-      payload[f.key] = false;
-    } else {
-      payload[f.key] = `Test value for ${f.label}`;
-    }
-  }
-
-  const url = `${appUrl}/api/questionnaires/${slug}/submit`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  const text = await resp.text();
-  console.log(text);
-}
-
-main().catch((e) => { console.error(e); process.exit(1); });
-// Submits a test response for a given slug
-const url = process.env.APP_URL || 'https://clean-crm-photography-cf3af67a2afe.herokuapp.com';
-const slug = process.argv[2];
-if (!slug) {
-  console.error('Usage: node scripts/submit-questionnaire.js <slug>');
-  process.exit(1);
-}
-(async () => {
-  try {
-    const payload = {
-      client_name: 'Test User',
-      client_email: 'test@example.com',
-      note: 'This is a test submission.'
-    };
-    const res = await fetch(`${url}/api/questionnaires/${slug}/submit`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const text = await res.text();
-    console.log(text);
-  } catch (e) {
-    console.error('submit-questionnaire error:', e);
-    process.exit(1);
-  }
-})();
