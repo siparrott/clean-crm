@@ -3389,22 +3389,24 @@ New Age Fotografie Team`;
               // Handle different data formats (items array or direct data)
               let lineItems = [];
               if (checkoutData.items && Array.isArray(checkoutData.items)) {
-                // Prefer real Stripe Prices for BASIC vouchers so product-scoped promo codes apply
-                const PRICE_ID_PREGNANCY = process.env.STRIPE_PRICE_ID_PREGNANCY_BASIC || process.env.VCWIEN_PRICE_ID_PREGNANCY_BASIC;
-                const PRICE_ID_FAMILY = process.env.STRIPE_PRICE_ID_FAMILY_BASIC || process.env.VCWIEN_PRICE_ID_FAMILY_BASIC;
-                const PRICE_ID_NEWBORN = process.env.STRIPE_PRICE_ID_NEWBORN_BASIC || process.env.VCWIEN_PRICE_ID_NEWBORN_BASIC;
-                const norm = s => (s || '').toLowerCase().replace(/[\u2013\u2014]/g, '-').trim();
-                const isPregnancy = n => { const m = norm(n); return m.includes('schwangerschaft') && m.includes('basic'); };
-                const isFamily = n => { const m = norm(n); return m.includes('family') && m.includes('basic'); };
-                const isNewborn = n => { const m = norm(n); return m.includes('newborn') && m.includes('basic'); };
+                // Always use dynamic price_data and apply client-provided discount (in cents) to eligible items
+                const totalClientDiscount = Math.max(0, Math.round(Number(checkoutData.discount || 0)));
+                let remainingDiscount = totalClientDiscount;
+                const looksLikeDelivery = (it) => ((it?.sku || '') + ' ' + (it?.description || '')).toLowerCase().includes('delivery') || (it?.sku || '').toLowerCase().startsWith('delivery-') || (it?.description || '').toLowerCase().includes('liefer');
 
                 lineItems = checkoutData.items.map(item => {
                   const name = item.name || 'Photography Service';
-                  const qty = item.quantity || 1;
-                  if (PRICE_ID_PREGNANCY && isPregnancy(name)) return { price: PRICE_ID_PREGNANCY, quantity: qty };
-                  if (PRICE_ID_FAMILY && isFamily(name)) return { price: PRICE_ID_FAMILY, quantity: qty };
-                  if (PRICE_ID_NEWBORN && isNewborn(name)) return { price: PRICE_ID_NEWBORN, quantity: qty };
-                  // Fallback: dynamic price_data
+                  const qty = Math.max(1, Number(item.quantity || 1));
+                  const baseCents = Math.max(0, Math.round(Number(item.price || 0)));
+                  let unitCents = baseCents;
+
+                  // Apply discount only to non-delivery items
+                  if (remainingDiscount > 0 && !looksLikeDelivery(item)) {
+                    const reduceBy = Math.min(unitCents, remainingDiscount);
+                    unitCents = Math.max(0, unitCents - reduceBy);
+                    remainingDiscount -= reduceBy;
+                  }
+
                   return ({
                     price_data: {
                       currency: 'eur',
@@ -3412,7 +3414,7 @@ New Age Fotografie Team`;
                         name,
                         description: item.description || 'Professional photography service',
                       },
-                      unit_amount: item.price || 0,
+                      unit_amount: unitCents,
                     },
                     quantity: qty,
                   });
@@ -3426,7 +3428,7 @@ New Age Fotografie Team`;
                       name: checkoutData.product_name || 'Photography Service',
                       description: checkoutData.description || 'Professional photography service',
                     },
-                    unit_amount: Math.round((checkoutData.amount || 0) * 100), // Convert to cents
+                    unit_amount: Math.max(0, Math.round((checkoutData.amount || 0) * 100) - Math.max(0, Math.round(Number(checkoutData.discount || 0)))),
                   },
                   quantity: 1,
                 }];
@@ -3462,7 +3464,7 @@ New Age Fotografie Team`;
                 mode: 'payment',
                 success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
                 cancel_url: `${baseUrl}/checkout/cancel`,
-                allow_promotion_codes: true,
+                allow_promotion_codes: false,
                 metadata: {
                   client_id: checkoutData.client_id || '',
                   invoice_id: checkoutData.invoice_id || '',
