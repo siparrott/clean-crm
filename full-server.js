@@ -1289,7 +1289,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Questionnaire: submit answers
-    if (pathname.match(/^\/api\/questionnaires\/[^\/]+\/submit$/) && req.method === 'POST') {
+  if (pathname.match(/^\/api\/questionnaires\/[^\/]+\/submit$/) && req.method === 'POST') {
       try {
         const slug = pathname.split('/')[3];
         if (!sql) {
@@ -1329,7 +1329,8 @@ const server = http.createServer(async (req, res) => {
               res.end(JSON.stringify({ ok: false, error: `Please answer: ${missing.join(', ')}` }));
               return;
             }
-            const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+            const rawIp = Array.isArray(req.headers['x-forwarded-for']) ? req.headers['x-forwarded-for'][0] : (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '');
+            const ip = String(rawIp).split(',')[0].trim();
             const ua = req.headers['user-agent'] || '';
             const saved = await sql`
               INSERT INTO questionnaire_responses (questionnaire_id, client_email, client_name, answers, ip, user_agent)
