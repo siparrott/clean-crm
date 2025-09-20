@@ -38,7 +38,7 @@ router.post("/api/questionnaires", async (req, res) => {
       [slug, body.title, body.description || "", JSON.stringify(body.fields), email]
     );
 
-    const base = (process.env.APP_BASE_URL || "").replace(/\/$/, "");
+  const base = (process.env.APP_BASE_URL || process.env.APP_URL || "").replace(/\/$/, "");
     const link = `${base}/q/${rows[0].slug}`;
     res.json({ ok: true, questionnaire: rows[0], link });
   } catch (e: any) {
@@ -212,6 +212,7 @@ router.post("/api/questionnaires/:slug/submit", async (req, res) => {
         subject: `Neue Fragebogen-Antwort: ${qn.title}`,
         html,
       });
+      console.log(`[QUESTIONNAIRE] Notification sent to ${to} for slug=${slug}`);
     }
 
     res.json({ ok: true, id: saved[0].id });
