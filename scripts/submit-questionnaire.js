@@ -1,4 +1,43 @@
 #!/usr/bin/env node
+// Submits a questionnaire response via API to exercise email + persistence
+
+require('dotenv').config();
+
+async function main() {
+  const base = (process.env.APP_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
+  const slug = process.env.Q_SLUG;
+  if (!base || !slug) {
+    console.error('Missing APP_URL/APP_BASE_URL or Q_SLUG');
+    process.exit(1);
+  }
+  const clientName = process.env.Q_NAME || 'Test Kunde';
+  const clientEmail = process.env.Q_EMAIL || 'test+questionnaire@newagefotografie.com';
+  // Provide sensible defaults for the fields used by create-questionnaire.js
+  const payload = {
+    client_name: clientName,
+    client_email: clientEmail,
+    shoot_type: 'Family',
+    date_window: 'Next week',
+    people: '2 Erwachsene',
+    phone: '+43 660 1234567'
+  };
+
+  const url = `${base}/api/questionnaires/${slug}/submit`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const text = await res.text();
+  try {
+    console.log(JSON.stringify(JSON.parse(text), null, 2));
+  } catch {
+    console.log(text);
+  }
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
+#!/usr/bin/env node
 // Clean submit script supporting both flags and positional args
 require('dotenv').config();
 
