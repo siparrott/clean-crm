@@ -42,7 +42,7 @@
     "health:check": "echo 'Health check passed'",
     "deploy": "npm run build && npm start",
     "db:init:questionnaires": "tsx scripts/init-questionnaires.ts",
-    "q:create:quick": "tsx scripts/create-quick-questionnaire.ts"
+    "q:create": "node scripts/create-questionnaire.js"
   },
   "keywords": [
     "photography",
