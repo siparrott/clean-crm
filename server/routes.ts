@@ -57,6 +57,7 @@ import PDFDocument from 'pdfkit';
 import { jsPDF } from 'jspdf';
 import OpenAI from 'openai';
 import websiteWizardRoutes from './routes/website-wizard';
+import questionnairesRouter from './routes/questionnaires';
 import galleryShopRouter from './routes/gallery-shop';
 import authRoutes from './routes/auth';
 import filesRouter from './routes/files';
@@ -946,6 +947,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Digital files API
   app.use('/api/files', filesRouter);
+
+  // Questionnaire module (public + admin APIs)
+  app.use(questionnairesRouter);
 
   // Health check endpoint for deployment
   app.get("/api/health", (req, res) => {

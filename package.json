@@ -40,7 +40,8 @@
     "prune:prod:dry": "cross-env BASE_URL=https://www.newagefotografie.com node scripts/prune-history.js --dry",
     "prune:prod:exec": "cross-env BASE_URL=https://www.newagefotografie.com node scripts/prune-history.js --execute",
     "health:check": "echo 'Health check passed'",
-    "deploy": "npm run build && npm start"
+    "deploy": "npm run build && npm start",
+    "db:init:questionnaires": "tsx scripts/init-questionnaires.ts"
   },
   "keywords": [
     "photography",
