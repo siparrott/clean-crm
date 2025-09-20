@@ -3388,13 +3388,24 @@ New Age Fotografie Team`;
               
               // Handle different data formats (items array or direct data)
               let lineItems = [];
-              if (checkoutData.items && Array.isArray(checkoutData.items)) {
+              const itemsArray = Array.isArray(checkoutData.items) ? checkoutData.items : [];
+              const looksLikeDelivery = (it) => (((it?.sku || '') + ' ' + (it?.description || '')).toLowerCase().includes('delivery') || (it?.sku || '').toLowerCase().startsWith('delivery-') || (it?.description || '').toLowerCase().includes('liefer'));
+              const hasDelivery = itemsArray.some(looksLikeDelivery);
+              if (hasDelivery) {
+                const addr = (checkoutData?.voucherData?.shippingAddress) || {};
+                const missing = !addr.address1 || !addr.city || !addr.zip || !addr.country;
+                if (missing) {
+                  res.writeHead(400, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({ success: false, error: 'Shipping address required for postal delivery' }));
+                  return;
+                }
+              }
+              if (itemsArray.length) {
                 // Always use dynamic price_data and apply client-provided discount (in cents) to eligible items
                 const totalClientDiscount = Math.max(0, Math.round(Number(checkoutData.discount || 0)));
                 let remainingDiscount = totalClientDiscount;
-                const looksLikeDelivery = (it) => ((it?.sku || '') + ' ' + (it?.description || '')).toLowerCase().includes('delivery') || (it?.sku || '').toLowerCase().startsWith('delivery-') || (it?.description || '').toLowerCase().includes('liefer');
-
-                lineItems = checkoutData.items.map(item => {
+                
+                lineItems = itemsArray.map(item => {
                   const name = item.name || 'Photography Service';
                   const qty = Math.max(1, Number(item.quantity || 1));
                   const baseCents = Math.max(0, Math.round(Number(item.price || 0)));
@@ -3492,6 +3503,18 @@ New Age Fotografie Team`;
                 if (checkoutData.voucherData.personalMessage) {
                   sessionParams.metadata.personal_message = checkoutData.voucherData.personalMessage.substring(0, 500); // Stripe metadata limit
                 }
+                if (checkoutData.voucherData.shippingAddress) {
+                  try {
+                    sessionParams.metadata.shipping_address = JSON.stringify(checkoutData.voucherData.shippingAddress).substring(0, 500);
+                  } catch (e) {}
+                }
+              }
+
+              // Collect shipping address in Stripe Checkout when a delivery line is present
+              if (hasDelivery) {
+                sessionParams.shipping_address_collection = {
+                  allowed_countries: ['AT', 'DE', 'CH', 'IT', 'FR', 'NL']
+                };
               }
 
               const session = await stripe.checkout.sessions.create(sessionParams);

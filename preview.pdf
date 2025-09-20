@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    
+    <!-- Primary SEO -->
+    <title>New Age Fotografie | Familien-, Baby- & Businessfotograf in Wien</title>
+    <meta name="description" content="Familien-, Neugeborenen-, Babybauch- und Businessfotos in entspannter Studioatmosphäre in Wien. Jetzt Termin buchen und zeitlose Erinnerungen schaffen.">
+    <link rel="canonical" href="https://www.newagefotografie.com/">
+
+    <!-- Viewport & Icons -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon-16x16.png" sizes="16x16" type="image/png">
+    <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="de_AT">
+    <meta property="og:site_name" content="New Age Fotografie">
+    <meta property="og:url" content="https://www.newagefotografie.com/">
+    <meta property="og:title" content="New Age Fotografie | Familien-, Baby- & Businessfotograf in Wien">
+    <meta property="og:description" content="Unvergessliche Familien- und Neugeborenenfotos, moderne Business-Headshots & freundlicher Service mitten in Wien.">
+    <meta property="og:image" content="https://www.newagefotografie.com/og-cover.jpg">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="New Age Fotografie | Familien-, Baby- & Businessfotograf in Wien">
+    <meta name="twitter:description" content="Upload your best self: Wir halten echte Emotionen in zeitlosen Bildern fest.">
+    <meta name="twitter:image" content="https://www.newagefotografie.com/og-cover.jpg">
+
+    <!-- Robots -->
+    <meta name="robots" content="index, follow">
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "PhotoStudio",
+      "@id": "https://www.newagefotografie.com#studio",
+      "name": "New Age Fotografie",
+      "url": "https://www.newagefotografie.com/",
+      "logo": "https://www.newagefotografie.com/logo.svg",
+      "image": "https://www.newagefotografie.com/og-cover.jpg",
+      "description": "Familien-, Neugeborenen-, Babybauch- und Businessfotografie in Wien.",
+      "telephone": "+43 677 633 99210",
+      "email": "hallo@newagefotografie.com",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Schönbrunner Str. 25",
+        "addressLocality": "Wien",
+        "postalCode": "1050",
+        "addressCountry": "AT"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 48.1851,
+        "longitude": 16.3569
+      },
+      "openingHoursSpecification": [{
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Friday","Saturday","Sunday"],
+        "opens": "09:00",
+        "closes": "17:00"
+      }],
+      "sameAs": [
+        "https://www.facebook.com/NewAgeFotografie",
+        "https://www.instagram.com/newagefotografie"
+      ],
+      "makesOffer": [
+        {
+          "@type": "Service",
+          "name": "Familienfotografie",
+          "description": "Professionelle Familienporträts in Wien"
+        },
+        {
+          "@type": "Service", 
+          "name": "Neugeborenenfotos",
+          "description": "Einfühlsame Babyfotografie und Neugeborenenfotos"
+        },
+        {
+          "@type": "Service",
+          "name": "Businessfotografie", 
+          "description": "Moderne Business-Headshots und Corporate Fotografie"
+        },
+        {
+          "@type": "Service",
+          "name": "Schwangerschaftsfotos",
+          "description": "Künstlerische Babybauch-Fotografie"
+        }
+      ]
+    }
+    </script>
+    <script type="module" crossorigin src="/assets/index-tRgEdStB.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-DZkXyRe8.js">
+    <link rel="modulepreload" crossorigin href="/assets/router-5hN9ru4p.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-uCYnSftD.css">
+  </head>
+  <body>
+    <script>
+      // COMPLETE CONSOLE SILENCE - Must be first script to run
+      (function() {
+        const noop = function() {};
+        window.console = {
+          log: noop, warn: noop, error: noop, info: noop, debug: noop,
+          trace: noop, table: noop, group: noop, groupEnd: noop,
+          time: noop, timeEnd: noop, clear: noop, count: noop,
+          assert: noop, dir: noop, dirxml: noop
+        };
+        Object.defineProperty(window, 'console', {
+          value: window.console, writable: false, configurable: false
+        });
+        // Disable React DevTools
+        window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+          isDisabled: true, supportsFiber: true, inject: noop,
+          onCommitFiberRoot: noop, onCommitFiberUnmount: noop
+        };
+      })();
+    </script>
+    <div id="root"></div>
+  </body>
+</html>
