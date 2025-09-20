@@ -3,8 +3,13 @@ import { pool } from "../server/db";
 async function main() {
   const client = await pool.connect();
   try {
+    console.log("Initializing questionnaire tables...");
     await client.query("BEGIN");
-    await client.query("CREATE EXTENSION IF NOT EXISTS pgcrypto;");
+    try {
+      await client.query("CREATE EXTENSION IF NOT EXISTS pgcrypto;");
+    } catch (e) {
+      console.warn("pgcrypto extension create skipped:", (e as any)?.message || e);
+    }
     await client.query(`
       CREATE TABLE IF NOT EXISTS questionnaires (
         id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
