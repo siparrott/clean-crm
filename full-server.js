@@ -168,6 +168,33 @@ function allowsSku(coupon, skuOrSlug) {
   return list.includes(sku);
 }
 
+// ===== Utilities for questionnaire routes =====
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (m) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[m]);
+}
+
+function formatDeDateTime(d) {
+  try {
+    return new Date(d).toLocaleString('de-AT', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).replace(',', '');
+  } catch {
+    const iso = new Date().toISOString();
+    return iso.slice(0, 16).replace('T', ' ');
+  }
+}
+
 // Files API handler function
 async function handleFilesAPI(req, res, pathname, query) {
   let neon, sql;
@@ -1140,6 +1167,60 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Public server-rendered questionnaire page
+  if (pathname.startsWith('/q/') && req.method === 'GET') {
+    try {
+      const slug = pathname.split('/')[2];
+      if (!slug) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Questionnaire not found');
+        return;
+      }
+      if (!sql) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Database not available');
+        return;
+      }
+      const rows = await sql`SELECT * FROM questionnaires WHERE slug = ${slug} AND is_active = true`;
+      if (!rows || rows.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Questionnaire not found');
+        return;
+      }
+      const qn = rows[0];
+      const fields = qn.fields || [];
+      const css = `body{font-family:ui-sans-serif,system-ui,Arial;margin:2rem;line-height:1.5}.card{max-width:760px;margin:auto;padding:24px;border:1px solid #eee;border-radius:14px;box-shadow:0 8px 26px rgba(0,0,0,.06)}label{display:block;margin:.5rem 0 .25rem;font-weight:600}input,select,textarea{width:100%;padding:.6rem;border:1px solid #ddd;border-radius:8px}.row{margin:1rem 0}button{background:#6C2BD9;color:#fff;padding:.8rem 1.2rem;border:0;border-radius:10px;cursor:pointer}.muted{color:#666;font-size:.9rem}`;
+      const inputs = (fields || []).map((f) => {
+        const reqAttr = f.required ? 'required' : '';
+        if (f.type === 'textarea') {
+          return `<div class="row"><label>${escapeHtml(f.label)}${f.required ? ' *' : ''}</label><textarea name="${escapeHtml(f.key)}" rows="4" ${reqAttr}></textarea></div>`;
+        }
+        if (f.type === 'select') {
+          const opts = (f.options || []).map((o) => `<option value="${escapeHtml(String(o))}">${escapeHtml(String(o))}</option>`).join('');
+          return `<div class="row"><label>${escapeHtml(f.label)}${f.required ? ' *' : ''}</label><select name="${escapeHtml(f.key)}" ${reqAttr}>${opts}</select></div>`;
+        }
+        if (f.type === 'radio') {
+          const radios = (f.options || []).map((o) => `<label style="font-weight:400"><input type="radio" name="${escapeHtml(f.key)}" value="${escapeHtml(String(o))}" ${reqAttr}/> ${escapeHtml(String(o))}</label>`).join('<br/>' );
+          return `<div class="row"><div><strong>${escapeHtml(f.label)}${f.required ? ' *' : ''}</strong></div>${radios}</div>`;
+        }
+        if (f.type === 'checkbox') {
+          return `<div class="row"><label style="font-weight:400"><input type="checkbox" name="${escapeHtml(f.key)}" /> ${escapeHtml(f.label)}</label></div>`;
+        }
+        const type = f.type === 'email' ? 'email' : 'text';
+        return `<div class="row"><label>${escapeHtml(f.label)}${f.required ? ' *' : ''}</label><input type="${type}" name="${escapeHtml(f.key)}" ${reqAttr}/></div>`;
+      }).join('');
+      const html = `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(qn.title)} – New Age Fotografie</title><style>${css}</style></head><body><div class="card"><h2>${escapeHtml(qn.title)}</h2>${qn.description ? `<p class=\"muted\">${escapeHtml(qn.description)}</p>` : ''}<form id="f"><div class="row"><label>Dein Name *</label><input type="text" name="client_name" required /></div><div class="row"><label>Deine E-Mail *</label><input type="email" name="client_email" required /></div>${inputs}<div class="row"><button type="submit">Antwort senden</button></div><p id="msg" class="muted"></p></form></div><script>const el=document.getElementById('f');el.addEventListener('submit',async(e)=>{e.preventDefault();const fd=new FormData(el);const payload={};fd.forEach((v,k)=>payload[k]=v);const r=await fetch('/api/questionnaires/${slug}/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();const msg=document.getElementById('msg');if(j.ok){msg.textContent='Danke! Deine Antworten wurden gesendet.';el.reset();}else{msg.textContent='Fehler: '+(j.error||'Bitte versuch es noch einmal.');}});</script></body></html>`;
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+      return;
+    } catch (err) {
+      console.error('❌ Error rendering questionnaire page:', err.message);
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Server error');
+      return;
+    }
+  }
+
   
   // API endpoints
   if (pathname.startsWith('/api/')) {
@@ -1162,6 +1243,175 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     
+    // Questionnaire: create
+    if (pathname === '/api/questionnaires' && req.method === 'POST') {
+      try {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', async () => {
+          try {
+            const data = JSON.parse(body || '{}');
+            const title = String(data.title || '').trim();
+            const description = String(data.description || '');
+            const fields = Array.isArray(data.fields) ? data.fields : [];
+            const notifyEmail = (data.notifyEmail || process.env.NOTIFY_EMAIL || '').trim() || null;
+            if (!title || !fields.length) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Title and at least one field are required' }));
+              return;
+            }
+            if (!sql) {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Database not available' }));
+              return;
+            }
+            const slug = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)).replace(/-/g,'').slice(0,10);
+            const inserted = await sql`
+              INSERT INTO questionnaires (slug, title, description, fields, notify_email)
+              VALUES (${slug}, ${title}, ${description}, ${JSON.stringify(fields)}, ${notifyEmail})
+              RETURNING id, slug, title, description, fields, notify_email, created_at
+            `;
+            const base = String(process.env.APP_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
+            const link = `${base}/q/${inserted[0].slug}`;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, questionnaire: inserted[0], link }));
+          } catch (err) {
+            console.error('❌ Create questionnaire error:', err.message);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Invalid payload' }));
+          }
+        });
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Server error' }));
+      }
+      return;
+    }
+
+    // Questionnaire: submit answers
+    if (pathname.match(/^\/api\/questionnaires\/[^\/]+\/submit$/) && req.method === 'POST') {
+      try {
+        const slug = pathname.split('/')[3];
+        if (!sql) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Database not available' }));
+          return;
+        }
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', async () => {
+          try {
+            const payload = JSON.parse(body || '{}');
+            const client_name = String(payload.client_name || '').trim();
+            const client_email = String(payload.client_email || '').trim();
+            if (!client_name || !client_email) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Please provide your name and email' }));
+              return;
+            }
+            const rows = await sql`SELECT * FROM questionnaires WHERE slug = ${slug} AND is_active = true`;
+            if (!rows || rows.length === 0) {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Questionnaire not found' }));
+              return;
+            }
+            const qn = rows[0];
+            const answers = {};
+            const missing = [];
+            for (const f of (qn.fields || [])) {
+              let val = payload[f.key];
+              if (f.type === 'checkbox') val = !!val;
+              if (f.required && (val === undefined || val === '')) missing.push(f.label);
+              answers[f.key] = (val === undefined ? null : val);
+            }
+            if (missing.length) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: `Please answer: ${missing.join(', ')}` }));
+              return;
+            }
+            const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+            const ua = req.headers['user-agent'] || '';
+            const saved = await sql`
+              INSERT INTO questionnaire_responses (questionnaire_id, client_email, client_name, answers, ip, user_agent)
+              VALUES (${qn.id}, ${client_email}, ${client_name}, ${JSON.stringify(answers)}, ${ip}, ${ua})
+              RETURNING id, created_at
+            `;
+            const to = qn.notify_email || process.env.NOTIFY_EMAIL;
+            if (to) {
+              try {
+                if (database && typeof database.sendEmail === 'function') {
+                  await database.sendEmail({
+                    to,
+                    subject: `Neue Fragebogen-Antwort: ${qn.title}`,
+                    html: `<p><strong>Neue Fragebogen-Antwort</strong></p><p><b>Fragebogen:</b> ${escapeHtml(qn.title)}<br/><b>Datum:</b> ${formatDeDateTime(saved[0].created_at)}<br/><b>Name:</b> ${escapeHtml(client_name)}<br/><b>E-Mail:</b> ${escapeHtml(client_email)}</p><p><b>Antworten:</b></p><pre style="background:#f8f8f8;padding:12px;border-radius:8px">${escapeHtml(JSON.stringify(answers, null, 2))}</pre>`
+                  });
+                } else {
+                  const nodemailer = require('nodemailer');
+                  const transporter = nodemailer.createTransport({
+                    host: process.env.SMTP_HOST,
+                    port: parseInt(process.env.SMTP_PORT || '587'),
+                    secure: (process.env.SMTP_SECURE || 'false') === 'true',
+                    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+                    tls: { rejectUnauthorized: false }
+                  });
+                  await transporter.sendMail({
+                    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+                    to,
+                    subject: `Neue Fragebogen-Antwort: ${qn.title}`,
+                    html: `<p><strong>Neue Fragebogen-Antwort</strong></p><p><b>Fragebogen:</b> ${escapeHtml(qn.title)}<br/><b>Datum:</b> ${formatDeDateTime(saved[0].created_at)}<br/><b>Name:</b> ${escapeHtml(client_name)}<br/><b>E-Mail:</b> ${escapeHtml(client_email)}</p><p><b>Antworten:</b></p><pre style="background:#f8f8f8;padding:12px;border-radius:8px">${escapeHtml(JSON.stringify(answers, null, 2))}</pre>`
+                  });
+                }
+              } catch (emailErr) {
+                console.warn('⚠️ Questionnaire email failed:', emailErr.message);
+              }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, id: saved[0].id }));
+          } catch (err) {
+            console.error('❌ Questionnaire submit error:', err.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Server error' }));
+          }
+        });
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Server error' }));
+      }
+      return;
+    }
+
+    // Questionnaire: list responses
+    if (pathname.match(/^\/api\/questionnaires\/[^\/]+\/responses$/) && req.method === 'GET') {
+      try {
+        if (!sql) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Database not available' }));
+          return;
+        }
+        const slug = pathname.split('/')[3];
+        const qrows = await sql`SELECT id, title FROM questionnaires WHERE slug = ${slug}`;
+        if (!qrows || qrows.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Not found' }));
+          return;
+        }
+        const qid = qrows[0].id;
+        const rows = await sql`
+          SELECT id, client_name, client_email, answers, created_at
+          FROM questionnaire_responses
+          WHERE questionnaire_id = ${qid}
+          ORDER BY created_at DESC
+        `;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, questionnaire: qrows[0], count: rows.length, responses: rows }));
+      } catch (err) {
+        console.error('❌ Questionnaire responses error:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Server error' }));
+      }
+      return;
+    }
+
     // Handle database API endpoints
     if (database) {
       if (pathname === '/api/crm/clients' && req.method === 'GET') {
