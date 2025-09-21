@@ -34,6 +34,17 @@ async function main() {
       );
     `);
 
+    // Backfill columns on existing table if they are missing
+    await client.query(`
+      ALTER TABLE questionnaire_responses
+      ADD COLUMN IF NOT EXISTS client_email text,
+      ADD COLUMN IF NOT EXISTS client_name text,
+      ADD COLUMN IF NOT EXISTS answers jsonb,
+      ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+      ADD COLUMN IF NOT EXISTS ip inet,
+      ADD COLUMN IF NOT EXISTS user_agent text;
+    `);
+
     // Add questionnaire_id column if missing
     await client.query(`
       DO $$ BEGIN
