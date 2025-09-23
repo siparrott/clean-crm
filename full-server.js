@@ -176,6 +176,61 @@ async function ensureCrmClientsSchema() {
   }
 }
 
+// Invoices schema: tables and extension for UUIDs
+async function ensureInvoiceSchema() {
+  try {
+    if (!sql) return;
+    await sql(`CREATE EXTENSION IF NOT EXISTS pgcrypto` ).catch(()=>{});
+    await sql(`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id uuid primary key default gen_random_uuid(),
+        invoice_no text unique not null,
+        client_id uuid,
+        client_name text not null,
+        client_email text,
+        client_phone text,
+        issue_date date not null,
+        due_date date not null,
+        currency text not null default 'EUR',
+        subtotal numeric(12,2) not null default 0,
+        tax numeric(12,2) not null default 0,
+        total numeric(12,2) not null default 0,
+        status text not null default 'draft',
+        public_id text unique not null,
+        notes text,
+        meta jsonb default '{}'::jsonb,
+        created_at timestamptz default now()
+      )`);
+    await sql(`
+      CREATE TABLE IF NOT EXISTS invoice_items (
+        id uuid primary key default gen_random_uuid(),
+        invoice_id uuid not null references invoices(id) on delete cascade,
+        description text not null,
+        quantity numeric(10,2) not null default 1,
+        unit_price numeric(12,2) not null default 0,
+        line_total numeric(12,2) not null default 0
+      )`);
+    await sql(`CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)`);
+  } catch (e) {
+    console.warn('ensureInvoiceSchema failed:', e.message);
+  }
+}
+
+// Invoices utilities
+const crypto = require('crypto');
+function makePublicId() {
+  return crypto.randomBytes(6).toString('hex');
+}
+function makeInvoiceNo(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const n = Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
+  return `INV-${y}${m}-${n}`;
+}
+function appUrl(req) {
+  return process.env.APP_URL || (req?.headers?.host ? `https://${req.headers.host}` : '');
+}
+
 // ===== Coupon Engine (env-driven with VCWIEN fallback) =====
 const COUPON_TTL_SECONDS = parseInt(process.env.COUPON_RELOAD_SECONDS || '60', 10);
 let __couponCache = { coupons: null, expiresAt: 0 };
@@ -2067,6 +2122,296 @@ const server = http.createServer(async (req, res) => {
       } catch (error) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Failed to execute batch merge' }));
+      }
+      return;
+    }
+
+    // ===== Invoices APIs =====
+    // Create invoice
+    if (pathname === '/api/invoices/create' && req.method === 'POST') {
+      try {
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureInvoiceSchema();
+        let raw = '';
+        req.on('data', c => raw += c.toString());
+        req.on('end', async () => {
+          try {
+            const body = raw ? JSON.parse(raw) : {};
+            const items = Array.isArray(body.items) ? body.items : [];
+            const required = ['client_name','issue_date','due_date'];
+            for (const k of required) { if (!body[k]) { res.writeHead(400, {'Content-Type':'application/json'}); res.end(JSON.stringify({ error: `${k} is required` })); return; } }
+            if (!items.length) { res.writeHead(400, {'Content-Type':'application/json'}); res.end(JSON.stringify({ error: 'items[] required' })); return; }
+            const currency = body.currency || 'EUR';
+            let subtotal = 0;
+            for (const it of items) {
+              const qty = Number(it?.quantity ?? 0);
+              const unit = Number(it?.unit_price ?? 0);
+              if (!(it?.description) || !(qty > 0) || !(unit >= 0)) { res.writeHead(400, {'Content-Type':'application/json'}); res.end(JSON.stringify({ error: 'Invalid item row' })); return; }
+              subtotal += qty * unit;
+            }
+            const tax = 0; // VAT if needed
+            const total = subtotal + tax;
+            const invoice_no = makeInvoiceNo();
+            const public_id = makePublicId();
+
+            const inv = await sql(
+              `INSERT INTO invoices(invoice_no, client_id, client_name, client_email, client_phone,
+                                     issue_date, due_date, currency, subtotal, tax, total, status, public_id, notes, meta)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'draft',$12,$13,$14)
+               RETURNING id`,
+              [
+                invoice_no,
+                body.client_id || null,
+                body.client_name,
+                body.client_email || null,
+                body.client_phone || null,
+                body.issue_date,
+                body.due_date,
+                currency,
+                subtotal,
+                tax,
+                total,
+                public_id,
+                body.notes || null,
+                body.meta || {}
+              ]
+            );
+            const invoice_id = inv?.[0]?.id || inv?.rows?.[0]?.id; // neon returns array or pg rows depending on client wrapper
+            const values = [];
+            const chunks = [];
+            for (const it of items) {
+              const lt = Number(it.quantity) * Number(it.unit_price);
+              values.push(invoice_id, it.description, Number(it.quantity), Number(it.unit_price), lt);
+              const base = values.length - 4;
+              chunks.push(`($${base},$${base+1},$${base+2},$${base+3},$${base+4})`);
+            }
+            if (chunks.length) {
+              await sql(`INSERT INTO invoice_items(invoice_id, description, quantity, unit_price, line_total) VALUES ${chunks.join(',')}`, values);
+            }
+            const link = `${appUrl(req)}/inv/${public_id}`;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, invoice_id, invoice_no, public_id, link, total }));
+          } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok:false, error: e?.message || 'Create failed' }));
+          }
+        });
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Create failed' }));
+      }
+      return;
+    }
+
+    // List invoices
+    if (pathname === '/api/invoices/list' && req.method === 'GET') {
+      try {
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureInvoiceSchema();
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const status = String(url.searchParams.get('status') || 'any');
+        const q = String(url.searchParams.get('q') || '').toLowerCase();
+        const params = [];
+        let where = 'WHERE 1=1';
+        if (status !== 'any') { params.push(status); where += ` AND status = $${params.length}`; }
+        if (q) {
+          params.push(`%${q}%`);
+          where += ` AND (lower(invoice_no) LIKE $${params.length} OR lower(client_name) LIKE $${params.length})`;
+        }
+        const rows = await sql(`
+          SELECT id::text as id, invoice_no, client_name, total, currency, status, issue_date, due_date, public_id, created_at
+          FROM invoices ${where}
+          ORDER BY created_at DESC
+          LIMIT 200`, params);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ rows }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'List failed' }));
+      }
+      return;
+    }
+
+    // Send invoice via email
+    if (pathname === '/api/invoices/send-email' && req.method === 'POST') {
+      try {
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureInvoiceSchema();
+        let raw = '';
+        req.on('data', c => raw += c.toString());
+        req.on('end', async () => {
+          try {
+            const body = raw ? JSON.parse(raw) : {};
+            const invoice_id = body.invoice_id;
+            const to = body.to;
+            if (!invoice_id || !to) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'invoice_id and to required' })); return; }
+            const inv = await sql(`SELECT invoice_no, client_name, client_email, total, currency, public_id, issue_date, due_date FROM invoices WHERE id = $1`, [invoice_id]);
+            if (!inv || inv.length === 0) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Invoice not found' })); return; }
+            const i = inv[0];
+            const link = `${appUrl(req)}/inv/${i.public_id}`;
+
+            const nodemailer = require('nodemailer');
+            const tx = nodemailer.createTransport({
+              host: process.env.SMTP_HOST,
+              port: Number(process.env.SMTP_PORT || 587),
+              secure: String(process.env.SMTP_SECURE || 'false') === 'true',
+              auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+            });
+            await tx.sendMail({
+              from: process.env.EMAIL_FROM || process.env.FROM_EMAIL || 'no-reply@example.com',
+              to,
+              subject: `Invoice ${i.invoice_no} from New Age Fotografie`,
+              html: `
+                <div style="font-family:system-ui;line-height:1.55">
+                  <p>Hi ${i.client_name},</p>
+                  <p>Here is your invoice <strong>${i.invoice_no}</strong> for <strong>${Number(i.total).toFixed(2)} ${i.currency}</strong>.</p>
+                  <p><a href="${link}">View your invoice online</a></p>
+                  <p>Issue Date: ${i.issue_date} — Due Date: ${i.due_date}</p>
+                  <p>Thank you!<br/>New Age Fotografie</p>
+                </div>`,
+            });
+            await sql(`UPDATE invoices SET status='sent' WHERE id = $1 AND status = 'draft'`, [invoice_id]);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, link }));
+          } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e?.message || 'send failed' }));
+          }
+        });
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'send failed' }));
+      }
+      return;
+    }
+
+    // Send invoice via WhatsApp (Twilio optional)
+    if (pathname === '/api/invoices/send-whatsapp' && req.method === 'POST') {
+      try {
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureInvoiceSchema();
+        let raw = '';
+        req.on('data', c => raw += c.toString());
+        req.on('end', async () => {
+          try {
+            const body = raw ? JSON.parse(raw) : {};
+            const invoice_id = body.invoice_id;
+            const to_phone = body.to_phone;
+            if (!invoice_id) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'invoice_id required' })); return; }
+            const inv = await sql(`SELECT invoice_no, client_name, total, currency, public_id FROM invoices WHERE id = $1`, [invoice_id]);
+            if (!inv || inv.length === 0) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Invoice not found' })); return; }
+            const i = inv[0];
+            const link = `${appUrl(req)}/inv/${i.public_id}`;
+            const message = `New Age Fotografie – Invoice ${i.invoice_no} for ${Number(i.total).toFixed(2)} ${i.currency}\n${link}`;
+
+            const hasTwilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_WHATSAPP_FROM);
+            if (hasTwilio && to_phone) {
+              try {
+                const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+                await twilio.messages.create({ from: process.env.TWILIO_WHATSAPP_FROM, to: `whatsapp:${to_phone}`, body: message });
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, sent: true, link }));
+                return;
+              } catch (e) {
+                // fall through to share link
+              }
+            }
+            const share = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, sent: false, share, link }));
+          } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e?.message || 'whatsapp failed' }));
+          }
+        });
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'whatsapp failed' }));
+      }
+      return;
+    }
+
+    // Update invoice status
+    if (pathname === '/api/invoices/update-status' && req.method === 'POST') {
+      try {
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureInvoiceSchema();
+        let raw = '';
+        req.on('data', c => raw += c.toString());
+        req.on('end', async () => {
+          try {
+            const body = raw ? JSON.parse(raw) : {};
+            const invoice_id = body.invoice_id;
+            const status = body.status;
+            if (!invoice_id || !status) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'invoice_id and status required' })); return; }
+            await sql(`UPDATE invoices SET status = $1 WHERE id = $2`, [status, invoice_id]);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+          } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e?.message || 'update failed' }));
+          }
+        });
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'update failed' }));
+      }
+      return;
+    }
+
+    // Public invoice page
+    if (pathname.startsWith('/inv/') && req.method === 'GET') {
+      try {
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('<main>Database unavailable</main>'); return; }
+        await ensureInvoiceSchema();
+        const publicId = pathname.split('/inv/')[1];
+        if (!publicId) { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('<main>Invoice not found.</main>'); return; }
+        const inv = await sql(`SELECT id, invoice_no, client_name, client_email, issue_date, due_date, currency, subtotal, tax, total, notes FROM invoices WHERE public_id = $1`, [publicId]);
+        if (!inv || inv.length === 0) { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('<main>Invoice not found.</main>'); return; }
+        const id = inv[0].id;
+        const items = await sql(`SELECT description, quantity, unit_price, line_total FROM invoice_items WHERE invoice_id = $1`, [id]);
+        const i = inv[0];
+        const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+        const rowHtml = items.map(it => `
+          <tr style="border-top:1px solid #eee"><td>${esc(it.description)}</td><td align="right">${Number(it.quantity).toFixed(2)}</td><td align="right">${Number(it.unit_price).toFixed(2)} ${i.currency}</td><td align="right">${Number(it.line_total).toFixed(2)} ${i.currency}</td></tr>
+        `).join('');
+        const html = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+          <title>Invoice ${esc(i.invoice_no)}</title>
+          <style>body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;margin:0} main{max-width:880px;margin:24px auto;padding:0 16px} button{cursor:pointer}</style>
+        </head><body>
+        <main>
+          <h1 style="margin-bottom:4px">Invoice ${esc(i.invoice_no)}</h1>
+          <div style="opacity:.75;margin-bottom:16px">New Age Fotografie · ${esc(process.env.SMTP_USER || 'hallo@newagefotografie.com')}</div>
+          <section style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div>
+              <strong>Bill To:</strong>
+              <div>${esc(i.client_name)}</div>
+              ${i.client_email ? `<div>${esc(i.client_email)}</div>` : ''}
+            </div>
+            <div>
+              <div><strong>Issue:</strong> ${esc(i.issue_date)}</div>
+              <div><strong>Due:</strong> ${esc(i.due_date)}</div>
+              <div><strong>Total:</strong> ${Number(i.total).toFixed(2)} ${esc(i.currency)}</div>
+            </div>
+          </section>
+          <table style="width:100%;margin-top:16px;border-collapse:collapse">
+            <thead><tr><th align="left">Description</th><th align="right">Qty</th><th align="right">Unit</th><th align="right">Line</th></tr></thead>
+            <tbody>${rowHtml}</tbody>
+            <tfoot>
+              <tr><td colspan="3" align="right">Subtotal</td><td align="right">${Number(i.subtotal).toFixed(2)} ${esc(i.currency)}</td></tr>
+              <tr><td colspan="3" align="right">Tax</td><td align="right">${Number(i.tax).toFixed(2)} ${esc(i.currency)}</td></tr>
+              <tr><td colspan="3" align="right"><strong>Total</strong></td><td align="right"><strong>${Number(i.total).toFixed(2)} ${esc(i.currency)}</strong></td></tr>
+            </tfoot>
+          </table>
+          ${i.notes ? `<p style="margin-top:16px;white-space:pre-wrap">${esc(i.notes)}</p>` : ''}
+          <button onclick="window.print()" style="margin-top:16px;padding:10px 14px;border-radius:8px;border:1px solid #111;background:#111;color:#fff">Print / Save PDF</button>
+        </main>
+        </body></html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end('<main>Server error</main>');
       }
       return;
     }
