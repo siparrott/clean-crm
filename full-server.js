@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 const crypto = require('crypto');
+const os = require('os');
 const PDFDocument = require('pdfkit');
 
 // Import database functions - with error handling
@@ -147,6 +148,42 @@ async function ensureLeadsSchema() {
 // ===== Coupon Engine (env-driven with VCWIEN fallback) =====
 const COUPON_TTL_SECONDS = parseInt(process.env.COUPON_RELOAD_SECONDS || '60', 10);
 let __couponCache = { coupons: null, expiresAt: 0 };
+let __dbCoupons = [];
+
+async function refreshDbCoupons() {
+  try {
+    if (!sql) return;
+    await sql`
+      CREATE TABLE IF NOT EXISTS discount_coupons (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        code TEXT UNIQUE NOT NULL,
+        type TEXT NOT NULL DEFAULT 'percentage',
+        percent NUMERIC,
+        amount NUMERIC,
+        allowed_skus JSONB DEFAULT '[]',
+        starts_at TIMESTAMPTZ,
+        ends_at TIMESTAMPTZ,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `;
+    const rows = await sql`SELECT id, code, type, percent, amount, allowed_skus, starts_at, ends_at, is_active FROM discount_coupons WHERE is_active = true`;
+    __dbCoupons = rows.map(r => ({
+      id: r.id,
+      code: r.code,
+      type: r.type,
+      percent: r.percent ? Number(r.percent) : undefined,
+      amount: r.amount ? Number(r.amount) : undefined,
+      allowedSkus: Array.isArray(r.allowed_skus) ? r.allowed_skus : [],
+      startDate: r.starts_at,
+      endDate: r.ends_at
+    }));
+    console.log(`✅ Loaded ${__dbCoupons.length} coupons from DB`);
+  } catch (e) {
+    console.warn('⚠️ Could not load coupons from DB:', e.message);
+  }
+}
 
 const DEFAULT_FALLBACK_COUPONS = [
   {
@@ -177,13 +214,19 @@ function getCoupons() {
   const now = Date.now();
   if (__couponCache.coupons && now < __couponCache.expiresAt) return __couponCache.coupons;
   const fromEnv = parseCouponsFromEnv();
-  const coupons = fromEnv && fromEnv.length ? fromEnv : DEFAULT_FALLBACK_COUPONS;
+  const merged = [
+    ...(__dbCoupons || []),
+    ...((fromEnv && fromEnv.length ? fromEnv : DEFAULT_FALLBACK_COUPONS) || [])
+  ];
+  const coupons = merged;
   __couponCache = {
     coupons,
     expiresAt: now + COUPON_TTL_SECONDS * 1000,
   };
   return coupons;
 }
+// Preload DB coupons on boot (non-blocking)
+refreshDbCoupons();
 
 function forceRefreshCoupons() {
   __couponCache.expiresAt = 0;
@@ -236,6 +279,39 @@ function escapeHtml(s) {
   })[m]);
 }
 
+// ===== Vouchers schema bootstrap =====
+let __vouchersSchemaEnsured = false;
+async function ensureVouchersSchema() {
+  if (__vouchersSchemaEnsured) return;
+  if (!sql) return;
+  try {
+    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS vouchers (
+        id uuid primary key default gen_random_uuid(),
+        session_id text unique,
+        payment_intent_id text,
+        email text,
+        amount integer,
+        currency text,
+        delivery text check (delivery in ('pdf','post')) not null,
+        variant text,
+        personalization jsonb not null,
+        preview_url text,
+        shipping jsonb,
+        status text not null default 'pending',
+        pdf_url text,
+        created_at timestamptz default now()
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_vouchers_status ON vouchers(status)`;
+    __vouchersSchemaEnsured = true;
+    console.log('✅ Vouchers schema ensured');
+  } catch (e) {
+    console.warn('⚠️ ensureVouchersSchema failed:', e.message);
+  }
+}
+
 function formatDeDateTime(d) {
   try {
     return new Date(d).toLocaleString('de-AT', {
@@ -250,6 +326,139 @@ function formatDeDateTime(d) {
     const iso = new Date().toISOString();
     return iso.slice(0, 16).replace('T', ' ');
   }
+}
+
+// ===== Helper: base URL, email sender, PDF generator =====
+function getBaseUrl() {
+  const base = (process.env.APP_BASE_URL || process.env.APP_URL || '').trim();
+  if (base) return base.replace(/\/$/, '');
+  const p = process.env.PORT || 3001;
+  return `http://localhost:${p}`;
+}
+
+async function sendEmailSimple(to, subject, text, html) {
+  try {
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      secure: (process.env.SMTP_SECURE || 'false') === 'true',
+      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+      tls: { rejectUnauthorized: false }
+    });
+    const from = process.env.FROM_EMAIL || process.env.SMTP_USER || 'no-reply@newagefotografie.com';
+    await transporter.sendMail({ from, to, subject, text, html });
+  } catch (e) {
+    console.warn('sendEmailSimple failed:', e.message);
+  }
+}
+
+function base64UrlEncode(s) {
+  return Buffer.from(s, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function base64UrlDecodeToString(token) {
+  const b64 = String(token).replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 2 ? '==' : b64.length % 4 === 3 ? '=' : '';
+  return Buffer.from(b64 + pad, 'base64').toString('utf8');
+}
+
+async function generateVoucherPdf(sessionId, personalization = {}, previewUrl = null) {
+  const tmpDir = path.join(os.tmpdir(), 'vouchers');
+  await fs.promises.mkdir(tmpDir, { recursive: true });
+  const filePath = path.join(tmpDir, `voucher-${sessionId}.pdf`);
+  const vId = personalization.voucher_id || sessionId;
+  const sku = personalization.sku || personalization.variant || 'Voucher';
+  const name = personalization.recipient_name || personalization.name || '—';
+  const from = personalization.from_name || personalization.from || '—';
+  const note = personalization.message || personalization.personal_message || '';
+  const exp = personalization.expiry_date || '12 Monate ab Kaufdatum';
+
+  await new Promise(async (resolve, reject) => {
+    try {
+      const out = fs.createWriteStream(filePath);
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      doc.pipe(out);
+
+      try {
+        const logoUrl = process.env.VOUCHER_LOGO_URL || 'https://i.postimg.cc/j55DNmbh/frontend-logo.jpg';
+        const resp = await fetch(logoUrl);
+        if (resp && resp.ok) {
+          const arr = await resp.arrayBuffer();
+          const imgBuf = Buffer.from(arr);
+          doc.image(imgBuf, 50, 50, { fit: [160, 60] });
+        }
+      } catch {}
+      doc.moveDown(2);
+
+      doc.fontSize(22).text('New Age Fotografie', { align: 'right' });
+      doc.moveDown(0.5);
+      doc.fontSize(12).text('www.newagefotografie.com', { align: 'right' });
+      doc.moveDown(1.5);
+
+      doc.fontSize(26).text('PERSONALISIERTER GUTSCHEIN', { align: 'left' });
+      doc.moveDown(0.5);
+
+      // Render front-end preview image if provided to match personalization exactly
+      if (previewUrl) {
+        try {
+          const respPrev = await fetch(String(previewUrl));
+          if (respPrev && respPrev.ok) {
+            const arrPrev = await respPrev.arrayBuffer();
+            const imgPrev = Buffer.from(arrPrev);
+            // Fit the preview image nicely on the page
+            const maxWidth = 500;
+            doc.image(imgPrev, { fit: [maxWidth, 300], align: 'center' });
+            doc.moveDown(0.5);
+          }
+        } catch {}
+      }
+
+      doc.fontSize(18).text(String(sku));
+      doc.moveDown(0.5);
+      doc.fontSize(12).text(`Gutschein-ID: ${vId}`);
+      doc.text(`SKU: ${sku}`);
+      doc.text(`Empfänger/in: ${name}`);
+      doc.text(`Von: ${from}`);
+      doc.text(`Gültig bis: ${exp}`);
+      doc.moveDown(0.5);
+
+      if (note) {
+        doc.fontSize(12).text('Nachricht:', { underline: true });
+        doc.moveDown(0.2);
+        doc.fontSize(12).text(String(note), { align: 'left' });
+        doc.moveDown(0.8);
+      }
+
+      doc.moveDown(1);
+      doc.fontSize(10).text(
+        'Einlösbar für die oben genannte Leistung in unserem Studio. ' +
+        'Nicht bar auszahlbar. Termin nach Verfügbarkeit. Bitte zur Einlösung Gutschein-ID angeben.',
+        { align: 'justify' }
+      );
+
+      doc.end();
+      out.on('finish', resolve);
+      out.on('error', reject);
+    } catch (e) { reject(e); }
+  });
+
+  const base = getBaseUrl();
+  const token = base64UrlEncode(filePath);
+  return `${base}/api/vouchers/download?token=${token}`;
+}
+
+function signDownload(sessionId, expires) {
+  const secret = process.env.DOWNLOAD_TOKEN_SECRET || (process.env.STRIPE_WEBHOOK_SECRET ? String(process.env.STRIPE_WEBHOOK_SECRET).slice(0, 32) : 'fallback-secret');
+  const h = crypto.createHmac('sha256', secret);
+  h.update(`${sessionId}.${expires}`);
+  return h.digest('hex');
+}
+
+function buildSecureDownloadUrl(sessionId, ttlSeconds = 3600) {
+  const base = getBaseUrl();
+  const expires = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const sig = signDownload(sessionId, expires);
+  return `${base}/api/vouchers/secure-download?session_id=${encodeURIComponent(sessionId)}&expires=${expires}&sig=${sig}`;
 }
 
 // Files API handler function
@@ -3771,7 +3980,7 @@ New Age Fotografie Team`;
       }
 
       // Stripe Checkout API endpoints
-      if (pathname === '/api/checkout/create-session' && req.method === 'POST') {
+      if ((pathname === '/api/checkout/create-session' || pathname === '/api/vouchers/create-session') && req.method === 'POST') {
         try {
           let body = '';
           req.on('data', chunk => { body += chunk.toString(); });
@@ -3870,7 +4079,7 @@ New Age Fotografie Team`;
               console.log('💳 Creating LIVE Stripe checkout session...');
               const baseUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:3001';
               
-              const isVoucherMode = !!(checkoutData?.voucherData || String(checkoutData?.mode || '').toLowerCase() === 'voucher' || String(checkoutData?.order_type || '').toLowerCase() === 'voucher');
+              const isVoucherMode = pathname === '/api/vouchers/create-session' || !!(checkoutData?.voucherData || String(checkoutData?.mode || '').toLowerCase() === 'voucher' || String(checkoutData?.order_type || '').toLowerCase() === 'voucher');
               const successPath = isVoucherMode ? '/voucher/thank-you' : '/checkout/success';
               const sessionParams = {
                 payment_method_types: ['card'],
@@ -3882,7 +4091,7 @@ New Age Fotografie Team`;
                 metadata: {
                   client_id: checkoutData.client_id || '',
                   invoice_id: checkoutData.invoice_id || '',
-                  order_type: checkoutData.order_type || checkoutData.mode || 'photography_service'
+                  order_type: isVoucherMode ? 'voucher' : (checkoutData.order_type || checkoutData.mode || 'photography_service')
                 }
               };
 
@@ -3892,16 +4101,19 @@ New Age Fotografie Team`;
               }
 
               // Add voucher-specific metadata if present
-              if (checkoutData.voucherData) {
+              if (isVoucherMode) {
+                const v = checkoutData.voucherData || checkoutData;
                 sessionParams.metadata.voucher_mode = 'true';
-                sessionParams.metadata.voucher_design = checkoutData.voucherData.selectedDesign?.name || 'custom';
-                sessionParams.metadata.delivery_option = checkoutData.voucherData.deliveryOption?.name || 'email';
-                if (checkoutData.voucherData.personalMessage) {
-                  sessionParams.metadata.personal_message = checkoutData.voucherData.personalMessage.substring(0, 500); // Stripe metadata limit
+                sessionParams.metadata.voucher_design = v.selectedDesign?.name || 'custom';
+                const delivery = v.delivery || v.deliveryOption?.name || checkoutData.delivery;
+                sessionParams.metadata.delivery = delivery || 'pdf';
+                if (v.personalMessage || checkoutData.message) {
+                  sessionParams.metadata.personal_message = String(v.personalMessage || checkoutData.message).substring(0, 500);
                 }
-                if (checkoutData.voucherData.shippingAddress) {
+                if (v.shippingAddress || checkoutData.shippingAddress) {
                   try {
-                    sessionParams.metadata.shipping_address = JSON.stringify(checkoutData.voucherData.shippingAddress).substring(0, 500);
+                    const sa = v.shippingAddress || checkoutData.shippingAddress;
+                    sessionParams.metadata.shipping_address = JSON.stringify(sa).substring(0, 500);
                   } catch (e) {}
                 }
                 // Extra metadata to support post-payment voucher PDF
@@ -3923,15 +4135,21 @@ New Age Fotografie Team`;
                   const sku = firstItem?.sku || deriveSku(firstItem?.name || firstItem?.title);
                   if (sku) sessionParams.metadata.sku = String(sku);
                   // Generate a simple voucher id when not provided
-                  const vid = checkoutData.voucherData.voucherId || `V-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+                  const vid = v.voucherId || `V-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
                   sessionParams.metadata.voucher_id = String(vid);
-                  const recipientName = checkoutData.voucherData.recipientName || checkoutData.voucherData.name;
-                  const fromName = checkoutData.voucherData.fromName || checkoutData.voucherData.sender;
-                  const message = checkoutData.voucherData.message || checkoutData.voucherData.personalMessage;
+                  const recipientName = v.recipientName || v.name;
+                  const fromName = v.fromName || v.sender;
+                  const message = v.message || v.personalMessage;
                   if (recipientName) sessionParams.metadata.recipient_name = String(recipientName).substring(0, 120);
                   if (fromName) sessionParams.metadata.from_name = String(fromName).substring(0, 120);
                   if (message) sessionParams.metadata.message = String(message).substring(0, 500);
-                  if (checkoutData.voucherData.expiryDate) sessionParams.metadata.expiry_date = String(checkoutData.voucherData.expiryDate);
+                  if (v.expiryDate) sessionParams.metadata.expiry_date = String(v.expiryDate);
+                  if (v.personalization || checkoutData.personalization) {
+                    sessionParams.metadata.personalization = JSON.stringify(v.personalization || checkoutData.personalization).substring(0, 500);
+                  }
+                  if (v.preview_url || checkoutData.preview_url) {
+                    sessionParams.metadata.preview_url = String(v.preview_url || checkoutData.preview_url);
+                  }
                 } catch {}
               }
 
@@ -3971,6 +4189,200 @@ New Age Fotografie Team`;
       }
 
       // ========= Voucher PDF Generation (no webhook required) =========
+      // Stripe Webhook for voucher fulfillment (checkout.session.completed)
+      if (pathname === '/api/stripe/webhook' && req.method === 'POST') {
+        try {
+          if (!stripe) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Stripe not configured' }));
+            return;
+          }
+          await ensureVouchersSchema();
+          const chunks = [];
+          req.on('data', (c) => chunks.push(c));
+          req.on('end', async () => {
+            try {
+              const buf = Buffer.concat(chunks);
+              const sig = req.headers['stripe-signature'];
+              const secret = process.env.STRIPE_WEBHOOK_SECRET;
+              let evt = null;
+              if (secret) {
+                evt = stripe.webhooks.constructEvent(buf, sig, secret);
+              } else {
+                evt = JSON.parse(buf.toString('utf8'));
+              }
+              if (evt.type === 'checkout.session.completed') {
+                const session = evt.data.object;
+                const delivery = (session.metadata?.delivery || session.metadata?.delivery_option || 'pdf').toLowerCase();
+                const meta = session.metadata || {};
+                const personalizationRaw = meta.personalization ? JSON.parse(meta.personalization) : {};
+                const mergedPersonalization = {
+                  ...personalizationRaw,
+                  voucher_id: personalizationRaw.voucher_id || meta.voucher_id || session.id,
+                  sku: personalizationRaw.sku || meta.sku || meta.variant || 'Voucher',
+                  variant: personalizationRaw.variant || meta.variant || meta.sku || 'Voucher',
+                  recipient_name: personalizationRaw.recipient_name || meta.recipient_name || personalizationRaw.recipientName,
+                  from_name: personalizationRaw.from_name || meta.from_name || personalizationRaw.fromName || personalizationRaw.sender,
+                  message: personalizationRaw.message || meta.message || meta.personal_message || personalizationRaw.personalMessage,
+                  expiry_date: personalizationRaw.expiry_date || meta.expiry_date,
+                  preview_url: personalizationRaw.preview_url || meta.preview_url || null
+                };
+                const preview_url = mergedPersonalization.preview_url || null;
+                const email = session.customer_details?.email || session.customer_email || '';
+                const shipping = session.shipping_details ? JSON.stringify(session.shipping_details) : null;
+                const amount = session.amount_total || 0;
+                const currency = session.currency || 'eur';
+                const variant = mergedPersonalization.variant || 'Voucher';
+
+                await sql`
+                  INSERT INTO vouchers(session_id, payment_intent_id, email, amount, currency, delivery, variant, personalization, preview_url, shipping, status)
+                  VALUES (${session.id}, ${session.payment_intent}, ${email}, ${amount}, ${currency}, ${delivery}, ${variant}, ${JSON.stringify(mergedPersonalization)}, ${preview_url}, ${shipping}, ${delivery === 'pdf' ? 'paid' : 'print_queue'})
+                  ON CONFLICT (session_id) DO UPDATE SET
+                    payment_intent_id = EXCLUDED.payment_intent_id,
+                    email = EXCLUDED.email,
+                    amount = EXCLUDED.amount,
+                    currency = EXCLUDED.currency,
+                    delivery = EXCLUDED.delivery,
+                    variant = EXCLUDED.variant,
+                    personalization = EXCLUDED.personalization,
+                    preview_url = EXCLUDED.preview_url,
+                    shipping = EXCLUDED.shipping,
+                    status = EXCLUDED.status
+                `;
+                // Generate PDF for pdf delivery and email link
+                if (delivery === 'pdf') {
+                  try {
+                    const pdfUrl = await generateVoucherPdf(session.id, mergedPersonalization, preview_url);
+                    await sql`UPDATE vouchers SET pdf_url = ${pdfUrl} WHERE session_id = ${session.id}`;
+                    const secureUrl = buildSecureDownloadUrl(session.id, 7 * 24 * 3600);
+                    if (email) {
+                      await sendEmailSimple(email, 'Your Photoshoot Voucher', `Download your voucher: ${secureUrl}`, `<p>Download your voucher <a href="${secureUrl}">${secureUrl}</a></p>`);
+                    }
+                  } catch (e) {
+                    console.warn('⚠️ PDF generation/email failed:', e.message);
+                  }
+                }
+              }
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ received: true }));
+            } catch (e) {
+              console.error('webhook error:', e.message);
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Webhook Error' }));
+            }
+          });
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+      }
+
+      // Temporary local download for generated PDFs (for smoke tests)
+      if (pathname === '/api/vouchers/download' && req.method === 'GET') {
+        try {
+          const token = String(parsedUrl.query?.token || '');
+          if (!token) { res.writeHead(400); res.end('Missing token'); return; }
+          const file = base64UrlDecodeToString(token);
+          if (!fs.existsSync(file)) { res.writeHead(404); res.end('Not found'); return; }
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', 'inline; filename=voucher.pdf');
+          fs.createReadStream(file).pipe(res);
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end('Download error');
+        }
+        return;
+      }
+      // Secure voucher PDF download by session_id (signed)
+      if (pathname === '/api/vouchers/secure-download' && req.method === 'GET') {
+        try {
+          const sid = String(parsedUrl.query?.session_id || '').trim();
+          const expires = parseInt(String(parsedUrl.query?.expires || '0'), 10);
+          const sig = String(parsedUrl.query?.sig || '');
+          if (!sid || !expires || !sig) { res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end('Bad request'); return; }
+          if (Date.now() / 1000 > expires) { res.writeHead(410, { 'Content-Type': 'text/plain' }); res.end('Link expired'); return; }
+          const expected = signDownload(sid, expires);
+          if (expected !== sig) { res.writeHead(403, { 'Content-Type': 'text/plain' }); res.end('Invalid signature'); return; }
+          await ensureVouchersSchema();
+          const rows = await sql`SELECT pdf_url, personalization, preview_url FROM vouchers WHERE session_id = ${sid}`;
+          let filePath = null;
+          if (rows && rows[0]?.pdf_url) {
+            const u = new URL(rows[0].pdf_url, getBaseUrl());
+            if (u.pathname === '/api/vouchers/download') {
+              const token = u.searchParams.get('token');
+              if (token) filePath = base64UrlDecodeToString(token);
+            }
+          }
+          if (!filePath || !fs.existsSync(filePath)) {
+            const pdfUrl = await generateVoucherPdf(sid, rows[0]?.personalization || {}, rows[0]?.preview_url || null);
+            await sql`UPDATE vouchers SET pdf_url = ${pdfUrl} WHERE session_id = ${sid}`;
+            const u2 = new URL(pdfUrl, getBaseUrl());
+            const t2 = u2.searchParams.get('token');
+            if (t2) filePath = base64UrlDecodeToString(t2);
+          }
+          if (!filePath || !fs.existsSync(filePath)) { res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end('File not ready'); return; }
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', 'inline; filename=voucher.pdf');
+          fs.createReadStream(filePath).pipe(res);
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end('Download error');
+        }
+        return;
+      }
+      // Public API: Return a freshly signed secure download link for the given session_id
+      if (pathname === '/api/vouchers/signed-link' && req.method === 'GET') {
+        try {
+          const sid = String(parsedUrl.query?.session_id || '').trim();
+          const ttl = parseInt(String(parsedUrl.query?.ttl || '86400'), 10);
+          if (!sid) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: false, error: 'session_id required' })); return; }
+          await ensureVouchersSchema();
+          let row = null;
+          try {
+            const rows = await sql`SELECT session_id, status FROM vouchers WHERE session_id = ${sid}`;
+            row = rows && rows[0] ? rows[0] : null;
+          } catch {}
+          let isPaid = false;
+          if (row) {
+            isPaid = row.status === 'paid' || row.status === 'print_queue' || row.status === 'fulfilled';
+          } else if (stripe) {
+            try {
+              const ses = await stripe.checkout.sessions.retrieve(sid);
+              isPaid = ses?.payment_status === 'paid';
+              if (isPaid) {
+                const m = ses.metadata || {};
+                const personalization = m.personalization ? JSON.parse(m.personalization) : {};
+                const merged = {
+                  ...personalization,
+                  voucher_id: personalization.voucher_id || m.voucher_id || sid,
+                  sku: personalization.sku || m.sku || m.variant || 'Voucher',
+                  variant: personalization.variant || m.variant || m.sku || 'Voucher',
+                  recipient_name: personalization.recipient_name || m.recipient_name || personalization.recipientName,
+                  from_name: personalization.from_name || m.from_name || personalization.fromName || personalization.sender,
+                  message: personalization.message || m.message || m.personal_message || personalization.personalMessage,
+                  expiry_date: personalization.expiry_date || m.expiry_date,
+                  preview_url: personalization.preview_url || m.preview_url || null
+                };
+                const delivery = (m.delivery || m.delivery_option || 'pdf').toLowerCase();
+                await sql`
+                  INSERT INTO vouchers(session_id, payment_intent_id, email, amount, currency, delivery, variant, personalization, preview_url, shipping, status)
+                  VALUES (${sid}, ${ses.payment_intent}, ${ses.customer_details?.email || ses.customer_email || ''}, ${ses.amount_total || 0}, ${ses.currency || 'eur'}, ${delivery}, ${merged.variant || 'Voucher'}, ${JSON.stringify(merged)}, ${merged.preview_url || null}, ${ses.shipping_details ? JSON.stringify(ses.shipping_details) : null}, ${delivery === 'pdf' ? 'paid' : 'print_queue'})
+                  ON CONFLICT (session_id) DO NOTHING
+                `;
+              }
+            } catch {}
+          }
+          if (!isPaid) { res.writeHead(402, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: false, error: 'Payment not completed' })); return; }
+          const urlSigned = buildSecureDownloadUrl(sid, isNaN(ttl) ? 86400 : Math.max(300, ttl));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, url: urlSigned }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+      }
       if (pathname === '/voucher/pdf' && req.method === 'GET') {
         try {
           const sessionId = String(parsedUrl.query?.session_id || '').trim();
@@ -4366,6 +4778,235 @@ New Age Fotografie Team`;
           cache: { expiresAt: __couponCache.expiresAt, millisRemaining: Math.max(0, __couponCache.expiresAt - now), ttlSeconds: COUPON_TTL_SECONDS },
           source: process.env.COUPONS_JSON ? 'env' : 'fallback'
         }));
+        return;
+      }
+
+      // ===== Admin Vouchers: Print Queue + Actions =====
+      if (pathname === '/api/admin/vouchers/print-queue' && req.method === 'GET') {
+        try {
+          const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+          const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+          if (!expected || token !== expected) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+            return;
+          }
+          await ensureVouchersSchema();
+          const rows = await sql`SELECT session_id, email, amount, currency, delivery, variant, personalization, preview_url, shipping, status, pdf_url, created_at FROM vouchers WHERE status = 'print_queue' ORDER BY created_at DESC LIMIT 100`;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, count: rows.length, vouchers: rows }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+      }
+      if (pathname.match(/^\/api\/admin\/vouchers\/[^/]+\/mark-fulfilled$/) && req.method === 'POST') {
+        try {
+          const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+          const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+          if (!expected || token !== expected) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+            return;
+          }
+          const sessionId = pathname.split('/')[4];
+          await ensureVouchersSchema();
+          const updated = await sql`UPDATE vouchers SET status = 'fulfilled' WHERE session_id = ${sessionId} RETURNING session_id`;
+          if (!updated || updated.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Not found' }));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+      }
+      if (pathname.match(/^\/api\/admin\/vouchers\/[^/]+\/regenerate-pdf$/) && req.method === 'POST') {
+        try {
+          const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+          const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+          if (!expected || token !== expected) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+            return;
+          }
+          const sessionId = pathname.split('/')[4];
+          await ensureVouchersSchema();
+          const rows = await sql`SELECT personalization, preview_url FROM vouchers WHERE session_id = ${sessionId} LIMIT 1`;
+          if (!rows || rows.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Not found' }));
+            return;
+          }
+          const pdfUrl = await generateVoucherPdf(sessionId, rows[0].personalization || {}, rows[0].preview_url || null);
+          await sql`UPDATE vouchers SET pdf_url = ${pdfUrl} WHERE session_id = ${sessionId}`;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, pdfUrl }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+      }
+
+      // Generate a signed secure download link (admin only)
+      if (pathname === '/api/admin/vouchers/secure-link' && req.method === 'GET') {
+        try {
+          const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+          const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+          if (!expected || token !== expected) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+            return;
+          }
+          const sid = String(parsedUrl.query?.session_id || '').trim();
+          const ttl = parseInt(String(parsedUrl.query?.ttl || '3600'), 10);
+          if (!sid) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'session_id required' }));
+            return;
+          }
+          const urlSigned = buildSecureDownloadUrl(sid, isNaN(ttl) ? 3600 : Math.max(60, ttl));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, url: urlSigned }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+      }
+
+      // ===== Admin Coupons CRUD (DB-backed) =====
+      if (pathname === '/api/admin/coupons' && req.method === 'GET') {
+        try {
+          const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+          const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+          if (!expected || token !== expected) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+            return;
+          }
+          await refreshDbCoupons();
+          const rows = await sql`SELECT id, code, type, percent, amount, allowed_skus, starts_at, ends_at, is_active, created_at, updated_at FROM discount_coupons ORDER BY created_at DESC LIMIT 200`;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, coupons: rows }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+      }
+      if (pathname === '/api/admin/coupons' && req.method === 'POST') {
+        try {
+          const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+          const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+          if (!expected || token !== expected) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+            return;
+          }
+          let raw = '';
+          req.on('data', c => raw += c.toString());
+          req.on('end', async () => {
+            const body = raw ? JSON.parse(raw) : {};
+            const code = String(body.code || '').trim();
+            if (!code) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: false, error: 'code required' })); return; }
+            const type = (body.type === 'amount') ? 'amount' : 'percentage';
+            const percent = type === 'percentage' ? Number(body.percent || 0) : null;
+            const amount = type === 'amount' ? Number(body.amount || 0) : null;
+            const allowed = Array.isArray(body.allowed_skus) ? body.allowed_skus : Array.isArray(body.allowedSkus) ? body.allowedSkus : [];
+            const starts_at = body.starts_at ? new Date(body.starts_at) : null;
+            const ends_at = body.ends_at ? new Date(body.ends_at) : null;
+            const is_active = body.is_active !== false;
+            await sql`
+              INSERT INTO discount_coupons (code, type, percent, amount, allowed_skus, starts_at, ends_at, is_active)
+              VALUES (${code}, ${type}, ${percent}, ${amount}, ${JSON.stringify(allowed)}, ${starts_at}, ${ends_at}, ${is_active})
+            `;
+            await refreshDbCoupons();
+            forceRefreshCoupons();
+            res.writeHead(201, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true }));
+          });
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+      }
+      if (pathname.match(/^\/api\/admin\/coupons\/[^/]+$/) && req.method === 'PUT') {
+        try {
+          const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+          const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+          if (!expected || token !== expected) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+            return;
+          }
+          const id = pathname.split('/')[4];
+          let raw = '';
+          req.on('data', c => raw += c.toString());
+          req.on('end', async () => {
+            const body = raw ? JSON.parse(raw) : {};
+            const updates = {
+              code: body.code ? String(body.code).trim() : undefined,
+              type: body.type && (body.type === 'amount' || body.type === 'percentage') ? body.type : undefined,
+              percent: body.percent !== undefined ? Number(body.percent) : undefined,
+              amount: body.amount !== undefined ? Number(body.amount) : undefined,
+              allowed_skus: Array.isArray(body.allowed_skus) ? body.allowed_skus : Array.isArray(body.allowedSkus) ? body.allowedSkus : undefined,
+              starts_at: body.starts_at ? new Date(body.starts_at) : undefined,
+              ends_at: body.ends_at ? new Date(body.ends_at) : undefined,
+              is_active: body.is_active !== undefined ? !!body.is_active : undefined,
+            };
+            const setClauses = [];
+            const values = [];
+            if (updates.code !== undefined) { setClauses.push(`code = $${setClauses.length+1}`); values.push(updates.code); }
+            if (updates.type !== undefined) { setClauses.push(`type = $${setClauses.length+1}`); values.push(updates.type); }
+            if (updates.percent !== undefined) { setClauses.push(`percent = $${setClauses.length+1}`); values.push(updates.percent); }
+            if (updates.amount !== undefined) { setClauses.push(`amount = $${setClauses.length+1}`); values.push(updates.amount); }
+            if (updates.allowed_skus !== undefined) { setClauses.push(`allowed_skus = $${setClauses.length+1}`); values.push(JSON.stringify(updates.allowed_skus)); }
+            if (updates.starts_at !== undefined) { setClauses.push(`starts_at = $${setClauses.length+1}`); values.push(updates.starts_at); }
+            if (updates.ends_at !== undefined) { setClauses.push(`ends_at = $${setClauses.length+1}`); values.push(updates.ends_at); }
+            if (updates.is_active !== undefined) { setClauses.push(`is_active = $${setClauses.length+1}`); values.push(updates.is_active); }
+            setClauses.push(`updated_at = NOW()`);
+            if (!setClauses.length) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: false, error: 'No updates' })); return; }
+            const query = `UPDATE discount_coupons SET ${setClauses.join(', ')} WHERE id = $${setClauses.length+1}`;
+            values.push(id);
+            await sql(query, values);
+            await refreshDbCoupons();
+            forceRefreshCoupons();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true }));
+          });
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+      }
+      if (pathname.match(/^\/api\/admin\/coupons\/[^/]+$/) && req.method === 'DELETE') {
+        try {
+          const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+          const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+          if (!expected || token !== expected) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+            return;
+          }
+          const id = pathname.split('/')[4];
+          await sql`DELETE FROM discount_coupons WHERE id = ${id}`;
+          await refreshDbCoupons();
+          forceRefreshCoupons();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
         return;
       }
 

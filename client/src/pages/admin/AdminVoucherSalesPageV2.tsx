@@ -30,6 +30,7 @@ import {
   Download,
   Settings
 } from "lucide-react";
+import FulfillmentView from './components/FulfillmentView';
 
 // Types
 type VoucherProduct = {
@@ -54,6 +55,7 @@ type DiscountCoupon = {
   maxDiscountAmount?: number;
   startDate?: string;
   endDate?: string;
+  allowedSkus?: string[];
   isActive: boolean;
   usageLimit?: number;
   usageCount: number;
@@ -103,6 +105,8 @@ type DiscountCouponFormData = z.infer<typeof discountCouponFormSchema>;
 
 export default function AdminVoucherSalesPageV2() {
   const [activeTab, setActiveTab] = useState("overview");
+  const [adminToken, setAdminToken] = useState<string>(() => localStorage.getItem('ADMIN_TOKEN') || '');
+  const saveAdminToken = (val: string) => { setAdminToken(val); if (val) localStorage.setItem('ADMIN_TOKEN', val); else localStorage.removeItem('ADMIN_TOKEN'); };
   const [selectedProduct, setSelectedProduct] = useState<VoucherProduct | null>(null);
   const [selectedCoupon, setSelectedCoupon] = useState<DiscountCoupon | null>(null);
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
@@ -122,7 +126,68 @@ export default function AdminVoucherSalesPageV2() {
   });
 
   const { data: discountCoupons, isLoading: isLoadingCoupons } = useQuery<DiscountCoupon[]>({
-    queryKey: ['/api/vouchers/coupons'],
+    queryKey: ['/api/admin/coupons', adminToken],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/coupons', { headers: { 'x-admin-token': adminToken || '' } });
+      if (res.status === 401) throw new Error('Unauthorized');
+      const data = await res.json();
+      const rows = data.coupons || [];
+      return rows.map((r: any) => ({
+        id: r.id,
+        code: r.code,
+        name: r.code,
+        description: r.description || '',
+        discountType: (r.type === 'amount') ? 'fixed_amount' : 'percentage',
+        discountValue: (r.type === 'amount') ? Number(r.amount || 0) : Number(r.percent || 0),
+        minOrderAmount: undefined,
+        maxDiscountAmount: undefined,
+        startDate: r.starts_at,
+        endDate: r.ends_at,
+        allowedSkus: Array.isArray(r.allowed_skus) ? r.allowed_skus : [],
+        isActive: !!r.is_active,
+        usageLimit: undefined,
+        usageCount: 0,
+        createdAt: r.created_at || new Date().toISOString(),
+      })) as DiscountCoupon[];
+    },
+    enabled: !!adminToken,
+  });
+
+  // Coupon mutations
+  const createCoupon = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await fetch('/api/admin/coupons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Create failed');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/admin/coupons', adminToken] })
+  });
+  const updateCoupon = useMutation({
+    mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
+      const res = await fetch(`/api/admin/coupons/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Update failed');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/admin/coupons', adminToken] })
+  });
+  const deleteCoupon = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/admin/coupons/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-token': adminToken || '' },
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/admin/coupons', adminToken] })
   });
 
   const { data: voucherSales, isLoading: isLoadingSales } = useQuery<VoucherSale[]>({
@@ -167,7 +232,7 @@ export default function AdminVoucherSalesPageV2() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-4 lg:w-1/2">
+          <TabsList className="grid w-full grid-cols-5 lg:w-2/3">
             <TabsTrigger value="overview" className="flex items-center space-x-2">
               <TrendingUp className="h-4 w-4" />
               <span>Overview</span>
@@ -183,6 +248,10 @@ export default function AdminVoucherSalesPageV2() {
             <TabsTrigger value="sales" className="flex items-center space-x-2">
               <ShoppingCart className="h-4 w-4" />
               <span>Sales</span>
+            </TabsTrigger>
+            <TabsTrigger value="fulfillment" className="flex items-center space-x-2">
+              <Gift className="h-4 w-4" />
+              <span>Fulfillment</span>
             </TabsTrigger>
           </TabsList>
 
@@ -423,6 +492,14 @@ export default function AdminVoucherSalesPageV2() {
 
           {/* Coupons Tab */}
           <TabsContent value="coupons" className="space-y-6">
+            {!adminToken && (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-sm mb-2">Enter Admin Token to manage coupons:</p>
+                <div className="flex gap-2">
+                  <Input placeholder="Admin token" value={adminToken} onChange={(e) => saveAdminToken(e.target.value)} />
+                </div>
+              </div>
+            )}
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Discount Coupons</h2>
@@ -522,9 +599,23 @@ export default function AdminVoucherSalesPageV2() {
                         <Edit className="h-4 w-4 mr-1" />
                         Edit
                       </Button>
-                      <Button variant="outline" size="sm">
-                        <TrendingUp className="h-4 w-4 mr-1" />
-                        Analytics
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={async () => {
+                          if (!adminToken) return toast({ title: 'Token required', description: 'Enter admin token above' });
+                          if (confirm(`Delete coupon ${coupon.code}?`)) {
+                            try {
+                              await deleteCoupon.mutateAsync(coupon.id);
+                              toast({ title: 'Deleted', description: `Coupon ${coupon.code} removed` });
+                            } catch (e:any) {
+                              toast({ title: 'Error', description: e.message || 'Failed to delete' });
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
                       </Button>
                     </CardFooter>
                   </Card>
@@ -651,6 +742,19 @@ export default function AdminVoucherSalesPageV2() {
               </Card>
             )}
           </TabsContent>
+
+          {/* Fulfillment Tab: Print Queue and Secure Download */}
+          <TabsContent value="fulfillment" className="space-y-6">
+            {!adminToken && (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-sm mb-2">Enter Admin Token to access print queue:</p>
+                <div className="flex gap-2">
+                  <Input placeholder="Admin token" value={adminToken} onChange={(e) => saveAdminToken(e.target.value)} />
+                </div>
+              </div>
+            )}
+            {adminToken && <FulfillmentView adminToken={adminToken} />}
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -775,7 +879,7 @@ export default function AdminVoucherSalesPageV2() {
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="discount-type">Discount Type</Label>
-                <Select defaultValue={selectedCoupon?.discountType || 'percentage'}>
+                <Select defaultValue={selectedCoupon?.discountType || 'percentage'} onValueChange={(v)=>{(document as any)._couponType=v;}}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -806,6 +910,20 @@ export default function AdminVoucherSalesPageV2() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
+                <Label htmlFor="starts-at">Start Date</Label>
+                <Input id="starts-at" type="date" defaultValue={selectedCoupon?.startDate ? selectedCoupon.startDate.slice(0,10) : ''} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ends-at">End Date</Label>
+                <Input id="ends-at" type="date" defaultValue={selectedCoupon?.endDate ? selectedCoupon.endDate.slice(0,10) : ''} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="allowed-skus">Allowed SKUs (comma separated)</Label>
+              <Input id="allowed-skus" placeholder="e.g., Maternity-Basic,Family-Premium" defaultValue={(selectedCoupon?.allowedSkus || []).join(',')} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <Label htmlFor="usage-limit">Usage Limit</Label>
                 <Input 
                   id="usage-limit" 
@@ -827,9 +945,39 @@ export default function AdminVoucherSalesPageV2() {
             <Button variant="outline" onClick={() => setIsCouponDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => {
-              toast({ title: "Success!", description: selectedCoupon ? "Coupon updated successfully" : "Coupon created successfully" });
-              setIsCouponDialogOpen(false);
+            <Button onClick={async () => {
+              if (!adminToken) { toast({ title: 'Token required', description: 'Enter admin token above' }); return; }
+              const code = (document.getElementById('code') as HTMLInputElement)?.value?.trim();
+              const name = (document.getElementById('coupon-name') as HTMLInputElement)?.value?.trim();
+              const description = (document.getElementById('coupon-description') as HTMLTextAreaElement)?.value?.trim();
+              const typeSel = (document as any)._couponType || (selectedCoupon?.discountType || 'percentage');
+              const discountValue = parseFloat((document.getElementById('discount-value') as HTMLInputElement)?.value || '0');
+              const startsAtRaw = (document.getElementById('starts-at') as HTMLInputElement)?.value || '';
+              const endsAtRaw = (document.getElementById('ends-at') as HTMLInputElement)?.value || '';
+              const allowedSkusRaw = (document.getElementById('allowed-skus') as HTMLInputElement)?.value || '';
+              const isActive = (document.getElementById('coupon-active') as HTMLInputElement)?.checked;
+              if (!code) { toast({ title: 'Code required', description: 'Please enter coupon code' }); return; }
+              const payload: any = {
+                code,
+                type: typeSel === 'fixed_amount' ? 'amount' : 'percentage',
+              };
+              if (payload.type === 'amount') payload.amount = discountValue; else payload.percent = discountValue;
+              if (startsAtRaw) payload.starts_at = new Date(startsAtRaw).toISOString();
+              if (endsAtRaw) payload.ends_at = new Date(endsAtRaw).toISOString();
+              if (allowedSkusRaw) payload.allowed_skus = allowedSkusRaw.split(',').map(s=>s.trim()).filter(Boolean);
+              if (isActive !== undefined) payload.is_active = !!isActive;
+              try {
+                if (selectedCoupon) {
+                  await updateCoupon.mutateAsync({ id: selectedCoupon.id, payload });
+                  toast({ title: 'Updated', description: 'Coupon updated successfully' });
+                } else {
+                  await createCoupon.mutateAsync(payload);
+                  toast({ title: 'Created', description: 'Coupon created successfully' });
+                }
+                setIsCouponDialogOpen(false);
+              } catch (e:any) {
+                toast({ title: 'Error', description: e.message || 'Operation failed' });
+              }
             }}>
               {selectedCoupon ? 'Update Coupon' : 'Create Coupon'}
             </Button>
