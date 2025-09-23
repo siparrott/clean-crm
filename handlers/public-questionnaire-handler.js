@@ -61,6 +61,14 @@ async function handlePublicQuestionnairePage(req, res, token) {
         padding: 2.5rem 2rem;
         text-align: center;
       }
+      .logo {
+        width: 180px;
+        height: auto;
+        display: block;
+        margin: 0 auto 1rem auto;
+        border-radius: 12px;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+      }
       .header h1 {
         margin: 0;
         font-size: 2rem;
@@ -300,6 +308,7 @@ async function handlePublicQuestionnairePage(req, res, token) {
       <body>
         <div class="container">
           <div class="header">
+            <img src="https://i.postimg.cc/V6wRZZPJ/frontend-logo.jpg" alt="Company Logo" class="logo" />
             <h1>${escapeHtml(questionnaire.title)}</h1>
             <p>Help us prepare for your perfect photoshoot experience</p>
           </div>
@@ -355,6 +364,26 @@ async function handlePublicQuestionnairePage(req, res, token) {
           const submitBtn = document.getElementById('submit-btn');
           const loading = document.getElementById('loading');
           const messageDiv = document.getElementById('message');
+          const localKey = 'qn-${token}';
+
+          // Inline editing support: load draft from localStorage
+          try {
+            const saved = JSON.parse(localStorage.getItem(localKey) || '{}');
+            Object.keys(saved).forEach((k) => {
+              const el = document.querySelector('[name="' + k + '"]');
+              if (el && saved[k] !== undefined && saved[k] !== null) el.value = saved[k];
+            });
+          } catch {}
+
+          // Save on input changes
+          form.addEventListener('input', (e) => {
+            try {
+              const fd = new FormData(form);
+              const obj = {};
+              fd.forEach((v, k) => { obj[k] = v; });
+              localStorage.setItem(localKey, JSON.stringify(obj));
+            } catch {}
+          });
           
           form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -398,6 +427,7 @@ async function handlePublicQuestionnairePage(req, res, token) {
               if (result.success) {
                 messageDiv.innerHTML = '<div class="message success">Thank you! Your questionnaire has been submitted successfully. We will review your responses and be in touch soon.</div>';
                 form.style.display = 'none';
+                try { localStorage.removeItem(localKey); } catch {}
               } else {
                 throw new Error(result.error || 'Something went wrong');
               }

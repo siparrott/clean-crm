@@ -439,8 +439,8 @@ const QuestionnairesPageV2: React.FC = () => {
                       <label className="block text-xs text-gray-600">Attach to Client</label>
                       <input
                         className="mt-1 w-full border rounded px-3 py-1"
-                        placeholder="Search name, email or client_id"
-                        value={attachInputs[r.id] ?? (r.client_id || '')}
+                        placeholder="Search name or email (Client will be linked by ID)"
+                        value={attachInputs[r.id] ?? ''}
                         onChange={(e) => { const v = e.target.value; setAttachInputs(prev => ({ ...prev, [r.id]: v })); setOpenSearchId(r.id); debouncedSearch(r.id, v); }}
                         onFocus={() => { setOpenSearchId(r.id); const v = attachInputs[r.id] ?? (r.client_id || ''); if (v && v.length >= 2) debouncedSearch(r.id, v, 0); }}
                         onKeyDown={(e) => {
@@ -480,7 +480,7 @@ const QuestionnairesPageV2: React.FC = () => {
                                 type="button"
                                 className={`w-full text-left px-3 py-2 ${active ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                                 onMouseEnter={() => setHighlightIdx(prev => ({ ...prev, [r.id]: i }))}
-                                onClick={() => { setAttachInputs(prev => ({ ...prev, [r.id]: (c.client_id || c.id) })); setClientOptions(prev => ({ ...prev, [r.id]: [] })); setOpenSearchId(null); }}
+                                onClick={() => { setAttachInputs(prev => ({ ...prev, [r.id]: ([c.first_name, c.last_name].filter(Boolean).join(' ') || c.client_id || c.id) })); setClientOptions(prev => ({ ...prev, [r.id]: [] })); setOpenSearchId(null); handleAttach(r.id, (c.client_id || c.id)); }}
                               >
                                 <div className="text-sm font-medium">{[c.first_name, c.last_name].filter(Boolean).join(' ') || c.client_id || c.id}</div>
                                 <div className="text-xs text-gray-500">{c.email}</div>

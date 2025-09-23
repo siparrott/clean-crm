@@ -87,6 +87,63 @@ initializeStripe();
 
 console.log('🚀 Starting PRODUCTION server with Neon database...');
 
+// ===== Leads schema bootstrap (compatible with existing table) =====
+let __leadsSchemaEnsured = false;
+async function ensureLeadsSchema() {
+  if (__leadsSchemaEnsured) return;
+  if (!sql) return; // will be re-attempted on first use when SQL ready
+  try {
+    // Ensure pgcrypto for gen_random_uuid
+    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
+    // Create table if missing (keeps existing if present)
+    await sql`
+      CREATE TABLE IF NOT EXISTS leads (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        form_type text,
+        full_name text,
+        email text,
+        phone text,
+        preferred_date date,
+        message text,
+        consent boolean DEFAULT false,
+        source_path text,
+        user_agent text,
+        ip inet,
+        meta jsonb DEFAULT '{}'::jsonb,
+        status text DEFAULT 'new',
+        created_at timestamptz DEFAULT now()
+      )
+    `;
+    // Add/align columns on existing installs (no-throw if already present)
+    const alters = [
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS form_type text`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS full_name text`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS email text`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone text`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_date date`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS message text`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent boolean DEFAULT false`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_path text`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS user_agent text`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS ip inet`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS meta jsonb DEFAULT '{}'::jsonb`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS status text DEFAULT 'new'`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now()`
+    ];
+    for (const stmt of alters) {
+      await sql(stmt).catch(() => {});
+    }
+    // Helpful indexes (idempotent)
+    await sql`CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_leads_created ON leads(created_at DESC)`;
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_newsletter_email ON leads (lower(email)) WHERE form_type = 'newsletter'`;
+    __leadsSchemaEnsured = true;
+    console.log('✅ Leads schema ensured');
+  } catch (e) {
+    console.warn('⚠️ ensureLeadsSchema failed:', e.message);
+  }
+}
+
 // ===== Coupon Engine (env-driven with VCWIEN fallback) =====
 const COUPON_TTL_SECONDS = parseInt(process.env.COUPON_RELOAD_SECONDS || '60', 10);
 let __couponCache = { coupons: null, expiresAt: 0 };
@@ -1736,6 +1793,159 @@ const server = http.createServer(async (req, res) => {
       }
       
       // === LEAD CAPTURE ENDPOINTS ===
+
+      // Unified leads submit endpoint (newsletter, waitlist, contact)
+      if (pathname === '/api/leads/submit') {
+        if (req.method !== 'POST') {
+          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Method Not Allowed' }));
+          return;
+        }
+        if (!sql) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Database not available' }));
+          return;
+        }
+        await ensureLeadsSchema();
+        let raw = '';
+        req.on('data', c => raw += c.toString());
+        req.on('end', async () => {
+          try {
+            const body = raw ? JSON.parse(raw) : {};
+            const formType = String(body.formType || '').toLowerCase();
+            const allowed = ['newsletter','waitlist','contact'];
+            if (!allowed.includes(formType)) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Invalid formType' }));
+              return;
+            }
+            const sourcePath = typeof body.sourcePath === 'string' ? body.sourcePath : (req.headers.referer || '');
+            const consent = !!body.consent;
+
+            // Basic validation per type
+            const email = String(body.email || '').trim();
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Valid email is required' }));
+              return;
+            }
+
+            let fullName = null, phone = null, preferredDate = null, message = null;
+            if (formType === 'waitlist' || formType === 'contact') {
+              fullName = String(body.fullName || '').trim();
+              if (!fullName) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: false, error: 'fullName is required' }));
+                return;
+              }
+              phone = body.phone ? String(body.phone).trim() : null;
+              message = body.message ? String(body.message).trim() : null;
+              if (formType === 'waitlist' && body.preferredDate) {
+                preferredDate = String(body.preferredDate);
+              }
+            }
+
+            // Capture client details
+            let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+            if (Array.isArray(ip)) ip = ip[0] || '';
+            if (typeof ip === 'string' && ip.includes(',')) ip = ip.split(',')[0].trim();
+            const userAgent = String(req.headers['user-agent'] || '');
+
+            // Insert
+            try {
+              const rows = await sql`
+                INSERT INTO leads(form_type, full_name, email, phone, preferred_date, message, consent, source_path, user_agent, ip, meta, status)
+                VALUES (${formType}, ${fullName}, ${email}, ${phone}, ${preferredDate}, ${message}, ${consent}, ${sourcePath}, ${userAgent}, ${ip}, ${JSON.stringify({})}, 'new')
+                RETURNING id, created_at
+              `;
+
+              // Send emails (studio + optional client acknowledgement)
+              try {
+                const nodemailer = require('nodemailer');
+                const tx = nodemailer.createTransport({
+                  host: process.env.SMTP_HOST,
+                  port: parseInt(process.env.SMTP_PORT || '587', 10),
+                  secure: false,
+                  auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+                  tls: { rejectUnauthorized: false }
+                });
+                const studioTo = (process.env.STUDIO_NOTIFY_EMAIL || '').trim();
+                if (studioTo) {
+                  const lines = [
+                    `Form: ${formType}`,
+                    `Name: ${fullName || '-'}`,
+                    `Email: ${email}`,
+                    `Phone: ${phone || '-'}`,
+                    `Preferred Date: ${preferredDate || '-'}`,
+                    `Message: ${message || '-'}`,
+                    `Consent: ${consent ? 'yes' : 'no'}`,
+                    `Source: ${sourcePath}`,
+                    `IP: ${ip}`,
+                  ];
+                  await tx.sendMail({
+                    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+                    to: studioTo,
+                    subject: '📥 New Lead received',
+                    text: lines.join('\n')
+                  });
+                }
+                if (email && (formType === 'waitlist' || formType === 'contact')) {
+                  await tx.sendMail({
+                    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+                    to: email,
+                    subject: 'Thanks — we’ve received your message ✅',
+                    html: `<div style="font-family:system-ui;line-height:1.55"><p>Hi ${fullName || ''}</p><p>Thanks for reaching out to New Age Fotografie. We’ll get back to you shortly.</p><p>– New Age Fotografie</p></div>`
+                  });
+                }
+              } catch (mailErr) {
+                console.warn('⚠️ Lead email notification failed:', mailErr.message);
+              }
+
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: true, id: rows[0]?.id }));
+            } catch (e) {
+              const msg = String(e?.message || '');
+              if (msg.includes('uniq_newsletter_email') && formType === 'newsletter') {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, duplicate: true, message: 'Already subscribed' }));
+                return;
+              }
+              console.error('DB insert error (leads):', e);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Failed to save lead' }));
+            }
+          } catch (err) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }));
+          }
+        });
+        return;
+      }
+
+      // List new leads (minimal admin helper)
+      if (pathname === '/api/leads/list' && req.method === 'GET') {
+        if (!sql) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Database not available' }));
+          return;
+        }
+        await ensureLeadsSchema();
+        try {
+          const rows = await sql`
+            SELECT id, form_type, full_name, email, phone, preferred_date, created_at
+            FROM leads
+            WHERE status = 'new'
+            ORDER BY created_at DESC
+          `;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ count: rows.length, rows }));
+        } catch (e) {
+          console.error('leads list error:', e.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Failed to list leads' }));
+        }
+        return;
+      }
       
       // Contact form submission endpoint
       if (pathname === '/api/contact' && req.method === 'POST') {
@@ -2091,27 +2301,36 @@ const server = http.createServer(async (req, res) => {
       // Get notifications endpoint
       if (pathname === '/api/admin/notifications' && req.method === 'GET') {
         try {
-          // For now, return notifications based on recent questionnaire responses
+          // Return notifications based on recent questionnaire responses with client name
           const recentResponses = await sql`
             SELECT 
               qr.id,
               qr.client_id,
+              qr.client_name,
+              qr.client_email,
               qr.submitted_at,
-              qr.token
+              qr.token,
+              c.first_name,
+              c.last_name
             FROM questionnaire_responses qr
+            LEFT JOIN crm_clients c ON (c.id::text = qr.client_id::text OR c.client_id::text = qr.client_id::text)
             WHERE qr.submitted_at > NOW() - INTERVAL '7 days'
             ORDER BY qr.submitted_at DESC
             LIMIT 10
           `;
-          
-          const notifications = recentResponses.map(response => ({
-            id: `questionnaire-${response.id}`,
-            type: 'questionnaire',
-            title: 'New Questionnaire Response',
-            message: `Client ${response.client_id} submitted a questionnaire response`,
-            timestamp: response.submitted_at,
-            read: false
-          }));
+
+          const notifications = recentResponses.map(r => {
+            const fullName = [r.first_name, r.last_name].filter(Boolean).join(' ').trim();
+            const displayName = fullName || (r.client_name || 'Client');
+            return {
+              id: `questionnaire-${r.id}`,
+              type: 'questionnaire',
+              title: 'New Questionnaire Response',
+              message: `Client ${displayName} submitted a questionnaire response`,
+              timestamp: r.submitted_at,
+              read: false
+            };
+          });
           
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(notifications));
