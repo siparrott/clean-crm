@@ -21,13 +21,10 @@ const questionnaireHandlers = {
       req.on('data', chunk => { body += chunk.toString(); });
       req.on('end', async () => {
         try {
-          const { client_id, questionnaire_id, expiry_days } = JSON.parse(body);
-          
-          if (!client_id) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'client_id is required' }));
-            return;
-          }
+          const payload = JSON.parse(body);
+          const client_id = payload.client_id || payload.clientId || null;
+          const questionnaire_id = payload.questionnaire_id || payload.template_id || null;
+          const expiry_days = payload.expiry_days;
           
           const result = await questionnaireService.createQuestionnaireLink(
             client_id, 

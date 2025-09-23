@@ -29,6 +29,7 @@ const QuestionnairesPageV2: React.FC = () => {
   const [highlightIdx, setHighlightIdx] = useState<Record<string, number>>({});
   const searchTimeoutsRef = useRef<Record<string, any>>({});
   const containerRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [searchLoading, setSearchLoading] = useState<Record<string, boolean>>({});
 
   const handleCreateQuestionnaireLink = async () => {
     try {
@@ -39,7 +40,7 @@ const QuestionnairesPageV2: React.FC = () => {
       const response = await fetch('/api/admin/create-questionnaire-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: 'demo-client', template_id: template }),
+        body: JSON.stringify({ client_id: 'demo-client', questionnaire_id: template }),
       });
 
       if (!response.ok) throw new Error('Failed to create questionnaire link');
@@ -76,11 +77,11 @@ const QuestionnairesPageV2: React.FC = () => {
     }
   };
 
-  const handleAttach = async (responseId: string) => {
+  const handleAttach = async (responseId: string, explicitClientId?: string) => {
     try {
       setLoading(true);
       setError(null);
-      const clientId = (attachInputs[responseId] || '').trim();
+      const clientId = (explicitClientId ?? attachInputs[responseId] ?? '').toString().trim();
       if (!clientId) { alert('Please enter a client identifier'); return; }
       const res = await fetch('/api/admin/attach-response-to-client', {
         method: 'POST',
@@ -99,7 +100,7 @@ const QuestionnairesPageV2: React.FC = () => {
 
   const searchClients = async (responseId: string, q: string) => {
     try {
-      if (!q || q.length < 2) { setClientOptions(prev => ({ ...prev, [responseId]: [] })); return; }
+      if (!q || q.length < 2) { setClientOptions(prev => ({ ...prev, [responseId]: [] })); setSearchLoading(prev => ({ ...prev, [responseId]: false })); return; }
       const u = `/api/admin/clients/search?q=${encodeURIComponent(q)}&limit=8`;
       const res = await fetch(u);
       if (!res.ok) return;
@@ -107,10 +108,14 @@ const QuestionnairesPageV2: React.FC = () => {
       setClientOptions(prev => ({ ...prev, [responseId]: data.clients || [] }));
       setHighlightIdx(prev => ({ ...prev, [responseId]: (data.clients && data.clients.length > 0) ? 0 : -1 }));
     } catch {}
+    finally {
+      setSearchLoading(prev => ({ ...prev, [responseId]: false }));
+    }
   };
 
   const debouncedSearch = (responseId: string, q: string, delay = 250) => {
     if (searchTimeoutsRef.current[responseId]) clearTimeout(searchTimeoutsRef.current[responseId]);
+    setSearchLoading(prev => ({ ...prev, [responseId]: true }));
     searchTimeoutsRef.current[responseId] = setTimeout(() => {
       searchClients(responseId, q);
     }, delay);
@@ -454,6 +459,8 @@ const QuestionnairesPageV2: React.FC = () => {
                               setAttachInputs(prev => ({ ...prev, [r.id]: (c.client_id || c.id) }));
                               setClientOptions(prev => ({ ...prev, [r.id]: [] }));
                               setOpenSearchId(null);
+                              // Auto-attach on Enter selection
+                              handleAttach(r.id, (c.client_id || c.id));
                             }
                           } else if (e.key === 'Escape') {
                             setClientOptions(prev => ({ ...prev, [r.id]: [] }));
@@ -461,6 +468,9 @@ const QuestionnairesPageV2: React.FC = () => {
                           }
                         }}
                       />
+                      {searchLoading[r.id] && (
+                        <div className="absolute right-2 top-2.5 h-4 w-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" aria-label="loading"></div>
+                      )}
                       {(clientOptions[r.id]?.length ?? 0) > 0 && (
                         <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow max-h-64 overflow-auto">
                           {clientOptions[r.id]!.map((c, i) => {

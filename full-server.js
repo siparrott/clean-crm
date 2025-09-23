@@ -1938,7 +1938,7 @@ const server = http.createServer(async (req, res) => {
       }
       
       // Get client questionnaire responses endpoint
-      if (pathname.startsWith('/api/admin/client-questionnaires/') && req.method === 'GET') {
+  if (pathname.startsWith('/api/admin/client-questionnaires/') && req.method === 'GET') {
         try {
           const clientId = pathname.split('/').pop();
           const clientIdParam = String(clientId);
@@ -1950,7 +1950,7 @@ const server = http.createServer(async (req, res) => {
             questionnaires = await sql`
               SELECT 
                 ql.token,
-                ql.client_id,
+                COALESCE(qr.client_id, ql.client_id) AS client_id,
                 ql.template_id,
                 ql.is_used,
                 ql.created_at as sent_at,
@@ -1963,9 +1963,15 @@ const server = http.createServer(async (req, res) => {
                 COALESCE(c.email, 'demo@example.com') as email
               FROM questionnaire_links ql
               LEFT JOIN questionnaire_responses qr ON ql.token = qr.token
-              LEFT JOIN crm_clients c ON ql.client_id = c.client_id
-              WHERE ql.client_id::text = ${clientIdParam}::text
-              ORDER BY ql.created_at DESC
+              LEFT JOIN crm_clients c ON (
+                c.client_id::text = COALESCE(qr.client_id::text, ql.client_id::text)
+                OR c.id::text = COALESCE(qr.client_id::text, ql.client_id::text)
+              )
+              WHERE (
+                ql.client_id::text = ${clientIdParam}::text
+                OR qr.client_id::text = ${clientIdParam}::text
+              )
+              ORDER BY COALESCE(qr.submitted_at, ql.created_at) DESC
             `;
             console.log('✅ Primary query successful, found questionnaires:', questionnaires.length);
             questionnaires.forEach((q, i) => {
@@ -1975,9 +1981,38 @@ const server = http.createServer(async (req, res) => {
                 is_used: q.is_used,
                 has_response: !!q.response_id,
                 submitted_at: q.submitted_at,
-                answers: q.answers ? Object.keys(JSON.parse(q.answers || '{}')).length + ' answers' : 'no answers'
+                answers: q.answers ? (typeof q.answers === 'string' ? Object.keys(JSON.parse(q.answers || '{}')).length : Object.keys(q.answers || {}).length) + ' answers' : 'no answers'
               });
             });
+            // If no results, fallback to responses table by client_id
+            if (!questionnaires || questionnaires.length === 0) {
+              console.log('ℹ️ No questionnaires via links. Falling back to responses by client_id...');
+              const responseResults = await sql`
+                SELECT 
+                  qr.token,
+                  qr.client_id,
+                  qr.answers,
+                  qr.submitted_at,
+                  qr.submitted_at as created_at
+                FROM questionnaire_responses qr
+                WHERE qr.client_id::text = ${clientIdParam}::text
+                ORDER BY qr.submitted_at DESC
+              `;
+              questionnaires = responseResults.map(r => ({
+                token: r.token,
+                client_id: r.client_id,
+                template_id: null,
+                is_used: true,
+                sent_at: r.created_at,
+                expires_at: null,
+                response_id: r.token,
+                answers: r.answers,
+                submitted_at: r.submitted_at,
+                first_name: 'Client',
+                last_name: '',
+                email: 'client@example.com'
+              }));
+            }
           } catch (sqlErr) {
             console.error('❌ Client questionnaires SQL error:', sqlErr.message || sqlErr);
             
@@ -1988,12 +2023,11 @@ const server = http.createServer(async (req, res) => {
                 SELECT 
                   token,
                   client_id,
-                  template_slug,
                   answers,
                   submitted_at,
-                  created_at
+                  submitted_at as created_at
                 FROM questionnaire_responses 
-                WHERE client_id = ${clientIdParam}
+                WHERE client_id::text = ${clientIdParam}::text
                 ORDER BY submitted_at DESC
               `;
               
@@ -2002,7 +2036,7 @@ const server = http.createServer(async (req, res) => {
               questionnaires = responseResults.map(r => ({
                 token: r.token,
                 client_id: r.client_id,
-                template_id: r.template_slug,
+                template_id: null,
                 is_used: true,
                 sent_at: r.created_at,
                 expires_at: null,

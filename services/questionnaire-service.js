@@ -70,6 +70,56 @@ class QuestionnaireService {
   constructor(deps = {}) {
     this.sql = deps.sql || sql;
     this.createTransporter = deps.createTransporter || createTransporter;
+    this._colCache = {};
+  }
+
+  async tableHasColumn(table, column) {
+    const key = `${table}.${column}`;
+    if (this._colCache[key] !== undefined) return this._colCache[key];
+    try {
+      const rows = await this.sql(
+        `SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2 LIMIT 1`,
+        [table, column]
+      );
+      const exists = !!rows?.length;
+      this._colCache[key] = exists;
+      return exists;
+    } catch {
+      this._colCache[key] = false;
+      return false;
+    }
+  }
+
+  async ensureQuestionnaireFromSurvey(surveyId) {
+    if (!surveyId) return null;
+    // Try find questionnaire with same id first
+    const existing = await this.sql`SELECT * FROM questionnaires WHERE id::text = ${surveyId}::text LIMIT 1`;
+    if (existing.length) return existing[0];
+    // Load survey and convert to questionnaire
+    const surveys = await this.sql`SELECT * FROM surveys WHERE id::text = ${surveyId}::text LIMIT 1`;
+    if (!surveys.length) return null;
+    const s = surveys[0];
+    // Convert survey.pages[0].questions to fields
+    let fields = [];
+    try {
+      const pages = s.pages || [];
+      const first = Array.isArray(pages) ? pages[0] : null;
+      const qs = (first && first.questions) || [];
+      fields = qs.map((q, idx) => ({
+        key: String(q.id || `q${idx + 1}`),
+        label: String(q.title || q.text || `Question ${idx + 1}`),
+        type: (q.type === 'textarea' ? 'textarea' : (q.type === 'number' ? 'number' : (q.type === 'email' ? 'email' : (q.type === 'radio' ? 'radio' : (q.type === 'select' ? 'select' : 'text'))))),
+        required: !!q.required
+      }));
+    } catch {}
+    const desc = s.description || null;
+    const notifyEmail = s.notify_email || s.notifyEmail || null;
+    const inserted = await this.sql`
+      INSERT INTO questionnaires (title, slug, description, fields, is_active, notify_email)
+      VALUES (${s.title || 'Survey'}, ${crypto.randomUUID().replace(/-/g,'').slice(0,10)}, ${desc}, ${JSON.stringify(fields)}, true, ${notifyEmail})
+      RETURNING *
+    `;
+    return inserted[0];
   }
   
   /**
@@ -83,8 +133,12 @@ class QuestionnaireService {
       // Get or create default questionnaire
       let questionnaire;
       if (questionnaireId) {
-        const result = await this.sql`SELECT * FROM questionnaires WHERE id = ${questionnaireId} AND is_active = true LIMIT 1`;
+        const result = await this.sql`SELECT * FROM questionnaires WHERE id::text = ${questionnaireId}::text AND is_active = true LIMIT 1`;
         questionnaire = result[0];
+        if (!questionnaire) {
+          // Try to convert from surveys table
+          questionnaire = await this.ensureQuestionnaireFromSurvey(questionnaireId);
+        }
       }
       
       if (!questionnaire) {
@@ -100,14 +154,35 @@ class QuestionnaireService {
       // Calculate expiry
       const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
       
-      // Store the link in database
-      await this.sql`
-        INSERT INTO questionnaire_links (
-          token, questionnaire_id, client_id, expires_at, is_used, created_at
-        ) VALUES (
-          ${token}, ${questionnaire.id}, ${clientId}, ${expiresAt}, false, NOW()
-        )
-      `;
+      // Store the link in database (support legacy template_id column)
+      const hasQuestionnaireId = await this.tableHasColumn('questionnaire_links', 'questionnaire_id');
+      const hasTemplateId = await this.tableHasColumn('questionnaire_links', 'template_id');
+      if (hasQuestionnaireId) {
+        await this.sql`
+          INSERT INTO questionnaire_links (
+            token, questionnaire_id, client_id, expires_at, is_used, created_at
+          ) VALUES (
+            ${token}, ${questionnaire.id}, ${clientId}, ${expiresAt}, false, NOW()
+          )
+        `;
+      } else if (hasTemplateId) {
+        await this.sql`
+          INSERT INTO questionnaire_links (
+            token, template_id, client_id, expires_at, is_used, created_at
+          ) VALUES (
+            ${token}, ${questionnaire.id}, ${clientId}, ${expiresAt}, false, NOW()
+          )
+        `;
+      } else {
+        // Fallback assume questionnaire_id
+        await this.sql`
+          INSERT INTO questionnaire_links (
+            token, questionnaire_id, client_id, expires_at, is_used, created_at
+          ) VALUES (
+            ${token}, ${questionnaire.id}, ${clientId}, ${expiresAt}, false, NOW()
+          )
+        `;
+      }
       
       // Generate proper link with BASE_URL
   const baseUrl = process.env.APP_BASE_URL || process.env.APP_URL || process.env.VERCEL_URL || 'https://www.newagefotografie.com';
@@ -149,8 +224,8 @@ class QuestionnaireService {
           c.last_name as client_last_name,
           c.email as client_email
         FROM questionnaire_links ql
-    JOIN questionnaires q ON q.id = ql.questionnaire_id
-  LEFT JOIN crm_clients c ON (c.id::text = ql.client_id OR c.client_id::text = ql.client_id)
+        JOIN questionnaires q ON q.id::text = COALESCE(ql.questionnaire_id::text, ql.template_id::text)
+        LEFT JOIN crm_clients c ON (c.id::text = ql.client_id::text OR c.client_id::text = ql.client_id::text)
         WHERE ql.token = ${token}
         LIMIT 1
       `;
