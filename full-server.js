@@ -213,20 +213,21 @@ async function handleFilesAPI(req, res, pathname, query) {
   const pathParts = pathname.split('/');
   const fileEndpoint = pathParts.slice(3).join('/'); // Remove '/api/files'
   
-  if (req.method === 'GET' && fileEndpoint === '') {
+    if (req.method === 'GET' && fileEndpoint === '') {
     // GET /api/files - Retrieve digital files with filters
     try {
       const { 
         folder_name, 
-                let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-                if (Array.isArray(ip)) ip = ip[0] || '';
-                if (typeof ip === 'string' && ip.includes(',')) ip = ip.split(',')[0].trim();
         client_id, 
         session_id,
         search_term,
         is_public,
         limit = '20'
       } = query || {};
+
+      let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+      if (Array.isArray(ip)) ip = ip[0] || '';
+      if (typeof ip === 'string' && ip.includes(',')) ip = ip.split(',')[0].trim();
 
       let queryStr = `
         SELECT id, folder_name, file_name, file_type, file_size, 
