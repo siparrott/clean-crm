@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -15,6 +15,20 @@ const QuestionnairesPageV2: React.FC = () => {
   // Builder-specific state
   const [logoUrl, setLogoUrl] = useState('');
   const [questions, setQuestions] = useState<string[]>([]);
+  // Responses UI state
+  const [responses, setResponses] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 10;
+  const [filterClientId, setFilterClientId] = useState('');
+  const [filterQuestionnaireId, setFilterQuestionnaireId] = useState('');
+  const [attachInputs, setAttachInputs] = useState<Record<string, string>>({});
+  const [clientOptions, setClientOptions] = useState<Record<string, any[]>>({});
+  const [openDetailId, setOpenDetailId] = useState<string | null>(null);
+  const [openSearchId, setOpenSearchId] = useState<string | null>(null);
+  const [highlightIdx, setHighlightIdx] = useState<Record<string, number>>({});
+  const searchTimeoutsRef = useRef<Record<string, any>>({});
+  const containerRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const handleCreateQuestionnaireLink = async () => {
     try {
@@ -45,21 +59,15 @@ const QuestionnairesPageV2: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await fetch('/api/admin/client-questionnaires/demo-client');
-      if (!response.ok) throw new Error('Failed to fetch responses');
-      const data = await response.json();
-      console.log('Questionnaire responses:', data);
-
-      if (data.length > 0) {
-        const responseDetails = data.map((resp: any, index: number) =>
-          `Response ${index + 1}:\nSubmitted: ${new Date(resp.submitted_at).toLocaleString()}\nAnswers: ${JSON.stringify(resp.responses, null, 2)}`
-        ).join('\n\n');
-
-        alert(`Found ${data.length} questionnaire responses:\n\n${responseDetails}`);
-      } else {
-  alert('No responses found for this questionnaire yet.\n\nTo test:\n1. Click the "Create Link" button\n2. Share the link with a client\n3. Complete the questionnaire\n4. Return here to view responses');
-      }
+      const offset = (page - 1) * pageSize;
+      const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
+      if (filterClientId.trim()) params.set('client_id', filterClientId.trim());
+      if (filterQuestionnaireId.trim()) params.set('questionnaire_id', filterQuestionnaireId.trim());
+      const res = await fetch(`/api/admin/questionnaire-responses?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch responses');
+      const data = await res.json();
+      setResponses(data.responses || []);
+      setTotal(data.total || 0);
     } catch (err) {
       console.error('Error fetching responses:', err);
       setError('Failed to fetch questionnaire responses.');
@@ -67,6 +75,60 @@ const QuestionnairesPageV2: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const handleAttach = async (responseId: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const clientId = (attachInputs[responseId] || '').trim();
+      if (!clientId) { alert('Please enter a client identifier'); return; }
+      const res = await fetch('/api/admin/attach-response-to-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response_id: responseId, client_id: clientId })
+      });
+      if (!res.ok) throw new Error('Attach failed');
+      await handleViewResponses();
+    } catch (err) {
+      console.error('Attach failed:', err);
+      setError('Failed to attach response to client.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchClients = async (responseId: string, q: string) => {
+    try {
+      if (!q || q.length < 2) { setClientOptions(prev => ({ ...prev, [responseId]: [] })); return; }
+      const u = `/api/admin/clients/search?q=${encodeURIComponent(q)}&limit=8`;
+      const res = await fetch(u);
+      if (!res.ok) return;
+      const data = await res.json();
+      setClientOptions(prev => ({ ...prev, [responseId]: data.clients || [] }));
+      setHighlightIdx(prev => ({ ...prev, [responseId]: (data.clients && data.clients.length > 0) ? 0 : -1 }));
+    } catch {}
+  };
+
+  const debouncedSearch = (responseId: string, q: string, delay = 250) => {
+    if (searchTimeoutsRef.current[responseId]) clearTimeout(searchTimeoutsRef.current[responseId]);
+    searchTimeoutsRef.current[responseId] = setTimeout(() => {
+      searchClients(responseId, q);
+    }, delay);
+  };
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const openId = openSearchId;
+      if (!openId) return;
+      const container = containerRefs.current[openId];
+      if (container && e.target instanceof Node && !container.contains(e.target)) {
+        setClientOptions(prev => ({ ...prev, [openId]: [] }));
+        setOpenSearchId(null);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [openSearchId]);
 
   // Load available questionnaires (surveys)
   const fetchSurveys = async () => {
@@ -314,6 +376,131 @@ const QuestionnairesPageV2: React.FC = () => {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Responses filters */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Client Filter</label>
+              <input value={filterClientId} onChange={(e) => setFilterClientId(e.target.value)} placeholder="client_id or CRM id" className="mt-1 w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Questionnaire</label>
+              <select value={filterQuestionnaireId} onChange={(e) => setFilterQuestionnaireId(e.target.value)} className="mt-1 w-full border rounded px-3 py-2">
+                <option value="">All</option>
+                {surveys.map((s) => (
+                  <option key={s.id} value={s.id}>{s.title || s.id}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setPage(1); handleViewResponses(); }} className="px-4 py-2 bg-indigo-600 text-white rounded">Apply</button>
+              <button onClick={() => { setFilterClientId(''); setFilterQuestionnaireId(''); setPage(1); handleViewResponses(); }} className="px-4 py-2 bg-gray-200 rounded">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Responses list */}
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Recent Responses</h3>
+            <div className="space-x-2">
+              <button onClick={() => { if (page > 1) { setPage(page - 1); handleViewResponses(); } }} disabled={page === 1 || loading} className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">Prev</button>
+              <button onClick={() => { setPage(page + 1); handleViewResponses(); }} disabled={(page * pageSize) >= total || loading} className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">Next</button>
+            </div>
+          </div>
+          {responses.length === 0 ? (
+            <p className="text-gray-500">No responses yet.</p>
+          ) : (
+            <div className="divide-y">
+              {responses.map((r) => (
+                <div key={r.id} className="py-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{r.client_name || 'Unknown Client'}</p>
+                      <p className="text-sm text-gray-500">{new Date(r.submitted_at).toLocaleString()}</p>
+                    </div>
+                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">{r.questionnaire_title || 'Questionnaire'}</span>
+                  </div>
+                  {r.answers && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-sm text-gray-600">View answers</summary>
+                      <pre className="mt-2 text-xs bg-gray-50 p-2 rounded overflow-auto">{JSON.stringify(r.answers, null, 2)}</pre>
+                    </details>
+                  )}
+                  <div className="mt-3 flex gap-2 items-end">
+                    <div className="flex-1 relative" ref={(el) => { containerRefs.current[r.id] = el; }}>
+                      <label className="block text-xs text-gray-600">Attach to Client</label>
+                      <input
+                        className="mt-1 w-full border rounded px-3 py-1"
+                        placeholder="Search name, email or client_id"
+                        value={attachInputs[r.id] ?? (r.client_id || '')}
+                        onChange={(e) => { const v = e.target.value; setAttachInputs(prev => ({ ...prev, [r.id]: v })); setOpenSearchId(r.id); debouncedSearch(r.id, v); }}
+                        onFocus={() => { setOpenSearchId(r.id); const v = attachInputs[r.id] ?? (r.client_id || ''); if (v && v.length >= 2) debouncedSearch(r.id, v, 0); }}
+                        onKeyDown={(e) => {
+                          const opts = clientOptions[r.id] || [];
+                          const idx = highlightIdx[r.id] ?? -1;
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            if (opts.length > 0) setHighlightIdx(prev => ({ ...prev, [r.id]: Math.min((idx < 0 ? 0 : idx + 1), opts.length - 1) }));
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            if (opts.length > 0) setHighlightIdx(prev => ({ ...prev, [r.id]: Math.max((idx < 0 ? 0 : idx - 1), 0) }));
+                          } else if (e.key === 'Enter') {
+                            if (opts.length > 0 && idx >= 0) {
+                              e.preventDefault();
+                              const c = opts[idx];
+                              setAttachInputs(prev => ({ ...prev, [r.id]: (c.client_id || c.id) }));
+                              setClientOptions(prev => ({ ...prev, [r.id]: [] }));
+                              setOpenSearchId(null);
+                            }
+                          } else if (e.key === 'Escape') {
+                            setClientOptions(prev => ({ ...prev, [r.id]: [] }));
+                            setOpenSearchId(null);
+                          }
+                        }}
+                      />
+                      {(clientOptions[r.id]?.length ?? 0) > 0 && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow max-h-64 overflow-auto">
+                          {clientOptions[r.id]!.map((c, i) => {
+                            const active = (highlightIdx[r.id] ?? -1) === i;
+                            return (
+                              <button key={c.id}
+                                type="button"
+                                className={`w-full text-left px-3 py-2 ${active ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                                onMouseEnter={() => setHighlightIdx(prev => ({ ...prev, [r.id]: i }))}
+                                onClick={() => { setAttachInputs(prev => ({ ...prev, [r.id]: (c.client_id || c.id) })); setClientOptions(prev => ({ ...prev, [r.id]: [] })); setOpenSearchId(null); }}
+                              >
+                                <div className="text-sm font-medium">{[c.first_name, c.last_name].filter(Boolean).join(' ') || c.client_id || c.id}</div>
+                                <div className="text-xs text-gray-500">{c.email}</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={() => handleAttach(r.id)} className="px-3 py-2 bg-green-600 text-white rounded" disabled={loading}>Attach</button>
+                    <button onClick={() => setOpenDetailId(openDetailId === r.id ? null : r.id)} className="px-3 py-2 bg-gray-200 rounded">Details</button>
+                  </div>
+                  {openDetailId === r.id && (
+                    <div className="mt-3 p-3 border rounded bg-gray-50">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div><span className="text-gray-500">Response ID:</span> {r.id}</div>
+                        <div><span className="text-gray-500">Token:</span> {r.token}</div>
+                        <div><span className="text-gray-500">Client ID:</span> {r.client_id || '-'}</div>
+                        <div><span className="text-gray-500">Client Email:</span> {r.client_email || '-'}</div>
+                        <div><span className="text-gray-500">Questionnaire:</span> {r.questionnaire_title || '-'}</div>
+                        <div><span className="text-gray-500">Submitted:</span> {new Date(r.submitted_at).toLocaleString()}</div>
+                      </div>
+                    </div>
+                  )}
+                  {/* duplicate attach input removed; typeahead above handles attach */}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="mt-4 text-sm text-gray-600">Page {page} • Total {total}</div>
         </div>
       </div>
     </AdminLayout>

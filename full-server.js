@@ -1170,58 +1170,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Public server-rendered questionnaire page
+  // Enhanced Public server-rendered questionnaire page
   if (pathname.startsWith('/q/') && req.method === 'GET') {
-    try {
-      const slug = pathname.split('/')[2];
-      if (!slug) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Questionnaire not found');
-        return;
-      }
-      if (!sql) {
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('Database not available');
-        return;
-      }
-      const rows = await sql`SELECT * FROM questionnaires WHERE slug = ${slug} AND is_active = true`;
-      if (!rows || rows.length === 0) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Questionnaire not found');
-        return;
-      }
-      const qn = rows[0];
-      const fields = qn.fields || [];
-      const css = `body{font-family:ui-sans-serif,system-ui,Arial;margin:2rem;line-height:1.5}.card{max-width:760px;margin:auto;padding:24px;border:1px solid #eee;border-radius:14px;box-shadow:0 8px 26px rgba(0,0,0,.06)}label{display:block;margin:.5rem 0 .25rem;font-weight:600}input,select,textarea{width:100%;padding:.6rem;border:1px solid #ddd;border-radius:8px}.row{margin:1rem 0}button{background:#6C2BD9;color:#fff;padding:.8rem 1.2rem;border:0;border-radius:10px;cursor:pointer}.muted{color:#666;font-size:.9rem}`;
-      const inputs = (fields || []).map((f) => {
-        const reqAttr = f.required ? 'required' : '';
-        if (f.type === 'textarea') {
-          return `<div class="row"><label>${escapeHtml(f.label)}${f.required ? ' *' : ''}</label><textarea name="${escapeHtml(f.key)}" rows="4" ${reqAttr}></textarea></div>`;
-        }
-        if (f.type === 'select') {
-          const opts = (f.options || []).map((o) => `<option value="${escapeHtml(String(o))}">${escapeHtml(String(o))}</option>`).join('');
-          return `<div class="row"><label>${escapeHtml(f.label)}${f.required ? ' *' : ''}</label><select name="${escapeHtml(f.key)}" ${reqAttr}>${opts}</select></div>`;
-        }
-        if (f.type === 'radio') {
-          const radios = (f.options || []).map((o) => `<label style="font-weight:400"><input type="radio" name="${escapeHtml(f.key)}" value="${escapeHtml(String(o))}" ${reqAttr}/> ${escapeHtml(String(o))}</label>`).join('<br/>' );
-          return `<div class="row"><div><strong>${escapeHtml(f.label)}${f.required ? ' *' : ''}</strong></div>${radios}</div>`;
-        }
-        if (f.type === 'checkbox') {
-          return `<div class="row"><label style="font-weight:400"><input type="checkbox" name="${escapeHtml(f.key)}" /> ${escapeHtml(f.label)}</label></div>`;
-        }
-        const type = f.type === 'email' ? 'email' : 'text';
-        return `<div class="row"><label>${escapeHtml(f.label)}${f.required ? ' *' : ''}</label><input type="${type}" name="${escapeHtml(f.key)}" ${reqAttr}/></div>`;
-      }).join('');
-      const html = `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(qn.title)} – New Age Fotografie</title><style>${css}</style></head><body><div class="card"><h2>${escapeHtml(qn.title)}</h2>${qn.description ? `<p class=\"muted\">${escapeHtml(qn.description)}</p>` : ''}<form id="f"><div class="row"><label>Dein Name *</label><input type="text" name="client_name" required /></div><div class="row"><label>Deine E-Mail *</label><input type="email" name="client_email" required /></div>${inputs}<div class="row"><button type="submit">Antwort senden</button></div><p id="msg" class="muted"></p></form></div><script>const el=document.getElementById('f');el.addEventListener('submit',async(e)=>{e.preventDefault();const fd=new FormData(el);const payload={};fd.forEach((v,k)=>payload[k]=v);const r=await fetch('/api/questionnaires/${slug}/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();const msg=document.getElementById('msg');if(j.ok){msg.textContent='Danke! Deine Antworten wurden gesendet.';el.reset();}else{msg.textContent='Fehler: '+(j.error||'Bitte versuch es noch einmal.');}});</script></body></html>`;
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(html);
-      return;
-    } catch (err) {
-      console.error('❌ Error rendering questionnaire page:', err.message);
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      res.end('Server error');
-      return;
-    }
+    const { handlePublicQuestionnairePage } = require('./handlers/public-questionnaire-handler');
+    const token = pathname.split('/')[2];
+    await handlePublicQuestionnairePage(req, res, token);
+    return;
   }
 
   
@@ -1412,6 +1366,49 @@ const server = http.createServer(async (req, res) => {
         console.error('❌ Questionnaire responses error:', err.message);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: 'Server error' }));
+      }
+      return;
+    }
+
+    // Enhanced Admin Questionnaire API Endpoints
+    if (pathname === '/api/admin/questionnaire-responses' && req.method === 'GET') {
+      const { questionnaireHandlers } = require('./api/questionnaire-handlers');
+      await questionnaireHandlers.getQuestionnaireResponses(req, res);
+      return;
+    }
+    
+    if (pathname === '/api/admin/attach-response-to-client' && req.method === 'POST') {
+      const { questionnaireHandlers } = require('./api/questionnaire-handlers');
+      await questionnaireHandlers.attachResponseToClient(req, res);
+      return;
+    }
+
+    // Simple clients search for admin typeahead
+    if (pathname === '/api/admin/clients/search' && req.method === 'GET') {
+      try {
+        const neon = require('@neondatabase/serverless');
+        const sql = neon.neon(process.env.DATABASE_URL);
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const q = (url.searchParams.get('q') || '').trim();
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '10'), 25);
+        if (!q) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ clients: [] }));
+          return;
+        }
+        const rows = await sql`
+          SELECT id::text as id, client_id, first_name, last_name, email
+          FROM crm_clients
+          WHERE (first_name ILIKE ${'%' + q + '%'} OR last_name ILIKE ${'%' + q + '%'} OR email ILIKE ${'%' + q + '%'} OR client_id ILIKE ${'%' + q + '%'})
+          ORDER BY last_name NULLS LAST, first_name NULLS LAST
+          LIMIT ${limit}
+        `;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ clients: rows }));
+      } catch (e) {
+        console.error('clients search error:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'search failed' }));
       }
       return;
     }
@@ -1716,332 +1713,25 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // Create questionnaire link endpoint
+      // Enhanced Create questionnaire link endpoint
       if (pathname === '/api/admin/create-questionnaire-link' && req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', async () => {
-          try {
-            const { client_id, template_id } = JSON.parse(body);
-            
-            // Generate a unique token for the questionnaire
-            const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
-            // Compute expiry for the link (30 days)
-            const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-            
-            // Get default survey (we'll use the first active survey or create a default one)
-            const surveys = [
-              {
-                id: 'default-survey',
-                title: 'Client Pre-Shoot Questionnaire',
-                description: 'Help us prepare for your perfect photoshoot',
-                status: 'active',
-                pages: [
-                  {
-                    id: 'page-1',
-                    title: 'About Your Session',
-                    questions: [
-                      {
-                        id: 'q1',
-                        type: 'text',
-                        title: 'What type of photoshoot are you looking for?',
-                        description: 'e.g., Portrait, Family, Business, etc.',
-                        required: true,
-                        options: []
-                      },
-                      {
-                        id: 'q2',
-                        type: 'multiple_choice',
-                        title: 'What is the occasion for this photoshoot?',
-                        required: true,
-                        options: [
-                          { id: 'birthday', text: 'Birthday' },
-                          { id: 'anniversary', text: 'Anniversary' },
-                          { id: 'professional', text: 'Professional/Business' },
-                          { id: 'family', text: 'Family Portrait' },
-                          { id: 'personal', text: 'Personal/Creative' },
-                          { id: 'other', text: 'Other' }
-                        ]
-                      },
-                      {
-                        id: 'q3',
-                        type: 'text',
-                        title: 'Do you have any specific ideas or inspiration for the shoot?',
-                        description: 'Share any Pinterest boards, reference photos, or themes you have in mind',
-                        required: false,
-                        options: []
-                      },
-                      {
-                        id: 'q4',
-                        type: 'multiple_choice',
-                        title: 'Preferred location type?',
-                        required: true,
-                        options: [
-                          { id: 'studio', text: 'Studio' },
-                          { id: 'outdoor', text: 'Outdoor/Nature' },
-                          { id: 'urban', text: 'Urban/City' },
-                          { id: 'home', text: 'At Home' },
-                          { id: 'venue', text: 'Specific Venue' }
-                        ]
-                      },
-                      {
-                        id: 'q5',
-                        type: 'rating',
-                        title: 'How comfortable are you in front of the camera?',
-                        description: '1 = Very nervous, 5 = Very comfortable',
-                        required: true,
-                        options: []
-                      }
-                    ]
-                  }
-                ],
-                settings: {
-                  allowAnonymous: true,
-                  progressBar: true
-                },
-                thankYouMessage: 'Thank you for completing the questionnaire! We will review your responses and be in touch soon.'
-              }
-            ];
-            
-            // Store the questionnaire link in database
-            try {
-              // Store the questionnaire link using the existing schema
-              const tpl = template_id || 'default-questionnaire';
-              await sql`
-                INSERT INTO questionnaire_links (
-                  token, client_id, template_id, expires_at, created_at
-                ) VALUES (
-                  ${token}, ${client_id}, ${tpl},
-                  ${expiresAt}, NOW()
-                )
-              `;
-              
-              console.log('💾 Questionnaire link stored for client:', client_id);
-            } catch (dbError) {
-              console.error('❌ Database storage error:', dbError.message);
-              // Continue even if database fails
-            }
-            
-            // Create the public link
-            const link = `${req.headers.origin || 'https://newagefotografie.com'}/q/${token}`;
-            
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ 
-              success: true, 
-              link,
-              token,
-              expires_at: expiresAt
-            }));
-          } catch (error) {
-            console.error('❌ Create questionnaire link error:', error.message);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
-          }
-        });
+        const { questionnaireHandlers } = require('./api/questionnaire-handlers');
+        await questionnaireHandlers.createQuestionnaireLink(req, res);
         return;
       }
 
-      // Get questionnaire by token endpoint
+      // Enhanced Get questionnaire by token endpoint
       if (pathname.startsWith('/api/questionnaire/') && req.method === 'GET') {
-        try {
-          const token = pathname.split('/').pop();
-          
-          // Mock questionnaire data for the token
-          const mockQuestionnaire = {
-            token,
-            clientName: '',
-            clientEmail: '',
-            isUsed: false,
-            survey: {
-              title: 'Client Pre-Shoot Questionnaire',
-              description: 'Help us prepare for your perfect photoshoot experience',
-              pages: [
-                {
-                  id: 'page-1',
-                  title: 'About Your Session',
-                  questions: [
-                    {
-                      id: 'q1',
-                      type: 'text',
-                      title: 'What type of photoshoot are you looking for?',
-                      required: true
-                    },
-                    {
-                      id: 'q2',
-                      type: 'single_choice',
-                      title: 'What is the occasion for this photoshoot?',
-                      required: true,
-                      options: [
-                        { id: 'birthday', text: 'Birthday' },
-                        { id: 'anniversary', text: 'Anniversary' },
-                        { id: 'professional', text: 'Professional/Business' },
-                        { id: 'family', text: 'Family Portrait' },
-                        { id: 'personal', text: 'Personal/Creative' },
-                        { id: 'other', text: 'Other' }
-                      ]
-                    },
-                    {
-                      id: 'q3',
-                      type: 'long_text',
-                      title: 'Do you have any specific ideas or inspiration for the shoot?',
-                      required: false
-                    },
-                    {
-                      id: 'q4',
-                      type: 'single_choice',
-                      title: 'Preferred location type?',
-                      required: true,
-                      options: [
-                        { id: 'studio', text: 'Studio' },
-                        { id: 'outdoor', text: 'Outdoor/Nature' },
-                        { id: 'urban', text: 'Urban/City' },
-                        { id: 'home', text: 'At Home' },
-                        { id: 'venue', text: 'Specific Venue' }
-                      ]
-                    },
-                    {
-                      id: 'q5',
-                      type: 'text',
-                      title: 'How comfortable are you in front of the camera? (1-5 scale)',
-                      required: true
-                    }
-                  ]
-                }
-              ],
-              settings: {
-                thankYouMessage: 'Thank you for completing the questionnaire! We will review your responses and be in touch soon to discuss your perfect photoshoot.'
-              }
-            }
-          };
-          
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(mockQuestionnaire));
-        } catch (error) {
-          console.error('❌ Get questionnaire error:', error.message);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: error.message }));
-        }
+        const { questionnaireHandlers } = require('./api/questionnaire-handlers');
+        const token = pathname.split('/').pop();
+        await questionnaireHandlers.getQuestionnaireByToken(req, res, token);
         return;
       }
 
-      // Submit questionnaire endpoint
+      // Enhanced Submit questionnaire endpoint
       if (pathname === '/api/email-questionnaire' && req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', async () => {
-          try {
-            const { token, clientName, clientEmail, answers } = JSON.parse(body);
-            
-            // Create email content
-            const emailContent = `
-New Client Questionnaire Submitted
-
-Client Information:
-- Name: ${clientName}
-- Email: ${clientEmail}
-- Token: ${token}
-
-Responses:
-${Object.entries(answers).map(([questionId, answer]) => {
-  // Map question IDs to readable questions
-  const questionMap = {
-    'q1': 'Type of photoshoot',
-    'q2': 'Occasion for photoshoot',
-    'q3': 'Specific ideas/inspiration',
-    'q4': 'Preferred location type',
-    'q5': 'Comfort level in front of camera'
-  };
-  
-  return `- ${questionMap[questionId] || questionId}: ${answer}`;
-}).join('\n')}
-
-This questionnaire was submitted on ${new Date().toLocaleString('de-DE')}.
-            `.trim();
-
-            // Send email to hallo@newagefotografie.com
-            try {
-              const emailData = {
-                to: 'hallo@newagefotografie.com',
-                subject: `New Questionnaire Response: ${clientName}`,
-                html: `
-                  <h2>New Questionnaire Response</h2>
-                  <p><strong>Client:</strong> ${clientName}</p>
-                  <p><strong>Submitted:</strong> ${new Date().toLocaleString('de-DE')}</p>
-                  
-                  <h3>Responses:</h3>
-                  <ul>
-                    ${Object.entries(answers).map(([questionId, answer]) => {
-                      const questionMap = {
-                        'q1': 'What type of photography session are you interested in?',
-                        'q2': 'Preferred session duration?',
-                        'q3': 'What style do you prefer?',
-                        'q4': 'Preferred location type?',
-                        'q5': 'How comfortable are you in front of the camera?'
-                      };
-                      return `<li><strong>${questionMap[questionId] || questionId}:</strong> ${answer}</li>`;
-                    }).join('')}
-                  </ul>
-                  
-                  <p><em>This questionnaire was submitted via the New Age Fotografie CRM system.</em></p>
-                `,
-                text: emailContent
-              };
-              
-              await database.sendEmail(emailData);
-              console.log('📧 Questionnaire notification email sent successfully');
-            } catch (emailError) {
-              console.error('❌ Email sending error:', emailError.message);
-              // Don't fail the request if email fails
-            }
-
-            // Store the response in the database
-            try {
-              // Store the questionnaire response using existing schema
-              console.log('💾 Storing questionnaire response:', {
-                token,
-                clientName,
-                clientEmail,
-                answersCount: Object.keys(answers).length
-              });
-              
-              await sql`
-                INSERT INTO questionnaire_responses (
-                  client_id, token, template_slug, answers, submitted_at
-                ) VALUES (
-                  (SELECT client_id FROM questionnaire_links WHERE token = ${token}),
-                  ${token},
-                  'default-questionnaire',
-                  ${JSON.stringify(answers)},
-                  NOW()
-                )
-              `;
-              
-              // Mark the questionnaire link as used
-              await sql`
-                UPDATE questionnaire_links 
-                SET is_used = true
-                WHERE token = ${token}
-              `;
-              
-              console.log('✅ Questionnaire response stored successfully for client:', clientName);
-              console.log('🔔 New questionnaire notification available for admin dashboard');
-            } catch (dbError) {
-              console.error('❌ Database storage error:', dbError.message);
-              console.error('❌ Full error details:', dbError);
-              // Continue even if database fails
-            }
-
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ 
-              success: true, 
-              message: 'Questionnaire submitted successfully' 
-            }));
-          } catch (error) {
-            console.error('❌ Submit questionnaire error:', error.message);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
-          }
-        });
+        const { questionnaireHandlers } = require('./api/questionnaire-handlers');
+        await questionnaireHandlers.submitQuestionnaire(req, res);
         return;
       }
       
