@@ -19,7 +19,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Merge
+  Merge,
+  Star
 } from 'lucide-react';
 
 interface Client {
@@ -58,14 +59,33 @@ const ClientsPage: React.FC = () => {
     primary: any;
     duplicates: any[];
     selected: boolean; // user choose to merge this group
+    type?: 'email' | 'phone';
   }
   const [mergeLoading, setMergeLoading] = useState(false);
   const [mergeSuggestions, setMergeSuggestions] = useState<MergeSuggestionRow[]>([]);
-  const [mergeMode, setMergeMode] = useState<'email' | 'phone'>('email');
+  const [mergeMode, setMergeMode] = useState<'email' | 'phone' | 'both'>('email');
   const [mergeStrategy, setMergeStrategy] = useState<'keep-oldest' | 'keep-newest'>('keep-oldest');
   const [executingMerge, setExecutingMerge] = useState(false);
   const [mergeMessage, setMergeMessage] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [adminToken, setAdminToken] = useState<string>(() => localStorage.getItem('ADMIN_TOKEN') || '');
+  const saveAdminToken = (val: string) => {
+    setAdminToken(val);
+    if (val) localStorage.setItem('ADMIN_TOKEN', val); else localStorage.removeItem('ADMIN_TOKEN');
+  };
+  const [stopOnError, setStopOnError] = useState(false);
+
+  const setGroupPrimary = (key: string, newPrimaryId: string) => {
+    setMergeSuggestions(prev => prev.map(group => {
+      if (group.key !== key) return group;
+      if (group.primary?.id === newPrimaryId) return group;
+      const newPrimary = group.duplicates.find((d: any) => d.id === newPrimaryId);
+      if (!newPrimary) return group;
+      const remaining = group.duplicates.filter((d: any) => d.id !== newPrimaryId);
+      const oldPrimary = group.primary;
+      return { ...group, primary: newPrimary, duplicates: [oldPrimary, ...remaining] } as MergeSuggestionRow;
+    }));
+  };
 
   useEffect(() => {
     fetchClients();
@@ -250,7 +270,7 @@ const ClientsPage: React.FC = () => {
     setMergeLoading(true);
     setMergeMessage(null);
     try {
-      const resp = await fetch(`/api/crm/clients/merge-suggestions?by=${mergeMode}&strategy=${mergeStrategy}&limit=100`);
+  const resp = await fetch(`/api/crm/clients/merge-suggestions?by=${mergeMode}&strategy=${mergeStrategy}&limit=100`);
       if (!resp.ok) throw new Error('Failed to fetch merge suggestions');
       const data = await resp.json();
       const suggestions: MergeSuggestionRow[] = (data?.suggestions || []).map((s: any) => ({ ...s, selected: true }));
@@ -270,34 +290,54 @@ const ClientsPage: React.FC = () => {
 
   const executeSelectedMerges = async () => {
     const selected = mergeSuggestions.filter(s => s.selected);
-    if (selected.length === 0) {
-      setMergeMessage('No groups selected to merge.');
-      return;
-    }
+    if (selected.length === 0) { setMergeMessage('No groups selected to merge.'); return; }
+    if (!adminToken) { setMergeMessage('Admin token required to execute merges.'); return; }
     if (!window.confirm(`Merge ${selected.length} duplicate group(s)? This cannot be undone.`)) return;
     setExecutingMerge(true);
-    setMergeMessage(null);
-    let successCount = 0;
-    try {
-      const mergesPayload = selected.map(group => ({ primaryId: group.primary.id, duplicateIds: group.duplicates.map(d => d.id) }));
-      const resp = await fetch('/api/crm/clients/merge-execute-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ merges: mergesPayload })
-      });
-      if (resp.ok) {
+    setMergeMessage('Starting merges...');
+    let success = 0, failed = 0, processed = 0;
+    let cancelled = false;
+
+    const doMerge = async (group: MergeSuggestionRow) => {
+      if (cancelled) return;
+      const body = { primaryId: (group as any).primary.id, duplicateIds: (group as any).duplicates.map((d: any) => d.id) };
+      try {
+        const resp = await fetch('/api/crm/clients/merge-execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+          body: JSON.stringify(body)
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
-        successCount = data?.results?.filter((r: any) => r.merged > 0).length || 0;
+        if (data?.merged > 0) success++; else failed++;
+      } catch (err) {
+        failed++;
+        if (stopOnError) { cancelled = true; }
+      } finally {
+        processed++;
+        setMergeMessage(`Progress: ${processed}/${selected.length} — merged ${success}, failed ${failed}${cancelled ? ' (stopping on error)' : ''}`);
       }
-      setMergeMessage(`Merged ${successCount} group(s). Refreshing client list...`);
-      await fetchClients();
-      // Refresh suggestions after merges
-      await loadMergeSuggestions();
-    } catch (e: any) {
-      setMergeMessage(e.message || 'Failed executing merges');
-    } finally {
-      setExecutingMerge(false);
-    }
+    };
+
+    // simple concurrency runner
+    const limit = 4;
+    let idx = 0, active = 0;
+    await new Promise<void>((resolve) => {
+      const launch = () => {
+        if ((idx >= selected.length && active === 0) || cancelled) return resolve();
+        while (active < limit && idx < selected.length && !cancelled) {
+          const g = selected[idx++];
+          active++;
+          doMerge(g).finally(() => { active--; launch(); });
+        }
+      };
+      launch();
+    });
+
+    setMergeMessage(`Done: merged ${success}, failed ${failed}. Refreshing...`);
+    await fetchClients();
+    await loadMergeSuggestions();
+    setExecutingMerge(false);
   };
 
   const toggleGroupSelected = (key: string) => {
@@ -311,7 +351,8 @@ const ClientsPage: React.FC = () => {
   const summaryCounts = () => {
     const totalGroups = mergeSuggestions.length;
     const totalClientsImpacted = mergeSuggestions.reduce((acc, g) => acc + 1 + g.duplicates.length, 0);
-    return { totalGroups, totalClientsImpacted };
+    const byType = mergeSuggestions.reduce((acc: any, g) => { const t = (g as any).type || 'email'; acc[t] = (acc[t]||0)+1; return acc; }, {} as Record<string, number>);
+    return { totalGroups, totalClientsImpacted, byType };
   };
 
   return (
@@ -498,10 +539,21 @@ const ClientsPage: React.FC = () => {
               >
                 ✕
               </button>
-              <h2 className="text-xl font-semibold mb-4 flex items-center"><Merge className="mr-2" size={22}/>Merge Wizard</h2>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-xl font-semibold flex items-center"><Merge className="mr-2" size={22}/>Merge Wizard</h2>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Found {mergeSuggestions.length} duplicate group{mergeSuggestions.length===1?'':'s'}</span>
+                  {(() => { const s = summaryCounts(); return (
+                    <>
+                      {s.byType.email ? <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">Email: {s.byType.email}</span> : null}
+                      {s.byType.phone ? <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">Phone: {s.byType.phone}</span> : null}
+                    </>
+                  ); })()}
+                </div>
+              </div>
               <div className="flex flex-wrap gap-4 mb-4 items-end">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Mode</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Search Duplicates By</label>
                   <select
                     value={mergeMode}
                     onChange={(e) => { setMergeMode(e.target.value as any); loadMergeSuggestions(); }}
@@ -509,6 +561,7 @@ const ClientsPage: React.FC = () => {
                   >
                     <option value="email">Email</option>
                     <option value="phone">Phone</option>
+                    <option value="both">Both</option>
                   </select>
                 </div>
                 <div>
@@ -522,10 +575,26 @@ const ClientsPage: React.FC = () => {
                     <option value="keep-newest">Keep Newest</option>
                   </select>
                 </div>
+                {!adminToken && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Admin Token</label>
+                    <input
+                      type="password"
+                      value={adminToken}
+                      onChange={(e) => saveAdminToken(e.target.value)}
+                      placeholder="Enter admin token"
+                      className="border rounded px-2 py-1"
+                    />
+                  </div>
+                )}
                 <div className="text-sm text-gray-600">
                   {mergeLoading ? 'Loading suggestions...' : `${mergeSuggestions.length} group(s) found`}
                 </div>
                 <div className="ml-auto flex gap-2">
+                  <label className="flex items-center gap-2 text-xs text-gray-700 mr-2">
+                    <input type="checkbox" checked={stopOnError} onChange={(e) => setStopOnError(e.target.checked)} />
+                    Stop on error
+                  </label>
                   <button
                     className="px-3 py-2 text-xs rounded bg-gray-200 hover:bg-gray-300"
                     onClick={() => selectAllGroups(true)}
@@ -569,18 +638,47 @@ const ClientsPage: React.FC = () => {
                             onChange={() => toggleGroupSelected(group.key)}
                           />
                         </td>
-                        <td className="p-2 align-top font-mono text-xs">{group.key}</td>
-                        <td className="p-2 align-top w-48">
-                          <div className="font-semibold">{group.primary.last_name || group.primary.lastName || ''} {group.primary.first_name || group.primary.firstName || ''}</div>
-                          <div className="text-xs text-gray-500 break-all">{group.primary.email || group.primary.phone}</div>
-                          <div className="text-[10px] text-gray-400">id: {group.primary.id}</div>
+                        <td className="p-2 align-top font-mono text-xs">
+                          <div className="flex items-center gap-2">
+                            <span>{group.key}</span>
+                            {('type' in group) && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] border ${ (group as any).type === 'phone' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-indigo-50 text-indigo-700 border-indigo-200' }`}>
+                                {(group as any).type === 'phone' ? 'Phone' : 'Email'}
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td className="p-2 align-top w-64">
+                        <td className="p-2 align-top w-56">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-semibold">{group.primary.last_name || group.primary.lastName || ''} {group.primary.first_name || group.primary.firstName || ''}</div>
+                              <div className="text-xs text-gray-500 break-all">{group.primary.email || group.primary.phone}</div>
+                              <div className="text-[10px] text-gray-400">id: {group.primary.id}</div>
+                            </div>
+                            <div className="ml-2">
+                              <span className="inline-flex items-center px-2 py-1 rounded text-[10px] bg-green-50 text-green-700 border border-green-200" title="This contact will be kept">
+                                <Star size={12} className="mr-1 fill-green-600 text-green-600" /> Keep
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-2 align-top w-72">
                           {group.duplicates.map(d => (
                             <div key={d.id} className="mb-2 border-b last:border-b-0 pb-1">
-                              <div className="font-medium">{d.last_name || d.lastName || ''} {d.first_name || d.firstName || ''}</div>
-                              <div className="text-xs text-gray-500 break-all">{d.email || d.phone}</div>
-                              <div className="text-[10px] text-gray-400">id: {d.id}</div>
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="font-medium">{d.last_name || d.lastName || ''} {d.first_name || d.firstName || ''}</div>
+                                  <div className="text-xs text-gray-500 break-all">{d.email || d.phone}</div>
+                                  <div className="text-[10px] text-gray-400">id: {d.id}</div>
+                                </div>
+                                <button
+                                  className="ml-2 px-2 py-1 text-[10px] rounded border bg-white hover:bg-gray-50 text-gray-700"
+                                  title="Keep this contact instead"
+                                  onClick={() => setGroupPrimary(group.key, d.id)}
+                                >
+                                  <span className="inline-flex items-center"><Star size={12} className="mr-1"/> Make Primary</span>
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </td>

@@ -145,6 +145,37 @@ async function ensureLeadsSchema() {
   }
 }
 
+// ===== CRM Clients schema ensure =====
+let __crmClientsEnsured = false;
+async function ensureCrmClientsSchema() {
+  if (__crmClientsEnsured) return;
+  if (!sql) return;
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS crm_clients (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        client_id TEXT UNIQUE,
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        address TEXT,
+        city VARCHAR(100),
+        state VARCHAR(100),
+        zip VARCHAR(20),
+        country VARCHAR(100),
+        total_sales DECIMAL(10,2) DEFAULT 0,
+        outstanding_balance DECIMAL(10,2) DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `;
+    __crmClientsEnsured = true;
+  } catch (e) {
+    console.warn('ensureCrmClientsSchema failed:', e.message);
+  }
+}
+
 // ===== Coupon Engine (env-driven with VCWIEN fallback) =====
 const COUPON_TTL_SECONDS = parseInt(process.env.COUPON_RELOAD_SECONDS || '60', 10);
 let __couponCache = { coupons: null, expiresAt: 0 };
@@ -1675,6 +1706,367 @@ const server = http.createServer(async (req, res) => {
         console.error('clients search error:', e.message);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'search failed' }));
+      }
+      return;
+    }
+
+    // Helper to normalize phone as SQL expression (digits + default country code)
+    const DEFAULT_CC = (process.env.DEFAULT_COUNTRY_CODE || '').replace('+','').trim();
+    const phoneKeyExprSQL = () => {
+      const cc = DEFAULT_CC;
+      const digits = "REGEXP_REPLACE(TRIM(phone), '[^0-9]+', '', 'g')";
+      const caseExpr = `(
+        CASE
+          WHEN ${digits} = '' THEN NULL
+          WHEN ${digits} LIKE '00%' THEN SUBSTRING(${digits} FROM 3)
+          ${cc ? `WHEN ${digits} LIKE '${cc}%' THEN ${digits}` : ''}
+          ${cc ? `WHEN '${cc}' <> '' AND ${digits} LIKE '0%' THEN '${cc}' || SUBSTRING(${digits} FROM 2)` : ''}
+          ELSE ${digits}
+        END
+      )`;
+      return caseExpr;
+    };
+
+    // ===== Find duplicate clients (by email or phone or both) =====
+    if ((pathname === '/api/crm/clients/duplicates' || pathname === '/api/admin/clients/duplicates') && req.method === 'GET') {
+      try {
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureCrmClientsSchema();
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const byParam = String(url.searchParams.get('by') || 'email').toLowerCase();
+        const by = ['phone','email','both'].includes(byParam) ? byParam : 'email';
+        const limit = Math.max(1, Math.min(500, parseInt(url.searchParams.get('limit') || '100', 10)));
+        const emailExpr = `LOWER(NULLIF(TRIM(email),'') )`;
+        const phoneExpr = phoneKeyExprSQL();
+        const baseQuery = (expr) => `
+          SELECT ${expr} AS dup_key, ARRAY_AGG(id) AS ids, COUNT(*)::int AS count
+          FROM crm_clients
+          WHERE ${expr} IS NOT NULL
+          GROUP BY 1
+          HAVING COUNT(*) > 1
+          ORDER BY COUNT(*) DESC
+          LIMIT $1`;
+        let rows = [];
+        if (by === 'both') {
+          const emailRows = await sql(baseQuery(emailExpr), [limit]);
+          const phoneRows = await sql(baseQuery(phoneExpr), [limit]);
+          // Tag keys to distinguish types
+          rows = [
+            ...emailRows.map(r => ({ ...r, dup_key: `email:${r.dup_key}` })),
+            ...phoneRows.map(r => ({ ...r, dup_key: `phone:${r.dup_key}` })),
+          ];
+        } else {
+          const expr = by === 'phone' ? phoneExpr : emailExpr;
+          rows = await sql(baseQuery(expr), [limit]);
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ by, groups: rows }));
+      } catch (error) {
+        console.error('Error listing duplicate clients:', error?.message || error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to list duplicates' }));
+      }
+      return;
+    }
+
+    // ===== Merge duplicate clients (bulk) =====
+    if ((pathname === '/api/crm/clients/merge-duplicates' || pathname === '/api/admin/clients/merge-duplicates') && req.method === 'POST') {
+      try {
+        const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+        const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+        if (!expected || token !== expected) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
+          return;
+        }
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureCrmClientsSchema();
+        let raw = '';
+        req.on('data', c => raw += c.toString());
+        req.on('end', async () => {
+          try {
+            const body = raw ? JSON.parse(raw) : {};
+            const by = String(body.by || 'email').toLowerCase() === 'phone' ? 'phone' : 'email';
+            const dryRun = body.dryRun !== false; // default true
+            const limit = Math.max(1, Math.min(1000, Number(body.limit ?? 200)));
+            const strategy = String(body.strategy || 'keep-oldest').toLowerCase();
+            const keepOldest = strategy !== 'keep-newest';
+            const keyExpr = by === 'phone' ? `NULLIF(TRIM(phone),'')` : `LOWER(NULLIF(TRIM(email),'') )`;
+            const dupQuery = `
+              SELECT ${keyExpr} AS dup_key, ARRAY_AGG(id) AS ids, COUNT(*)::int AS count
+              FROM crm_clients
+              WHERE ${keyExpr} IS NOT NULL
+              GROUP BY 1
+              HAVING COUNT(*) > 1
+              ORDER BY COUNT(*) DESC
+              LIMIT $1`;
+            const groups = await sql(dupQuery, [limit]);
+
+            let totalMerged = 0;
+            const previews = [];
+
+            for (const g of groups) {
+              const ids = g.ids || [];
+              if (!ids || ids.length < 2) continue;
+              const rows = await sql(
+                `SELECT id, created_at, updated_at, first_name, last_name, email, phone, address, city, state, zip, country
+                 FROM crm_clients WHERE id = ANY($1)`,
+                [ids]
+              );
+              if (!rows || rows.length < 2) continue;
+              rows.sort((a, b) => {
+                const ta = new Date(a.created_at || a.updated_at || 0).getTime();
+                const tb = new Date(b.created_at || b.updated_at || 0).getTime();
+                return keepOldest ? (ta - tb) : (tb - ta);
+              });
+              const primary = rows[0];
+              const duplicates = rows.slice(1);
+              const dupIds = duplicates.map(r => r.id);
+              previews.push({ key: g.dup_key, keep: primary.id, remove: dupIds });
+              totalMerged += dupIds.length;
+              if (dryRun) continue;
+
+              // For each duplicate, re-link references then delete dup
+              for (const d of duplicates) {
+                const dupId = d.id;
+                // Relink references best-effort
+                await sql(`UPDATE invoices SET client_id = $1 WHERE client_id = $2`, [primary.id, dupId]).catch(()=>{});
+                await sql(`UPDATE crm_messages SET client_id = $1 WHERE client_id = $2`, [primary.id, dupId]).catch(()=>{});
+                await sql(`UPDATE galleries SET client_id = $1 WHERE client_id = $2`, [primary.id, dupId]).catch(()=>{});
+                await sql(`UPDATE digital_files SET client_id = $1 WHERE client_id = $2`, [primary.id, dupId]).catch(()=>{});
+
+                // Fill missing primary fields from duplicate when blank
+                await sql(
+                  `UPDATE crm_clients AS c SET
+                     email = COALESCE(NULLIF(c.email,''), NULLIF($2,'')),
+                     phone = COALESCE(NULLIF(c.phone,''), NULLIF($3,'')),
+                     address = COALESCE(NULLIF(c.address,''), NULLIF($4,'')),
+                     city = COALESCE(NULLIF(c.city,''), NULLIF($5,'')),
+                     state = COALESCE(NULLIF(c.state,''), NULLIF($6,'')),
+                     zip = COALESCE(NULLIF(c.zip,''), NULLIF($7,'')),
+                     country = COALESCE(NULLIF(c.country,''), NULLIF($8,'')),
+                     updated_at = NOW()
+                   WHERE c.id = $1`,
+                  [primaryId, d.email, d.phone, d.address, d.city, d.state, d.zip, d.country]
+                ).catch(()=>{});
+
+                await sql(`DELETE FROM crm_clients WHERE id = $1`, [dupId]);
+              }
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, dryRun, by, groups: groups.length, totalMerged, preview: previews.slice(0, 50) }));
+          } catch (e) {
+            console.error('merge-duplicates error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to merge duplicates' }));
+          }
+        });
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to merge duplicates' }));
+      }
+      return;
+    }
+
+    // ===== Merge suggestions (read-only) =====
+    if ((pathname === '/api/crm/clients/merge-suggestions' || pathname === '/api/admin/clients/merge-suggestions') && req.method === 'GET') {
+      try {
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureCrmClientsSchema();
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const byParam = String(url.searchParams.get('by') || 'email').toLowerCase();
+        const mode = ['phone','email','both'].includes(byParam) ? byParam : 'email';
+        const strategy = String(url.searchParams.get('strategy') || 'keep-oldest').toLowerCase();
+        const keepOldest = strategy !== 'keep-newest';
+        const limit = Math.max(1, Math.min(500, Number(url.searchParams.get('limit') ?? '100')));
+        const emailExpr = `LOWER(NULLIF(TRIM(email),'') )`;
+        const phoneExpr = phoneKeyExprSQL();
+        const dupQuery = (expr) => `
+          SELECT ${expr} AS dup_key, ARRAY_AGG(id) AS ids, COUNT(*)::int AS count
+          FROM crm_clients
+          WHERE ${expr} IS NOT NULL
+          GROUP BY 1
+          HAVING COUNT(*) > 1
+          ORDER BY COUNT(*) DESC
+          LIMIT $1`;
+        let groups = [];
+        if (mode === 'both') {
+          const emailGroups = await sql(dupQuery(emailExpr), [limit]);
+          const phoneGroups = await sql(dupQuery(phoneExpr), [limit]);
+          groups = [
+            ...emailGroups.map(g => ({ ...g, __type: 'email' })),
+            ...phoneGroups.map(g => ({ ...g, __type: 'phone' })),
+          ];
+        } else {
+          const expr = mode === 'phone' ? phoneExpr : emailExpr;
+          groups = await sql(dupQuery(expr), [limit]);
+        }
+        const suggestions = [];
+        for (const g of groups) {
+          const ids = g.ids || [];
+          if (!ids || ids.length < 2) continue;
+          const rows = await sql(
+            `SELECT id, created_at, updated_at, first_name, last_name, email, phone, address, city, state, zip, country
+             FROM crm_clients WHERE id = ANY($1)`,
+            [ids]
+          );
+          if (!rows || rows.length < 2) continue;
+          rows.sort((a, b) => {
+            const ta = new Date(a.created_at || a.updated_at || 0).getTime();
+            const tb = new Date(b.created_at || b.updated_at || 0).getTime();
+            return keepOldest ? (ta - tb) : (tb - ta);
+          });
+          const primary = rows[0];
+          const duplicates = rows.slice(1);
+          suggestions.push({ key: g.dup_key, primary, duplicates, type: g.__type || mode });
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, by: mode, strategy, count: suggestions.length, suggestions }));
+      } catch (error) {
+        console.error('merge-suggestions error:', error?.message || error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to build merge suggestions' }));
+      }
+      return;
+    }
+
+    // ===== Execute a targeted merge decision from wizard =====
+    if ((pathname === '/api/crm/clients/merge-execute' || pathname === '/api/admin/clients/merge-execute') && req.method === 'POST') {
+      try {
+        const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+        const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+        if (!expected || token !== expected) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
+          return;
+        }
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureCrmClientsSchema();
+        let raw = '';
+        req.on('data', c => raw += c.toString());
+        req.on('end', async () => {
+          try {
+            const body = raw ? JSON.parse(raw) : {};
+            const primaryId = body.primaryId;
+            const duplicateIds = Array.isArray(body.duplicateIds) ? body.duplicateIds : [];
+            if (!primaryId || duplicateIds.length === 0) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'primaryId and duplicateIds[] required' })); return; }
+
+            // validate primary exists
+            const prim = await sql(`SELECT id, phone, address, city, state, zip, country FROM crm_clients WHERE id = $1`, [primaryId]);
+            if (!prim || prim.length === 0) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Primary client not found' })); return; }
+
+            let merged = 0;
+            for (const dupId of duplicateIds) {
+              if (dupId === primaryId) continue;
+              const dup = await sql(`SELECT id, phone, address, city, state, zip, country FROM crm_clients WHERE id = $1`, [dupId]);
+              if (!dup || dup.length === 0) continue;
+              const d = dup[0];
+              await sql(`UPDATE invoices SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]).catch(()=>{});
+              await sql(`UPDATE crm_messages SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]).catch(()=>{});
+              await sql(`UPDATE galleries SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]).catch(()=>{});
+              await sql(`UPDATE digital_files SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]).catch(()=>{});
+
+              await sql(
+                `UPDATE crm_clients AS c SET
+                   email = COALESCE(NULLIF(c.email,''), NULLIF($2,'')),
+                   phone = COALESCE(NULLIF(c.phone,''), NULLIF($3,'')),
+                   address = COALESCE(NULLIF(c.address,''), NULLIF($4,'')),
+                   city = COALESCE(NULLIF(c.city,''), NULLIF($5,'')),
+                   state = COALESCE(NULLIF(c.state,''), NULLIF($6,'')),
+                   zip = COALESCE(NULLIF(c.zip,''), NULLIF($7,'')),
+                   country = COALESCE(NULLIF(c.country,''), NULLIF($8,'')),
+                   updated_at = NOW()
+                 WHERE c.id = $1`,
+                [primaryId, d.email, d.phone, d.address, d.city, d.state, d.zip, d.country]
+              ).catch(()=>{});
+              await sql(`DELETE FROM crm_clients WHERE id = $1`, [dupId]);
+              merged++;
+            }
+            const updatedPrimary = await sql(`SELECT * FROM crm_clients WHERE id = $1`, [primaryId]);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, merged, primaryId, primary: updatedPrimary?.[0] }));
+          } catch (e) {
+            console.error('merge-execute error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to execute merge' }));
+          }
+        });
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to execute merge' }));
+      }
+      return;
+    }
+
+    // ===== Execute batch merges from wizard =====
+    if ((pathname === '/api/crm/clients/merge-execute-batch' || pathname === '/api/admin/clients/merge-execute-batch') && req.method === 'POST') {
+      try {
+        const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+        const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+        if (!expected || token !== expected) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
+          return;
+        }
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureCrmClientsSchema();
+        let raw = '';
+        req.on('data', c => raw += c.toString());
+        req.on('end', async () => {
+          try {
+            const body = raw ? JSON.parse(raw) : {};
+            const merges = Array.isArray(body.merges) ? body.merges : [];
+            const results = [];
+            for (const m of merges) {
+              const primaryId = m?.primaryId;
+              const duplicateIds = Array.isArray(m?.duplicateIds) ? m.duplicateIds : [];
+              if (!primaryId || duplicateIds.length === 0) { results.push({ primaryId, merged: 0, error: 'invalid' }); continue; }
+              try {
+                const prim = await sql(`SELECT id, phone, address, city, state, zip, country FROM crm_clients WHERE id = $1`, [primaryId]);
+                if (!prim || prim.length === 0) { results.push({ primaryId, merged: 0, error: 'primary not found' }); continue; }
+                let merged = 0;
+                for (const dupId of duplicateIds) {
+                  if (dupId === primaryId) continue;
+                  const dup = await sql(`SELECT id, phone, address, city, state, zip, country FROM crm_clients WHERE id = $1`, [dupId]);
+                  if (!dup || dup.length === 0) continue;
+                  const d = dup[0];
+                  await sql(`UPDATE invoices SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]).catch(()=>{});
+                  await sql(`UPDATE crm_messages SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]).catch(()=>{});
+                  await sql(`UPDATE galleries SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]).catch(()=>{});
+                  await sql(`UPDATE digital_files SET client_id = $1 WHERE client_id = $2`, [primaryId, dupId]).catch(()=>{});
+                  await sql(
+                    `UPDATE crm_clients AS c SET
+                       email = COALESCE(NULLIF(c.email,''), NULLIF($2,'')),
+                       phone = COALESCE(NULLIF(c.phone,''), NULLIF($3,'')),
+                       address = COALESCE(NULLIF(c.address,''), NULLIF($4,'')),
+                       city = COALESCE(NULLIF(c.city,''), NULLIF($5,'')),
+                       state = COALESCE(NULLIF(c.state,''), NULLIF($6,'')),
+                       zip = COALESCE(NULLIF(c.zip,''), NULLIF($7,'')),
+                       country = COALESCE(NULLIF(c.country,''), NULLIF($8,'')),
+                       updated_at = NOW()
+                     WHERE c.id = $1`,
+                    [primaryId, d.email, d.phone, d.address, d.city, d.state, d.zip, d.country]
+                  ).catch(()=>{});
+                  await sql(`DELETE FROM crm_clients WHERE id = $1`, [dupId]);
+                  merged++;
+                }
+                results.push({ primaryId, merged });
+              } catch (e) {
+                results.push({ primaryId, merged: 0, error: e?.message || 'error' });
+              }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, results }));
+          } catch (e) {
+            console.error('merge-execute-batch error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to execute batch merge' }));
+          }
+        });
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to execute batch merge' }));
       }
       return;
     }
