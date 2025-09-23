@@ -518,7 +518,7 @@ const translations = {
     'footer.quickLinks': 'Quick Links',
     'footer.contact': 'Contact',
     'footer.categories': 'Categories',
-    'footer.officeAddress': 'Office & Correspondence Address',
+  'footer.officeAddress': '',
     'footer.fullContactDetails': 'Full Contact Details',
     'footer.family': 'Family',
     'footer.baby': 'Baby',
