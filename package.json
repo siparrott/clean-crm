@@ -4,9 +4,10 @@
   "description": "Live demo of Photography CRM SaaS platform",
   "main": "minimal-server.js",
   "engines": {
-    "node": "20.x",
+    "node": ">=20.0.0",
     "npm": ">=9.0.0"
   },
+  "engineStrict": false,
   "scripts": {
     "prebuild": "echo 'Preparing build environment...' && npm --version",
     "dev": "cross-env NODE_ENV=development DEMO_MODE=true tsx server/index.ts",

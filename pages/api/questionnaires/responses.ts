@@ -1,7 +1,6 @@
-import type { NextApiRequest, NextApiResponse } from "next";
 import { db } from "../../../lib/db";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: any, res: any) {
   if (req.method !== "GET") return res.status(405).end("Method Not Allowed");
   
   const { questionnaire_id } = req.query;

@@ -217,7 +217,6 @@ async function ensureInvoiceSchema() {
 }
 
 // Invoices utilities
-const crypto = require('crypto');
 function makePublicId() {
   return crypto.randomBytes(6).toString('hex');
 }
@@ -229,6 +228,20 @@ function makeInvoiceNo(d = new Date()) {
 }
 function appUrl(req) {
   return process.env.APP_URL || (req?.headers?.host ? `https://${req.headers.host}` : '');
+}
+
+// Vonage helpers
+function generateVonageJwt() {
+  const appId = process.env.VONAGE_APPLICATION_ID;
+  const pk = process.env.VONAGE_PRIVATE_KEY; // PEM content
+  if (!appId || !pk) return null;
+  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const iat = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(JSON.stringify({ application_id: appId, iat, exp: iat + 300, jti: crypto.randomBytes(8).toString('hex') })).toString('base64url');
+  const sign = crypto.createSign('RSA-SHA256');
+  sign.update(`${header}.${payload}`);
+  const signature = sign.sign(pk, 'base64url');
+  return `${header}.${payload}.${signature}`;
 }
 
 // ===== Coupon Engine (env-driven with VCWIEN fallback) =====
@@ -254,6 +267,16 @@ async function refreshDbCoupons() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
+    // Backfill columns on older databases
+    await sql`ALTER TABLE discount_coupons ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'percentage'`;
+    await sql`ALTER TABLE discount_coupons ADD COLUMN IF NOT EXISTS percent NUMERIC`;
+    await sql`ALTER TABLE discount_coupons ADD COLUMN IF NOT EXISTS amount NUMERIC`;
+    await sql`ALTER TABLE discount_coupons ADD COLUMN IF NOT EXISTS allowed_skus JSONB DEFAULT '[]'`;
+    await sql`ALTER TABLE discount_coupons ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ`;
+    await sql`ALTER TABLE discount_coupons ADD COLUMN IF NOT EXISTS ends_at TIMESTAMPTZ`;
+    await sql`ALTER TABLE discount_coupons ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE`;
+    await sql`ALTER TABLE discount_coupons ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`;
+    await sql`ALTER TABLE discount_coupons ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
     const rows = await sql`SELECT id, code, type, percent, amount, allowed_skus, starts_at, ends_at, is_active FROM discount_coupons WHERE is_active = true`;
     __dbCoupons = rows.map(r => ({
       id: r.id,
@@ -2219,11 +2242,41 @@ const server = http.createServer(async (req, res) => {
           where += ` AND (lower(invoice_no) LIKE $${params.length} OR lower(client_name) LIKE $${params.length})`;
         }
         const rows = await sql(`
-          SELECT id::text as id, invoice_no, client_name, total, currency, status, issue_date, due_date, public_id, created_at
+          SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
           FROM invoices ${where}
           ORDER BY created_at DESC
           LIMIT 200`, params);
         res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ rows }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'List failed' }));
+      }
+      return;
+    }
+
+    // Compatibility: legacy dashboards calling /api/crm/invoices
+    if (pathname === '/api/crm/invoices' && req.method === 'GET') {
+      try {
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureInvoiceSchema();
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const status = String(url.searchParams.get('status') || 'any');
+        const q = String(url.searchParams.get('q') || '').toLowerCase();
+        const params = [];
+        let where = 'WHERE 1=1';
+        if (status !== 'any') { params.push(status); where += ` AND status = $${params.length}`; }
+        if (q) {
+          params.push(`%${q}%`);
+          where += ` AND (lower(invoice_no) LIKE $${params.length} OR lower(client_name) LIKE $${params.length})`;
+        }
+        const rows = await sql(`
+          SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
+          FROM invoices ${where}
+          ORDER BY created_at DESC
+          LIMIT 200`, params);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        // Return the same shape as /api/invoices/list for consistency
         res.end(JSON.stringify({ rows }));
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -2251,12 +2304,14 @@ const server = http.createServer(async (req, res) => {
             const link = `${appUrl(req)}/inv/${i.public_id}`;
 
             const nodemailer = require('nodemailer');
-            const tx = nodemailer.createTransport({
-              host: process.env.SMTP_HOST,
-              port: Number(process.env.SMTP_PORT || 587),
-              secure: String(process.env.SMTP_SECURE || 'false') === 'true',
-              auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-            });
+            const tx = (process.env.EMAIL_TRANSPORT === 'json')
+              ? nodemailer.createTransport({ jsonTransport: true })
+              : nodemailer.createTransport({
+                  host: process.env.SMTP_HOST,
+                  port: Number(process.env.SMTP_PORT || 587),
+                  secure: String(process.env.SMTP_SECURE || 'false') === 'true',
+                  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+                });
             await tx.sendMail({
               from: process.env.EMAIL_FROM || process.env.FROM_EMAIL || 'no-reply@example.com',
               to,
@@ -2285,7 +2340,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Send invoice via WhatsApp (Twilio optional)
+    // Send invoice via WhatsApp (Vonage or Twilio optional)
     if (pathname === '/api/invoices/send-whatsapp' && req.method === 'POST') {
       try {
         if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
@@ -2304,16 +2359,41 @@ const server = http.createServer(async (req, res) => {
             const link = `${appUrl(req)}/inv/${i.public_id}`;
             const message = `New Age Fotografie – Invoice ${i.invoice_no} for ${Number(i.total).toFixed(2)} ${i.currency}\n${link}`;
 
+            // Try Vonage Messages API (WhatsApp)
+            const vonageJwt = generateVonageJwt();
+            const vonageFrom = process.env.VONAGE_WHATSAPP_FROM;
+            if (vonageJwt && vonageFrom && to_phone) {
+              try {
+                const resp = await fetch('https://api.nexmo.com/v1/messages', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${vonageJwt}` },
+                  body: JSON.stringify({
+                    from: { type: 'whatsapp', number: vonageFrom },
+                    to: { type: 'whatsapp', number: String(to_phone).replace(/[^0-9+]/g,'') },
+                    message: { content: { type: 'text', text: message } }
+                  })
+                });
+                if (resp.ok) {
+                  res.writeHead(200, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({ ok: true, sent: true, provider: 'vonage', link }));
+                  return;
+                }
+              } catch (e) {
+                // fall through
+              }
+            }
+
+            // Try Twilio WhatsApp
             const hasTwilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_WHATSAPP_FROM);
             if (hasTwilio && to_phone) {
               try {
                 const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
                 await twilio.messages.create({ from: process.env.TWILIO_WHATSAPP_FROM, to: `whatsapp:${to_phone}`, body: message });
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ ok: true, sent: true, link }));
+                res.end(JSON.stringify({ ok: true, sent: true, provider: 'twilio', link }));
                 return;
               } catch (e) {
-                // fall through to share link
+                // fall through
               }
             }
             const share = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -2327,6 +2407,49 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'whatsapp failed' }));
+      }
+      return;
+    }
+
+    // Send invoice via SMS (Vonage SMS API)
+    if (pathname === '/api/invoices/send-sms' && req.method === 'POST') {
+      try {
+        if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+        await ensureInvoiceSchema();
+        let raw = '';
+        req.on('data', c => raw += c.toString());
+        req.on('end', async () => {
+          try {
+            const body = raw ? JSON.parse(raw) : {};
+            const invoice_id = body.invoice_id;
+            const to_phone = body.to_phone;
+            if (!invoice_id || !to_phone) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'invoice_id and to_phone required' })); return; }
+            const inv = await sql(`SELECT invoice_no, client_name, total, currency, public_id FROM invoices WHERE id = $1`, [invoice_id]);
+            if (!inv || inv.length === 0) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Invoice not found' })); return; }
+            const i = inv[0];
+            const link = `${appUrl(req)}/inv/${i.public_id}`;
+            const message = `New Age Fotografie – Invoice ${i.invoice_no} for ${Number(i.total).toFixed(2)} ${i.currency} ${link}`;
+            const key = process.env.VONAGE_API_KEY;
+            const secret = process.env.VONAGE_API_SECRET;
+            const from = process.env.VONAGE_SMS_FROM || 'NewAgeFoto';
+            if (key && secret) {
+              const resp = await fetch('https://rest.nexmo.com/sms/json', {
+                method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ api_key: key, api_secret: secret, to: String(to_phone).replace(/[^0-9+]/g,''), from, text: message }).toString()
+              });
+              const data = await resp.json().catch(() => ({}));
+              if (resp.ok) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, sent: true, provider: 'vonage', data, link })); return; }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, sent: false, info: 'No SMS provider configured', link }));
+          } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e?.message || 'sms failed' }));
+          }
+        });
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'sms failed' }));
       }
       return;
     }
@@ -6076,10 +6199,33 @@ New Age Fotografie Team`;
     if (pathname.startsWith('/api/crm/invoices')) {
       try {
         // Map legacy paths to new endpoints
-        // GET /api/crm/invoices -> /api/invoices
+        // GET /api/crm/invoices -> proxy to new invoices list (from invoices table)
         if (pathname === '/api/crm/invoices' && req.method === 'GET') {
-          req.url = req.url.replace('/api/crm/invoices', '/api/invoices');
-          parsedUrl.pathname = '/api/invoices';
+          try {
+            await ensureInvoiceSchema();
+            const urlObj = new URL(req.url, `http://${req.headers.host}`);
+            const status = String(urlObj.searchParams.get('status') || 'any');
+            const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
+            const params = [];
+            let where = 'WHERE 1=1';
+            if (status !== 'any') { params.push(status); where += ` AND status = $${params.length}`; }
+            if (q) {
+              params.push(`%${q}%`);
+              where += ` AND (lower(invoice_no) LIKE $${params.length} OR lower(client_name) LIKE $${params.length})`;
+            }
+            const rows = await sql(`
+              SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
+              FROM invoices ${where}
+              ORDER BY created_at DESC
+              LIMIT 200`, params);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ rows }));
+          } catch (err) {
+            console.error('❌ Legacy /api/crm/invoices list proxy error:', err.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'List failed' }));
+          }
+          return;
         }
         // POST /api/crm/invoices -> /api/invoices
         if (pathname === '/api/crm/invoices' && req.method === 'POST') {

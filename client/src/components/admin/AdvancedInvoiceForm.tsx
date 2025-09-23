@@ -55,6 +55,7 @@ interface AdvancedInvoiceFormProps {
   onClose: () => void;
   onSuccess: () => void;
   editingInvoice?: Invoice | null;
+  prefillClientId?: string | undefined;
 }
 
 interface Invoice {
@@ -72,7 +73,8 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  editingInvoice
+  editingInvoice,
+  prefillClientId
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [clients, setClients] = useState<Client[]>([]);
@@ -146,6 +148,19 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
       }
     }
   }, [isOpen, editingInvoice]);
+
+  // Apply prefill client when provided and clients are loaded
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!prefillClientId) return;
+    if (clients.length === 0) return;
+    const c = clients.find(x => x.id === prefillClientId);
+    if (c) {
+      setFormData(prev => ({ ...prev, client_id: c.id }));
+      setClientSearch(c.name);
+      setShowClientDropdown(false);
+    }
+  }, [isOpen, prefillClientId, clients]);
 
   const fetchPriceList = async () => {
     try {
@@ -404,67 +419,41 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
       }, 0);
       const total = subtotal + taxAmount - formData.discount_amount;
 
-      // Prepare the invoice data for the PostgreSQL API
-      const invoiceData = {
-        clientId: formData.client_id,
-        issueDate: new Date().toISOString().split('T')[0],
-        dueDate: formData.due_date,
-        subtotal: subtotal.toString(),
-        taxAmount: taxAmount.toString(),
-        total: total.toString(),
-        status: markAsPaid ? 'paid' : 'draft', // Set status to paid if immediate payment
+      // Prepare payload for our invoices API
+      const payload = {
+        // Server requires client_name at minimum; try to resolve name/email
+        client_name: (clients.find(c => c.id === formData.client_id)?.name) || 'Client',
+        client_id: formData.client_id || null,
+        client_email: (clients.find(c => c.id === formData.client_id)?.email) || undefined,
+        issue_date: new Date().toISOString().split('T')[0],
+        due_date: formData.due_date,
+        currency: formData.currency,
         notes: formData.notes,
-        termsAndConditions: formData.payment_terms,
+        meta: { payment_terms: formData.payment_terms, discount_amount: formData.discount_amount },
         items: formData.items.map(item => ({
           description: item.description,
-          quantity: item.quantity.toString(),
-          unitPrice: item.unit_price.toString(),
-          taxRate: item.tax_rate.toString()
+          quantity: item.quantity,
+          unit_price: item.unit_price
         }))
       };
 
-      // Create the invoice using direct API call
-      const response = await fetch('/api/crm/invoices', {
+      const response = await fetch('/api/invoices/create', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(invoiceData),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create invoice');
+      const created = await response.json();
+      if (!response.ok || !created?.ok) {
+        throw new Error(created?.error || 'Failed to create invoice');
       }
+      setCreatedInvoice(created);
 
-      const invoice = await response.json();
-      setCreatedInvoice(invoice); // Store created invoice for PDF/email functions
-
-      // If marked as paid, create payment record
-      if (markAsPaid) {
-        const paymentRecord = {
-          invoice_id: invoice.id,
-          amount: total,
-          payment_method: paymentData.payment_method,
-          payment_reference: paymentData.payment_reference,
-          payment_date: new Date().toISOString().split('T')[0],
-          notes: paymentData.payment_notes
-        };
-
-        const paymentResponse = await fetch('/api/crm/invoice-payments', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify(paymentRecord),
-        });
-
-        if (!paymentResponse.ok) {
-          // console.error removed
-          // Continue anyway - invoice is created, payment can be added later
-        }
+      // Mark as paid immediately via status update if selected
+      if (markAsPaid && created?.invoice_id) {
+        await fetch('/api/invoices/update-status', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoice_id: created.invoice_id, status: 'paid' })
+        }).catch(()=>{});
       }
 
       onSuccess();
@@ -479,80 +468,37 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
 
   // PDF Download Function
   const downloadPDF = async () => {
-    if (!createdInvoice) return;
-    
     try {
-      setLoading(true);
-      const response = await fetch(`/api/crm/invoices/${createdInvoice.id}/pdf`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/pdf'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`PDF generation failed: ${response.status}`);
-      }
-      
-      const blob = await response.blob();
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `Rechnung-${createdInvoice.invoiceNumber || createdInvoice.id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      
-      // Cleanup
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }, 100);
-      
-    } catch (error) {
+      const publicId = createdInvoice?.public_id;
+      if (!publicId) throw new Error('No invoice link');
+      window.open(`/inv/${publicId}`, '_blank');
+    } catch (e) {
       setError('PDF download failed. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
   // Email Send Function
   const sendEmail = async () => {
-    if (!createdInvoice) return;
-    
+    if (!createdInvoice?.invoice_id) return;
     try {
       setLoading(true);
-      const response = await fetch(`/api/crm/invoices/${createdInvoice.id}/email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(emailData),
-      });
-      
-      if (!response.ok) throw new Error('Failed to send email');
-      
-      const result = await response.json();
+      const to = clients.find(c => c.id === formData.client_id)?.email || '';
+      const r = await fetch('/api/invoices/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoice_id: createdInvoice.invoice_id, to }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || 'send failed');
       setShowEmailModal(false);
-      alert('Invoice successfully sent by email!');
-    } catch (error) {
-      // console.error removed
+      alert('Invoice email sent.');
+    } catch (e) {
       setError('Failed to send email. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   // Generate Shareable Link Function
   const generateShareableLink = () => {
-    if (!createdInvoice) return '';
-    
+    const pid = createdInvoice?.public_id;
+    if (!pid) return '';
     const baseUrl = window.location.origin;
-    return `${baseUrl}/invoice/${createdInvoice.id}`;
+    return `${baseUrl}/inv/${pid}`;
   };
 
   // Copy Link to Clipboard Function
@@ -1152,7 +1098,7 @@ const AdvancedInvoiceForm: React.FC<AdvancedInvoiceFormProps> = ({
                       onClick={() => {
                         const client = clients.find(c => c.id === formData.client_id);
                         setEmailData({
-                          subject: `Rechnung ${createdInvoice.invoiceNumber} - New Age Fotografie`,
+                          subject: `Rechnung ${createdInvoice.invoice_no || createdInvoice.invoiceNumber || createdInvoice.public_id} - New Age Fotografie`,
                           message: `Liebe/r ${client?.name},\n\nanbei senden wir Ihnen Ihre Rechnung zu.\n\nMit freundlichen Grüßen,\nNew Age Fotografie Team`,
                           includeAttachment: true
                         });

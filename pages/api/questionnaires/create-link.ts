@@ -1,13 +1,12 @@
-import type { NextApiRequest, NextApiResponse } from "next";
 import crypto from "crypto";
 import { db } from "../../../lib/db";
 
-function baseUrl(req: NextApiRequest) {
+function baseUrl(req: any) {
   return process.env.APP_BASE_URL
     || `${req.headers["x-forwarded-proto"] ?? "https"}://${req.headers.host}`;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: any, res: any) {
   if (req.method !== "POST") return res.status(405).end("Method Not Allowed");
   
   const { questionnaire_id, client_id, expires_in_days } = req.body || {};

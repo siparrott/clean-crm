@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
 import AdvancedInvoiceForm from '../../components/admin/AdvancedInvoiceForm';
 import InvoiceViewer from '../../components/admin/InvoiceViewer';
@@ -21,6 +22,7 @@ import {
 
 interface Invoice {
   id: string;
+  public_id?: string;
   invoice_number: string;
   client_id: string;
   client_name: string;
@@ -35,12 +37,15 @@ interface Invoice {
 }
 
 const InvoicesPage: React.FC = () => {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const prefillClientId = searchParams.get('client_id') || searchParams.get('client') || undefined;
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);  const [showCreateModal, setShowCreateModal] = useState(Boolean(prefillClientId));
   const [viewingInvoiceId, setViewingInvoiceId] = useState<string | null>(null);
   const [paymentTrackingInvoice, setPaymentTrackingInvoice] = useState<{ id: string; total: number; currency: string } | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
@@ -53,38 +58,37 @@ const InvoicesPage: React.FC = () => {
     filterInvoices();
   }, [invoices, searchTerm, statusFilter]);
 
+  // If route param changes at runtime, auto-open when present
+  useEffect(() => {
+    if (prefillClientId) setShowCreateModal(true);
+  }, [prefillClientId]);
+
   const fetchInvoices = async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const response = await fetch('/api/crm/invoices', {
-        credentials: 'include'
-      });
-      
+      const response = await fetch('/api/invoices/list?status=any', { credentials: 'include' });
       if (!response.ok) {
         throw new Error('Failed to fetch invoices');
       }
-      
       const data = await response.json();
-      
-      // Format the data to match expected interface based on database schema
-      const formattedInvoices = data.map((invoice: any) => ({
-        id: invoice.id,
-        invoice_number: invoice.invoice_number,
-        client_id: invoice.client_id,
-        client_name: invoice.client_name || 'Unknown Client',
-        amount: parseFloat(invoice.subtotal || 0),
-        tax_amount: parseFloat(invoice.tax_amount || 0), 
-        total_amount: parseFloat(invoice.total || 0),
-        status: invoice.status?.toLowerCase() || 'pending',
-        due_date: invoice.due_date,
-        paid_date: null, // Not in current schema
-        notes: invoice.notes || '',
-        created_at: invoice.created_at
+      const rows = data?.rows || data || [];
+      const formatted = rows.map((r: any) => ({
+        id: r.id,
+        public_id: r.public_id || r.publicId,
+        invoice_number: r.invoice_no || r.invoice_number || '',
+        client_id: r.client_id || '',
+        client_name: r.client_name || 'Unknown Client',
+        amount: Number(r.subtotal ?? 0),
+        tax_amount: Number(r.tax ?? 0),
+        total_amount: Number(r.total ?? 0),
+        status: (r.status || 'draft').toLowerCase(),
+        due_date: r.due_date,
+        paid_date: undefined,
+        notes: r.notes || '',
+        created_at: r.created_at
       }));
-      
-      setInvoices(formattedInvoices || []);
+      setInvoices(formatted || []);
     } catch (err) {
       // console.error removed
       setError('Failed to load invoices. Please try again.');
@@ -115,22 +119,20 @@ const InvoicesPage: React.FC = () => {
   const handleDeleteInvoice = async (id: string) => {
     try {
       setLoading(true);
-      
-      const response = await fetch(`/api/crm/invoices/${id}`, {
-        method: 'DELETE',
-        credentials: 'include'
+      // Mark as cancelled instead of hard delete
+      const response = await fetch(`/api/invoices/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ invoice_id: id, status: 'cancelled' })
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete invoice');
-      }
+      if (!response.ok) throw new Error('Failed to cancel invoice');
       
       // Remove from local state
       setInvoices(prevInvoices => prevInvoices.filter(invoice => invoice.id !== id));
       setDeleteConfirmation(null);
     } catch (err) {
-      // console.error removed
-      setError('Failed to delete invoice. Please try again.');
+      setError('Failed to cancel invoice. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -139,25 +141,12 @@ const InvoicesPage: React.FC = () => {
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
       setLoading(true);
-      
-      const updateData: any = {
-        status: newStatus,
-      };
-      
-      // If marking as paid, set the paid date
-      if (newStatus === 'paid') {
-        updateData.paid_date = new Date().toISOString().split('T')[0];
-      }
-      
-      const response = await fetch(`/api/crm/invoices/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await fetch(`/api/invoices/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(updateData),
+        body: JSON.stringify({ invoice_id: id, status: newStatus })
       });
-      
       if (!response.ok) {
         throw new Error('Failed to update invoice status');
       }
@@ -198,40 +187,48 @@ const InvoicesPage: React.FC = () => {
     return status !== 'paid' && new Date(dueDate) < new Date();
   };
 
-  const downloadInvoicePDF = async (invoiceId: string) => {
+  const downloadInvoicePDF = async (publicId?: string) => {
     try {
-      const response = await fetch(`/api/crm/invoices/${invoiceId}/pdf`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/pdf'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`PDF generation failed: ${response.status}`);
-      }
-      
-      const blob = await response.blob();
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `Invoice-${invoiceId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      
-      // Cleanup
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }, 100);
+      // For now, just open the public page and let the user Print / Save PDF
+      if (!publicId) throw new Error('Missing invoice link');
+      window.open(`/inv/${publicId}`, '_blank');
       
     } catch (error) {
       alert('PDF download failed. Please try again.');
     }
+  };
+
+  const sendEmail = async (id: string, to?: string) => {
+    const email = to || prompt('Send invoice to email address:', '') || '';
+    if (!email) return;
+    try {
+      const r = await fetch('/api/invoices/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoice_id: id, to: email }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || 'send failed');
+      alert(`Email sent. Link: ${j.link}`);
+    } catch (e:any) { alert(e.message || 'send failed'); }
+  };
+
+  const sendWhatsApp = async (id: string, phone?: string) => {
+    const to = phone || prompt('Recipient WhatsApp number (+countrycode...):', '') || '';
+    if (!to) return;
+    try {
+      const r = await fetch('/api/invoices/send-whatsapp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoice_id: id, to_phone: to }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || 'send failed');
+      if (j.sent) alert('WhatsApp sent.'); else if (j.share) window.open(j.share, '_blank'); else alert(`Link: ${j.link}`);
+    } catch (e:any) { alert(e.message || 'send failed'); }
+  };
+
+  const sendSms = async (id: string, phone?: string) => {
+    const to = phone || prompt('Recipient SMS number (+countrycode...):', '') || '';
+    if (!to) return;
+    try {
+      const r = await fetch('/api/invoices/send-sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoice_id: id, to_phone: to }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || 'send failed');
+      alert(j.sent ? 'SMS sent.' : 'SMS provider not configured. Link copied.');
+    } catch (e:any) { alert(e.message || 'send failed'); }
   };
 
   const getTotalStats = () => {
@@ -443,17 +440,24 @@ const InvoicesPage: React.FC = () => {
                             <DollarSign size={16} />
                           </button>
                           <button 
-                            onClick={() => downloadInvoicePDF(invoice.id)}
+                            onClick={() => downloadInvoicePDF(invoice.public_id)}
                             className="text-indigo-600 hover:text-indigo-900" 
                             title="Download PDF"
                           >
                             <Download size={16} />
                           </button>
-                          {invoice.status === 'draft' && (
-                            <button className="text-indigo-600 hover:text-indigo-900" title="Send">
-                              <Send size={16} />
-                            </button>
-                          )}
+                          <a href={`/inv/${invoice.public_id || ''}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-900" title="Open public link">
+                            <FileText size={16} />
+                          </a>
+                          <button onClick={() => sendEmail(invoice.id)} className="text-indigo-600 hover:text-indigo-900" title="Send Email">
+                            <Send size={16} />
+                          </button>
+                          <button onClick={() => sendWhatsApp(invoice.id)} className="text-green-600 hover:text-green-900" title="Send WhatsApp">
+                            <Send size={16} />
+                          </button>
+                          <button onClick={() => sendSms(invoice.id)} className="text-emerald-600 hover:text-emerald-900" title="Send SMS">
+                            <Send size={16} />
+                          </button>
                           <button 
                             onClick={() => setDeleteConfirmation(invoice.id)}
                             className="text-red-600 hover:text-red-900" 
@@ -531,6 +535,7 @@ const InvoicesPage: React.FC = () => {
           fetchInvoices();
           setShowCreateModal(false);
         }}
+        prefillClientId={prefillClientId}
       />
     </AdminLayout>
   );

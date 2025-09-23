@@ -5,10 +5,10 @@ export const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-export async function db<T = any>(q: string, p: any[] = []) {
+export async function db(q: string, p: any[] = []) {
   const c = await pool.connect();
   try { 
-    return await c.query<T>(q, p); 
+    return await c.query(q, p); 
   }
   finally { 
     c.release(); 
