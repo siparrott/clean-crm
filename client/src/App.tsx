@@ -48,6 +48,7 @@ import AdminInboxPageV2 from './pages/admin/AdminInboxPageV2';
 import QuestionnairesPageV2 from './pages/admin/QuestionnairesPageV2';
 import ComprehensiveReportsPage from './pages/admin/ComprehensiveReportsPage';
 import SettingsPage from './pages/admin/SettingsPage';
+import EmailSettingsPage from './pages/admin/EmailSettingsPage';
 import CalendarTest from './pages/admin/CalendarTest';
 import CustomizationPage from './pages/admin/CustomizationPage';
 import StudioCustomization from './pages/admin/StudioCustomization';
@@ -356,6 +357,14 @@ function App() {
                   element={
                     <NeonProtectedRoute>
                       <SettingsPage />
+                    </NeonProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/settings/email"
+                  element={
+                    <NeonProtectedRoute>
+                      <EmailSettingsPage />
                     </NeonProtectedRoute>
                   }
                 />

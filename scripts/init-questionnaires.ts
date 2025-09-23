@@ -34,6 +34,25 @@ async function main() {
       );
     `);
 
+    // Ensure missing columns are added for existing installations
+    const ensureColumn = async (name: string, type: string, defaultExpr?: string) => {
+      const exists = await client.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_name='questionnaire_responses' AND column_name=$1`,
+        [name]
+      );
+      if (exists.rowCount === 0) {
+        const def = defaultExpr ? ` DEFAULT ${defaultExpr}` : '';
+        await client.query(`ALTER TABLE questionnaire_responses ADD COLUMN ${name} ${type}${def};`);
+      }
+    };
+
+    await ensureColumn('client_email', 'text');
+    await ensureColumn('client_name', 'text');
+    await ensureColumn('answers', 'jsonb');
+    await ensureColumn('created_at', 'timestamptz', 'now()');
+    await ensureColumn('ip', 'inet');
+    await ensureColumn('user_agent', 'text');
+
     // Backfill columns on existing table if they are missing
     await client.query(`
       ALTER TABLE questionnaire_responses

@@ -218,7 +218,9 @@ async function handleFilesAPI(req, res, pathname, query) {
     try {
       const { 
         folder_name, 
-        file_type, 
+                let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+                if (Array.isArray(ip)) ip = ip[0] || '';
+                if (typeof ip === 'string' && ip.includes(',')) ip = ip.split(',')[0].trim();
         client_id, 
         session_id,
         search_term,
