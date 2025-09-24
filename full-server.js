@@ -2176,40 +2176,21 @@ const server = http.createServer(async (req, res) => {
             const total = subtotal + tax;
             const invoice_no = makeInvoiceNo();
             const public_id = makePublicId();
-
-            const inv = await sql(
-              `INSERT INTO invoices(invoice_no, client_id, client_name, client_email, client_phone,
-                                     issue_date, due_date, currency, subtotal, tax, total, status, public_id, notes, meta)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'draft',$12,$13,$14)
-               RETURNING id`,
-              [
-                invoice_no,
-                body.client_id || null,
-                body.client_name,
-                body.client_email || null,
-                body.client_phone || null,
-                body.issue_date,
-                body.due_date,
-                currency,
-                subtotal,
-                tax,
-                total,
-                public_id,
-                body.notes || null,
-                body.meta || {}
-              ]
-            );
-            const invoice_id = inv?.[0]?.id || inv?.rows?.[0]?.id; // neon returns array or pg rows depending on client wrapper
-            const values = [];
-            const chunks = [];
-            for (const it of items) {
-              const lt = Number(it.quantity) * Number(it.unit_price);
-              values.push(invoice_id, it.description, Number(it.quantity), Number(it.unit_price), lt);
-              const base = values.length - 4;
-              chunks.push(`($${base},$${base+1},$${base+2},$${base+3},$${base+4})`);
-            }
-            if (chunks.length) {
-              await sql(`INSERT INTO invoice_items(invoice_id, description, quantity, unit_price, line_total) VALUES ${chunks.join(',')}`, values);
+            const invRows = await sql`
+              INSERT INTO invoices (
+                invoice_no, client_id, client_name, client_email, client_phone,
+                issue_date, due_date, currency, subtotal, tax, total, status, public_id, notes, meta
+              ) VALUES (
+                ${invoice_no}, ${body.client_id || null}, ${body.client_name}, ${body.client_email || null}, ${body.client_phone || null},
+                ${body.issue_date}, ${body.due_date}, ${currency}, ${subtotal}, ${tax}, ${total}, 'draft', ${public_id}, ${body.notes || null}, ${body.meta || {}}
+              )
+              RETURNING id
+            `;
+            const invoice_id = invRows?.[0]?.id;
+            if (!invoice_id) { throw new Error('Insert failed'); }
+            const valueTuples = items.map(it => sql`(${invoice_id}, ${it.description}, ${Number(it.quantity)}, ${Number(it.unit_price)}, ${Number(it.quantity) * Number(it.unit_price)})`);
+            if (valueTuples.length) {
+              await sql`INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, line_total) VALUES ${sql.join(valueTuples, sql`,`)}`;
             }
             const link = `${appUrl(req)}/inv/${public_id}`;
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2231,21 +2212,20 @@ const server = http.createServer(async (req, res) => {
       try {
         if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
         await ensureInvoiceSchema();
-        const url = new URL(req.url, `http://${req.headers.host}`);
-        const status = String(url.searchParams.get('status') || 'any');
-        const q = String(url.searchParams.get('q') || '').toLowerCase();
-        const params = [];
-        let where = 'WHERE 1=1';
-        if (status !== 'any') { params.push(status); where += ` AND status = $${params.length}`; }
-        if (q) {
-          params.push(`%${q}%`);
-          where += ` AND (lower(invoice_no) LIKE $${params.length} OR lower(client_name) LIKE $${params.length})`;
-        }
-        const rows = await sql(`
+        const urlObj = new URL(req.url, `http://${req.headers.host}`);
+        const status = String(urlObj.searchParams.get('status') || 'any');
+        const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
+        const conds = [];
+        if (status !== 'any') conds.push(sql`status = ${status}`);
+        if (q) conds.push(sql`(lower(invoice_no) LIKE ${'%' + q + '%'} OR lower(client_name) LIKE ${'%' + q + '%'})`);
+        const whereFrag = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
+        const rows = await sql`
           SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
-          FROM invoices ${where}
+          FROM invoices
+          ${whereFrag}
           ORDER BY created_at DESC
-          LIMIT 200`, params);
+          LIMIT 200
+        `;
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ rows }));
       } catch (e) {
@@ -2260,21 +2240,20 @@ const server = http.createServer(async (req, res) => {
       try {
         if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
         await ensureInvoiceSchema();
-        const url = new URL(req.url, `http://${req.headers.host}`);
-        const status = String(url.searchParams.get('status') || 'any');
-        const q = String(url.searchParams.get('q') || '').toLowerCase();
-        const params = [];
-        let where = 'WHERE 1=1';
-        if (status !== 'any') { params.push(status); where += ` AND status = $${params.length}`; }
-        if (q) {
-          params.push(`%${q}%`);
-          where += ` AND (lower(invoice_no) LIKE $${params.length} OR lower(client_name) LIKE $${params.length})`;
-        }
-        const rows = await sql(`
+        const urlObj = new URL(req.url, `http://${req.headers.host}`);
+        const status = String(urlObj.searchParams.get('status') || 'any');
+        const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
+        const conds = [];
+        if (status !== 'any') conds.push(sql`status = ${status}`);
+        if (q) conds.push(sql`(lower(invoice_no) LIKE ${'%' + q + '%'} OR lower(client_name) LIKE ${'%' + q + '%'})`);
+        const whereFrag = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
+        const rows = await sql`
           SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
-          FROM invoices ${where}
+          FROM invoices
+          ${whereFrag}
           ORDER BY created_at DESC
-          LIMIT 200`, params);
+          LIMIT 200
+        `;
         res.writeHead(200, { 'Content-Type': 'application/json' });
         // Return the same shape as /api/invoices/list for consistency
         res.end(JSON.stringify({ rows }));
@@ -2298,7 +2277,7 @@ const server = http.createServer(async (req, res) => {
             const invoice_id = body.invoice_id;
             const to = body.to;
             if (!invoice_id || !to) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'invoice_id and to required' })); return; }
-            const inv = await sql(`SELECT invoice_no, client_name, client_email, total, currency, public_id, issue_date, due_date FROM invoices WHERE id = $1`, [invoice_id]);
+            const inv = await sql`SELECT invoice_no, client_name, client_email, total, currency, public_id, issue_date, due_date FROM invoices WHERE id = ${invoice_id}`;
             if (!inv || inv.length === 0) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Invoice not found' })); return; }
             const i = inv[0];
             const link = `${appUrl(req)}/inv/${i.public_id}`;
@@ -2325,7 +2304,7 @@ const server = http.createServer(async (req, res) => {
                   <p>Thank you!<br/>New Age Fotografie</p>
                 </div>`,
             });
-            await sql(`UPDATE invoices SET status='sent' WHERE id = $1 AND status = 'draft'`, [invoice_id]);
+            await sql`UPDATE invoices SET status='sent' WHERE id = ${invoice_id} AND status = 'draft'`;
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: true, link }));
           } catch (e) {
@@ -2353,7 +2332,7 @@ const server = http.createServer(async (req, res) => {
             const invoice_id = body.invoice_id;
             const to_phone = body.to_phone;
             if (!invoice_id) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'invoice_id required' })); return; }
-            const inv = await sql(`SELECT invoice_no, client_name, total, currency, public_id FROM invoices WHERE id = $1`, [invoice_id]);
+            const inv = await sql`SELECT invoice_no, client_name, total, currency, public_id FROM invoices WHERE id = ${invoice_id}`;
             if (!inv || inv.length === 0) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Invoice not found' })); return; }
             const i = inv[0];
             const link = `${appUrl(req)}/inv/${i.public_id}`;
@@ -2424,7 +2403,7 @@ const server = http.createServer(async (req, res) => {
             const invoice_id = body.invoice_id;
             const to_phone = body.to_phone;
             if (!invoice_id || !to_phone) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'invoice_id and to_phone required' })); return; }
-            const inv = await sql(`SELECT invoice_no, client_name, total, currency, public_id FROM invoices WHERE id = $1`, [invoice_id]);
+            const inv = await sql`SELECT invoice_no, client_name, total, currency, public_id FROM invoices WHERE id = ${invoice_id}`;
             if (!inv || inv.length === 0) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Invoice not found' })); return; }
             const i = inv[0];
             const link = `${appUrl(req)}/inv/${i.public_id}`;
@@ -2467,7 +2446,7 @@ const server = http.createServer(async (req, res) => {
             const invoice_id = body.invoice_id;
             const status = body.status;
             if (!invoice_id || !status) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'invoice_id and status required' })); return; }
-            await sql(`UPDATE invoices SET status = $1 WHERE id = $2`, [status, invoice_id]);
+            await sql`UPDATE invoices SET status = ${status} WHERE id = ${invoice_id}`;
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: true }));
           } catch (e) {
@@ -2489,10 +2468,10 @@ const server = http.createServer(async (req, res) => {
         await ensureInvoiceSchema();
         const publicId = pathname.split('/inv/')[1];
         if (!publicId) { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('<main>Invoice not found.</main>'); return; }
-        const inv = await sql(`SELECT id, invoice_no, client_name, client_email, issue_date, due_date, currency, subtotal, tax, total, notes FROM invoices WHERE public_id = $1`, [publicId]);
+        const inv = await sql`SELECT id, invoice_no, client_name, client_email, issue_date, due_date, currency, subtotal, tax, total, notes FROM invoices WHERE public_id = ${publicId}`;
         if (!inv || inv.length === 0) { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('<main>Invoice not found.</main>'); return; }
         const id = inv[0].id;
-        const items = await sql(`SELECT description, quantity, unit_price, line_total FROM invoice_items WHERE invoice_id = $1`, [id]);
+        const items = await sql`SELECT description, quantity, unit_price, line_total FROM invoice_items WHERE invoice_id = ${id}`;
         const i = inv[0];
         const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
         const rowHtml = items.map(it => `
@@ -6206,18 +6185,17 @@ New Age Fotografie Team`;
             const urlObj = new URL(req.url, `http://${req.headers.host}`);
             const status = String(urlObj.searchParams.get('status') || 'any');
             const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
-            const params = [];
-            let where = 'WHERE 1=1';
-            if (status !== 'any') { params.push(status); where += ` AND status = $${params.length}`; }
-            if (q) {
-              params.push(`%${q}%`);
-              where += ` AND (lower(invoice_no) LIKE $${params.length} OR lower(client_name) LIKE $${params.length})`;
-            }
-            const rows = await sql(`
+            const conds = [];
+            if (status !== 'any') conds.push(sql`status = ${status}`);
+            if (q) conds.push(sql`(lower(invoice_no) LIKE ${'%' + q + '%'} OR lower(client_name) LIKE ${'%' + q + '%'})`);
+            const whereFrag = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
+            const rows = await sql`
               SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
-              FROM invoices ${where}
+              FROM invoices
+              ${whereFrag}
               ORDER BY created_at DESC
-              LIMIT 200`, params);
+              LIMIT 200
+            `;
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ rows }));
           } catch (err) {
