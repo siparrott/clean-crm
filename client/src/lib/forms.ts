@@ -9,7 +9,7 @@ interface WaitlistFormData extends ContactFormData {
   preferredDate: string;
 }
 
-export async function submitContactForm(formData: ContactFormData) {
+export async function submitContactForm(formData: ContactFormData & { sourcePath?: string }) {
   try {
     // Use the local backend API endpoint
     const response = await fetch('/api/contact', {
@@ -17,7 +17,10 @@ export async function submitContactForm(formData: ContactFormData) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(formData),
+      body: JSON.stringify({
+        ...formData,
+        sourcePath: formData.sourcePath || (typeof window !== 'undefined' ? window.location.pathname : undefined),
+      }),
     });
 
     if (!response.ok) {
@@ -32,7 +35,7 @@ export async function submitContactForm(formData: ContactFormData) {
   }
 }
 
-export async function submitWaitlistForm(formData: WaitlistFormData) {
+export async function submitWaitlistForm(formData: WaitlistFormData & { sourcePath?: string }) {
   try {
     // Use the waitlist/appointment request endpoint
     const response = await fetch('/api/waitlist', {
@@ -40,7 +43,10 @@ export async function submitWaitlistForm(formData: WaitlistFormData) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(formData),
+      body: JSON.stringify({
+        ...formData,
+        sourcePath: formData.sourcePath || (typeof window !== 'undefined' ? window.location.pathname : undefined),
+      }),
     });
 
     if (!response.ok) {
@@ -55,7 +61,7 @@ export async function submitWaitlistForm(formData: WaitlistFormData) {
   }
 }
 
-export async function submitNewsletterForm(email: string) {
+export async function submitNewsletterForm(email: string, opts?: { consent?: boolean; sourcePath?: string }) {
   try {
     // Use the newsletter signup endpoint
     const response = await fetch('/api/newsletter/signup', {
@@ -63,7 +69,11 @@ export async function submitNewsletterForm(email: string) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ 
+        email,
+        consent: opts?.consent ?? true,
+        sourcePath: opts?.sourcePath || (typeof window !== 'undefined' ? window.location.pathname : undefined),
+      }),
     });
 
     if (!response.ok) {

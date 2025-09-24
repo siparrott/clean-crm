@@ -400,7 +400,7 @@ const HomePage: React.FC = () => {
                 <p className="text-gray-600 mb-4">{t('home.pregnancyShootingDescription')}</p>
                 <div className="flex justify-between items-center">
                   <div className="flex flex-col">
-                    <span className="text-lg text-gray-500 line-through">€195</span>
+                    <span className="text-sm text-gray-500 uppercase tracking-wide">{language === 'de' ? 'AB' : 'FROM'}</span>
                     <span className="text-2xl font-bold text-purple-600">€95</span>
                   </div>
                   <button 
@@ -430,8 +430,8 @@ const HomePage: React.FC = () => {
                 <p className="text-gray-600 mb-4">{t('home.familyShootingDescription')}</p>
                 <div className="flex justify-between items-center">
                   <div className="flex flex-col">
-                    <span className="text-lg text-gray-500 line-through">€295</span>
-                    <span className="text-2xl font-bold text-purple-600">€195</span>
+                    <span className="text-sm text-gray-500 uppercase tracking-wide">{language === 'de' ? 'AB' : 'FROM'}</span>
+                    <span className="text-2xl font-bold text-purple-600">€95</span>
                   </div>
                   <button 
                     onClick={() => {
@@ -460,8 +460,8 @@ const HomePage: React.FC = () => {
                 <p className="text-gray-600 mb-4">{t('home.newbornShootingDescription')}</p>
                 <div className="flex justify-between items-center">
                   <div className="flex flex-col">
-                    <span className="text-lg text-gray-500 line-through">€395</span>
-                    <span className="text-2xl font-bold text-purple-600">€295</span>
+                    <span className="text-sm text-gray-500 uppercase tracking-wide">{language === 'de' ? 'AB' : 'FROM'}</span>
+                    <span className="text-2xl font-bold text-purple-600">€95</span>
                   </div>
                   <button 
                     onClick={() => {

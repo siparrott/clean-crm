@@ -15,7 +15,9 @@ const Footer: React.FC = () => {
   };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [subscribed, setSubscribed] = useState(false);    const handleSubmit = async (e: React.FormEvent) => {
+  const [subscribed, setSubscribed] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email.trim()) {
@@ -34,8 +36,7 @@ const Footer: React.FC = () => {
     setError(null);
     
     try {
-      const result = await submitNewsletterForm(email.trim());
-      // console.log removed
+      const result = await submitNewsletterForm(email.trim(), { consent: true, sourcePath: window.location.pathname });
       
       if (result.success) {
         setSubscribed(true);
@@ -46,7 +47,6 @@ const Footer: React.FC = () => {
         throw new Error(result.message || 'Signup failed');
       }
     } catch (err) {
-      // console.error removed
       const errorMessage = err instanceof Error ? err.message : 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.';
       setError(errorMessage);
     } finally {
