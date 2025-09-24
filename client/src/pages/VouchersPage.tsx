@@ -1,10 +1,11 @@
-  import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import CategoryFilter from '../components/vouchers/CategoryFilter';
 import { useAppContext } from '../context/AppContext';
 import { Search, Gift } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import HeroDealsAuto from '@/components/HeroDealsAuto';
 
 const VouchersPage: React.FC = () => {
   const { selectedCategory } = useAppContext();
@@ -106,6 +107,20 @@ const VouchersPage: React.FC = () => {
 
   return (
     <Layout>
+      {/* Groupon-style hero for top vouchers */}
+      <HeroDealsAuto
+        items={voucherProducts.map(v => ({
+          id: v.id,
+          name: v.name,
+          description: v.description,
+          image: v.image,
+          price: v.price,
+          originalPrice: v.originalPrice,
+          route: v.route,
+          // Preserve existing wiring by exposing href-equivalent
+          url: v.route
+        }))}
+      />
       <div className="container mx-auto px-4 py-8">
         {/* Company Logo and Header */}
         <div className="flex items-center justify-center mb-8">

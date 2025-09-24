@@ -2231,9 +2231,8 @@ const server = http.createServer(async (req, res) => {
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
         const status = String(urlObj.searchParams.get('status') || 'any');
         const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
-        // Detect available columns to avoid referencing non-existent ones
-        const colRows = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'invoices'`;
-        const cols = new Set(colRows.map(r => r.column_name));
+  // Detect available columns (cached) to avoid referencing non-existent ones
+  const cols = await getInvoiceColumnSet();
 
         const has = (c) => cols.has(c);
   const invoiceNoExpr = has('invoice_no') ? 'invoice_no' : (has('invoice_number') ? 'invoice_number' : "''");
@@ -2284,9 +2283,8 @@ const server = http.createServer(async (req, res) => {
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
         const status = String(urlObj.searchParams.get('status') || 'any');
         const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
-        // Detect available columns to avoid referencing non-existent ones
-        const colRows = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'invoices'`;
-        const cols = new Set(colRows.map(r => r.column_name));
+  // Detect available columns (cached)
+  const cols = await getInvoiceColumnSet();
 
         const has = (c) => cols.has(c);
   const invoiceNoExpr = has('invoice_no') ? 'invoice_no' : (has('invoice_number') ? 'invoice_number' : "''");
