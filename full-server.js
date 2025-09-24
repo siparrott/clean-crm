@@ -180,8 +180,8 @@ async function ensureCrmClientsSchema() {
 async function ensureInvoiceSchema() {
   try {
     if (!sql) return;
-    await sql(`CREATE EXTENSION IF NOT EXISTS pgcrypto` ).catch(()=>{});
-    await sql(`
+    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
+    await sql`
       CREATE TABLE IF NOT EXISTS invoices (
         id uuid primary key default gen_random_uuid(),
         invoice_no text unique not null,
@@ -200,8 +200,8 @@ async function ensureInvoiceSchema() {
         notes text,
         meta jsonb default '{}'::jsonb,
         created_at timestamptz default now()
-      )`);
-    await sql(`
+      )`;
+    await sql`
       CREATE TABLE IF NOT EXISTS invoice_items (
         id uuid primary key default gen_random_uuid(),
         invoice_id uuid not null references invoices(id) on delete cascade,
@@ -209,8 +209,8 @@ async function ensureInvoiceSchema() {
         quantity numeric(10,2) not null default 1,
         unit_price numeric(12,2) not null default 0,
         line_total numeric(12,2) not null default 0
-      )`);
-    await sql(`CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)`);
+      )`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)`;
   } catch (e) {
     console.warn('ensureInvoiceSchema failed:', e.message);
   }
@@ -2216,19 +2216,22 @@ const server = http.createServer(async (req, res) => {
         const status = String(urlObj.searchParams.get('status') || 'any');
         const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
         const conds = [];
-        if (status !== 'any') conds.push(sql`status = ${status}`);
-        if (q) conds.push(sql`(lower(invoice_no) LIKE ${'%' + q + '%'} OR lower(client_name) LIKE ${'%' + q + '%'})`);
-        const whereFrag = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
-        const rows = await sql`
+        const params = [];
+        let i = 1;
+        if (status !== 'any') { conds.push(`status = $${i++}`); params.push(status); }
+        if (q) { conds.push(`(lower(invoice_no) LIKE $${i} OR lower(client_name) LIKE $${i})`); params.push('%' + q + '%'); i++; }
+        const whereClause = conds.length ? (' WHERE ' + conds.join(' AND ')) : '';
+        const query = `
           SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
           FROM invoices
-          ${whereFrag}
+          ${whereClause}
           ORDER BY created_at DESC
-          LIMIT 200
-        `;
+          LIMIT 200`;
+        const rows = await sql(query, params);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ rows }));
       } catch (e) {
+        console.error('❌ /api/invoices/list error:', e.message);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'List failed' }));
       }
@@ -2244,20 +2247,23 @@ const server = http.createServer(async (req, res) => {
         const status = String(urlObj.searchParams.get('status') || 'any');
         const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
         const conds = [];
-        if (status !== 'any') conds.push(sql`status = ${status}`);
-        if (q) conds.push(sql`(lower(invoice_no) LIKE ${'%' + q + '%'} OR lower(client_name) LIKE ${'%' + q + '%'})`);
-        const whereFrag = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
-        const rows = await sql`
+        const params = [];
+        let i = 1;
+        if (status !== 'any') { conds.push(`status = $${i++}`); params.push(status); }
+        if (q) { conds.push(`(lower(invoice_no) LIKE $${i} OR lower(client_name) LIKE $${i})`); params.push('%' + q + '%'); i++; }
+        const whereClause = conds.length ? (' WHERE ' + conds.join(' AND ')) : '';
+        const query = `
           SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
           FROM invoices
-          ${whereFrag}
+          ${whereClause}
           ORDER BY created_at DESC
-          LIMIT 200
-        `;
+          LIMIT 200`;
+        const rows = await sql(query, params);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         // Return the same shape as /api/invoices/list for consistency
         res.end(JSON.stringify({ rows }));
       } catch (e) {
+        console.error('❌ /api/crm/invoices list error:', e.message);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'List failed' }));
       }
@@ -6178,33 +6184,6 @@ New Age Fotografie Team`;
     if (pathname.startsWith('/api/crm/invoices')) {
       try {
         // Map legacy paths to new endpoints
-        // GET /api/crm/invoices -> proxy to new invoices list (from invoices table)
-        if (pathname === '/api/crm/invoices' && req.method === 'GET') {
-          try {
-            await ensureInvoiceSchema();
-            const urlObj = new URL(req.url, `http://${req.headers.host}`);
-            const status = String(urlObj.searchParams.get('status') || 'any');
-            const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
-            const conds = [];
-            if (status !== 'any') conds.push(sql`status = ${status}`);
-            if (q) conds.push(sql`(lower(invoice_no) LIKE ${'%' + q + '%'} OR lower(client_name) LIKE ${'%' + q + '%'})`);
-            const whereFrag = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
-            const rows = await sql`
-              SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
-              FROM invoices
-              ${whereFrag}
-              ORDER BY created_at DESC
-              LIMIT 200
-            `;
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ rows }));
-          } catch (err) {
-            console.error('❌ Legacy /api/crm/invoices list proxy error:', err.message);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'List failed' }));
-          }
-          return;
-        }
         // POST /api/crm/invoices -> /api/invoices
         if (pathname === '/api/crm/invoices' && req.method === 'POST') {
           req.url = req.url.replace('/api/crm/invoices', '/api/invoices');
