@@ -55,6 +55,28 @@ const VouchersPage: React.FC = () => {
     }
   ];
 
+  // Prepare hero items mapping once
+  const heroItems = voucherProducts.map(v => ({
+    id: v.id,
+    name: v.name,
+    description: v.description,
+    image: v.image,
+    price: v.price,
+    originalPrice: v.originalPrice,
+    route: v.route,
+    url: v.route,
+  }));
+
+  // Cosmetic requirement: show only three offers in Groupon-style hero
+  const showThreeOnly = true;
+  if (showThreeOnly) {
+    return (
+      <Layout>
+        <HeroDealsAuto items={heroItems} />
+      </Layout>
+    );
+  }
+
   useEffect(() => {
     // SEO Meta Tags - Dynamic based on language
     const title = language === 'en' 
@@ -108,19 +130,7 @@ const VouchersPage: React.FC = () => {
   return (
     <Layout>
       {/* Groupon-style hero for top vouchers */}
-      <HeroDealsAuto
-        items={voucherProducts.map(v => ({
-          id: v.id,
-          name: v.name,
-          description: v.description,
-          image: v.image,
-          price: v.price,
-          originalPrice: v.originalPrice,
-          route: v.route,
-          // Preserve existing wiring by exposing href-equivalent
-          url: v.route
-        }))}
-      />
+      <HeroDealsAuto items={heroItems} />
       <div className="container mx-auto px-4 py-8">
         {/* Company Logo and Header */}
         <div className="flex items-center justify-center mb-8">
