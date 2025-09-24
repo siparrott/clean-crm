@@ -1,19 +1,17 @@
-📊 Database: Neon connection (Supabase-free architecture)
-✅ Stripe initialized in routes
-� Starting New Age Fotografie CRM server...
-✅ Email service initialized
-✅ SMS service initialized with vonage from database
-✅ SMS service initialized
-✅ Database connection verified
-✅ New Age Fotografie CRM successfully started on 127.0.0.1:10000
-Environment: development
-Working directory: D:\TogNina NewAge v.2. Github 007\clean-crm
-Demo mode: false
-Database URL configured: true
-Email queue check - direct sending active
-Email queue check - direct sending active
-Email queue check - direct sending active
-Email queue check - direct sending active
-Email queue check - direct sending active
-Email queue check - direct sending active
-Email queue check - direct sending active
+[dotenv@17.2.2] injecting env (5) from .env -- tip: ⚙️  override existing env vars with { override: true }
+🔌 Connecting to Neon database...
+✅ DATABASE_URL found, creating connection pool...
+✅ Neon SQL client initialized
+🔍 Checking Stripe configuration...
+📍 Environment: development
+🔑 Stripe key found: your_live_stripe_sec...here
+🚀 Starting PRODUCTION server with Neon database...
+ℹ️ Reaching server.listen with port = 3012 
+✅ PRODUCTION server with database support running on port 3012 
+🌐 Website: http://localhost:3012 
+🔌 API: http://localhost:3012 /api/status
+📊 Health: http://localhost:3012 /healthz
+✅ Database connected successfully
+🔨 Initializing database schema...
+✅ Loaded 7 coupons from DB
+✅ Database schema initialized successfully

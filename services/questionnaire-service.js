@@ -73,6 +73,55 @@ class QuestionnaireService {
     this._colCache = {};
   }
 
+  async ensureSchema() {
+    try {
+      // Ensure extension for UUIDs
+      await this.sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
+      // Questionnaires master
+      await this.sql`
+        CREATE TABLE IF NOT EXISTS questionnaires (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          slug text UNIQUE,
+          title text NOT NULL,
+          description text,
+          fields jsonb NOT NULL DEFAULT '[]'::jsonb,
+          is_active boolean DEFAULT true,
+          notify_email text,
+          created_at timestamptz DEFAULT now()
+        )`;
+      // Links (use text for foreigns to avoid type operator issues across installs)
+      await this.sql`
+        CREATE TABLE IF NOT EXISTS questionnaire_links (
+          token text PRIMARY KEY,
+          questionnaire_id text,
+          template_id text,
+          client_id text,
+          expires_at timestamptz,
+          is_used boolean DEFAULT false,
+          created_at timestamptz DEFAULT now()
+        )`;
+      // Responses
+      await this.sql`
+        CREATE TABLE IF NOT EXISTS questionnaire_responses (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          questionnaire_id text,
+          client_id text,
+          token text,
+          answers jsonb,
+          client_name text,
+          client_email text,
+          submitted_at timestamptz DEFAULT now()
+        )`;
+      // Helpful indexes
+      await this.sql`CREATE INDEX IF NOT EXISTS idx_q_links_client ON questionnaire_links((client_id))`;
+      await this.sql`CREATE INDEX IF NOT EXISTS idx_q_resp_client ON questionnaire_responses((client_id))`;
+      await this.sql`CREATE INDEX IF NOT EXISTS idx_q_resp_token ON questionnaire_responses((token))`;
+    } catch (e) {
+      // best-effort; do not throw to avoid breaking endpoints on restricted roles
+      console.warn('⚠️ questionnaire ensureSchema:', e.message);
+    }
+  }
+
   async tableHasColumn(table, column) {
     const key = `${table}.${column}`;
     if (this._colCache[key] !== undefined) return this._colCache[key];
@@ -127,6 +176,7 @@ class QuestionnaireService {
    */
   async createQuestionnaireLink(clientId, questionnaireId = null, expiryDays = 30) {
     try {
+      await this.ensureSchema();
       // Generate secure token
       const token = crypto.randomBytes(32).toString('hex');
       
@@ -147,7 +197,18 @@ class QuestionnaireService {
         questionnaire = result[0];
         
         if (!questionnaire) {
-          throw new Error('No active questionnaire found');
+          // create a sensible default to avoid 404s on fresh databases
+          const fields = [
+            { key: 'sessionType', label: 'Type of photoshoot', type: 'select', options: ['Family','Maternity','Newborn','Business'] },
+            { key: 'preferredDate', label: 'Preferred date', type: 'text' },
+            { key: 'notes', label: 'Anything we should know?', type: 'textarea' }
+          ];
+          const inserted = await this.sql`
+            INSERT INTO questionnaires (slug, title, description, fields, is_active)
+            VALUES (${crypto.randomUUID().replace(/-/g,'').slice(0,10)}, ${'Photography Preferences'}, ${'Help us prepare for your perfect photoshoot'}, ${JSON.stringify(fields)}, true)
+            RETURNING *
+          `;
+          questionnaire = inserted[0];
         }
       }
       
@@ -209,8 +270,10 @@ class QuestionnaireService {
    */
   async getQuestionnaireByToken(token) {
     try {
+      await this.ensureSchema();
       // Get questionnaire link with questionnaire data
-      const result = await this.sql`
+      // Use a safe join that does not reference missing template_id on installs
+      let result = await this.sql`
         SELECT 
           ql.token,
           ql.client_id,
@@ -224,11 +287,35 @@ class QuestionnaireService {
           c.last_name as client_last_name,
           c.email as client_email
         FROM questionnaire_links ql
-        JOIN questionnaires q ON q.id::text = COALESCE(ql.questionnaire_id::text, ql.template_id::text)
+        JOIN questionnaires q ON q.id::text = ql.questionnaire_id::text
         LEFT JOIN crm_clients c ON (c.id::text = ql.client_id::text OR c.client_id::text = ql.client_id::text)
         WHERE ql.token = ${token}
         LIMIT 1
       `;
+      if (!result.length) {
+        // Fallback: some databases used template_id only
+        try {
+          result = await this.sql`
+            SELECT 
+              ql.token,
+              ql.client_id,
+              ql.is_used,
+              ql.expires_at,
+              q.id as questionnaire_id,
+              q.title,
+              q.fields,
+              q.is_active,
+              c.first_name as client_first_name,
+              c.last_name as client_last_name,
+              c.email as client_email
+            FROM questionnaire_links ql
+            JOIN questionnaires q ON q.id::text = ql.template_id::text
+            LEFT JOIN crm_clients c ON (c.id::text = ql.client_id::text OR c.client_id::text = ql.client_id::text)
+            WHERE ql.token = ${token}
+            LIMIT 1
+          `;
+        } catch {}
+      }
       
       if (result.length === 0) {
         throw new Error('Questionnaire not found');
@@ -276,6 +363,7 @@ class QuestionnaireService {
    */
   async submitQuestionnaireResponse(token, answers, clientContact = {}) {
     try {
+      await this.ensureSchema();
       // Get questionnaire details first
       const questionnaire = await this.getQuestionnaireByToken(token);
       if (questionnaire.is_used) {
@@ -444,6 +532,7 @@ This is an automated confirmation email.
    */
   async getQuestionnaireResponses(questionnaireId = null, clientId = null, limit = 50, offset = 0) {
     try {
+      await this.ensureSchema();
       let query = `
         SELECT 
           qr.*,

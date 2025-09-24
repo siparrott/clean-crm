@@ -921,7 +921,7 @@ async function handleGalleryAPI(req, res, pathname, query) {
         INSERT INTO galleries (title, description, slug, cover_image, client_id, 
                              is_public, is_password_protected, password, created_by)
         VALUES (${title}, ${description}, ${finalSlug}, ${coverImage}, ${client_id}, 
-                ${is_public}, ${is_password_protected}, ${password}, 'admin')
+                ${is_public}, ${is_password_protected}, ${password}, NULL)
         RETURNING *
       `;
       
