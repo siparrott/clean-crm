@@ -4175,7 +4175,7 @@ const server = http.createServer(async (req, res) => {
                 original_price: body.originalPrice ? Number(body.originalPrice) : null,
                 category: body.category || null,
                 type: 'voucher',
-                sku: (name.toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$|/g,'').slice(0,12) + '-' + Math.floor(Math.random()*900+100)),
+                sku: (name.toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,12) + '-' + Math.floor(Math.random()*900+100)),
                 is_active: body.isActive !== false,
                 features: Array.isArray(body.features) ? body.features : [],
                 terms_and_conditions: body.termsAndConditions || null,
