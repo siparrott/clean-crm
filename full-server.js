@@ -1571,15 +1571,26 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   
-  // Health check
+  // Health check (enhanced with DB + SMTP)
   if (pathname === '/healthz') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      status: 'ONLINE',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      database: 'Neon PostgreSQL (ready)'
-    }));
+    try {
+      const { db } = require('./lib/db');
+      const { assertMailer } = require('./lib/mailer');
+      let dbOk = null;
+      try {
+        const r = await db('select now() as ts');
+        dbOk = r?.rows?.[0]?.ts || true;
+      } catch (e) {
+        dbOk = false;
+      }
+      let smtpOk = true;
+      try { await assertMailer(); } catch { smtpOk = false; }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, db: dbOk, smtp: smtpOk ? 'ok' : 'fail' }));
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, db: 'unknown', smtp: 'unknown' }));
+    }
     return;
   }
   
@@ -1789,6 +1800,38 @@ const server = http.createServer(async (req, res) => {
   
   // API endpoints
   if (pathname.startsWith('/api/')) {
+    // Admin debug: ping-db
+    if (pathname === '/api/admin/ping-db' && req.method === 'GET') {
+      try {
+        const { db } = require('./lib/db');
+        const r = await db('select current_database() as db, now() as ts');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, info: r.rows?.[0] || null }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+      return;
+    }
+
+    // Admin debug: test-email
+    if (pathname === '/api/admin/test-email' && req.method === 'POST') {
+      try {
+        let raw = ''; req.on('data', c => raw += c); await new Promise(r => req.on('end', r));
+        const body = raw ? JSON.parse(raw) : {};
+        const { mailer } = require('./lib/mailer');
+        const { ENV } = require('./lib/env');
+        const to = String(body.to || ENV?.SMTP_USER || ENV?.EMAIL_FROM || '').trim();
+        const tx = mailer();
+        await tx.sendMail({ from: (ENV && (ENV.EMAIL_FROM || ENV.SMTP_USER)) || 'no-reply@newagefotografie.com', to: to || 'hallo@newagefotografie.com', subject: 'New Age Fotografie – SMTP test', text: 'If you received this, your SMTP is working.' });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, to: to || 'default' }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+      return;
+    }
     // Simple image upload stub for admin UI (returns placeholder URL)
     if (pathname === '/api/upload/image' && req.method === 'POST') {
       if (!requireAdminToken(req, res)) return;
