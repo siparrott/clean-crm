@@ -39,7 +39,7 @@ const VouchersPage: React.FC = () => {
       description: t('home.familyShootingDescription'),
       originalPrice: 295,
       price: 195,
-      image: 'https://i.imgur.com/4m5hoL9.jpg',
+      image: 'https://i.postimg.cc/bw7ZyvPK/Familienfotoshooting-im-Fotostudio-Wien-Krexner-2777.jpg',
       category: 'family',
       route: '/gutschein/family'
     },

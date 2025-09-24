@@ -1,5 +1,6 @@
 import React from "react";
 import "@/styles/naf-hero-deals.css";
+import { useLanguage } from "@/context/LanguageContext";
 
 type AnyObj = Record<string, any>;
 
@@ -42,20 +43,29 @@ function normalize(item: AnyObj) {
   return { id, imageUrl, title, url, price, compareAt, ribbonText: ribbon, dataVoucherId: dataId, subtitle };
 }
 
-function pctSave(price: number, compareAt?: number) {
+function pctSave(price: number, compareAt: number | undefined, language: 'en' | 'de') {
   if (!compareAt || compareAt <= price) return null;
-  return `${Math.round(((compareAt - price) / compareAt) * 100)}% SPAREN`;
+  const pct = Math.round(((compareAt - price) / compareAt) * 100);
+  const suffix = language === 'de' ? 'SPAREN' : 'OFF';
+  return `${pct}% ${suffix}`;
 }
 
 export default function HeroDealsAuto({ items }: { items: AnyObj[] }) {
+  const { t, language } = useLanguage();
   const top3 = (items || []).slice(0, 3).map(normalize).filter(v => v.imageUrl && v.title && v.url);
   if (!top3.length) return null;
+
+  const formatter = new Intl.NumberFormat(language === 'de' ? 'de-AT' : 'en-AT', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+  });
 
   return (
     <section className="naf-hero-wrap" aria-label="Top vouchers">
       <div className="naf-hero-grid">
         {top3.map(v => {
-          const save = pctSave(v.price, v.compareAt);
+          const save = pctSave(v.price, v.compareAt, language);
           return (
             <article key={v.id} className="naf-card">
               <div className="naf-card-media">
@@ -66,13 +76,13 @@ export default function HeroDealsAuto({ items }: { items: AnyObj[] }) {
                 <h3 className="naf-title">{v.title}</h3>
                 {v.subtitle && <p className="naf-sub">{v.subtitle}</p>}
                 <div className="naf-price-row">
-                  {v.compareAt ? <span className="naf-old">€{v.compareAt.toFixed(2)}</span> : null}
-                  <span className="naf-new">€{v.price.toFixed(2)}</span>
+                  {v.compareAt ? <span className="naf-old">{formatter.format(v.compareAt)}</span> : null}
+                  <span className="naf-new">{formatter.format(v.price)}</span>
                   {save && <span className="naf-save">{save}</span>}
                 </div>
                 <div className="naf-cta-row">
-                  <a href={v.url} className="naf-btn book-button" data-voucher-id={v.dataVoucherId}>
-                    Book Now
+                  <a href={v.url} className="naf-btn book-button" data-voucher-id={v.dataVoucherId} aria-label={t('home.bookNowButton')}>
+                    {t('home.bookNowButton')}
                   </a>
                 </div>
               </div>
