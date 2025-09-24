@@ -214,7 +214,7 @@ const VouchersPage: React.FC = () => {
                       {/* Price and Button */}
                       <div className="flex justify-between items-center">
                         <div className="flex flex-col">
-                          <span className="text-lg text-gray-500 line-through">€{voucher.originalPrice}</span>
+                          <span className="text-sm text-gray-500 uppercase tracking-wide">{language === 'de' ? 'AB' : 'FROM'}</span>
                           <span className="text-2xl font-bold text-purple-600">€{voucher.price}</span>
                         </div>
                         <button 

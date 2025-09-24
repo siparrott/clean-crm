@@ -10,10 +10,11 @@
 .naf-card-body{padding:14px 16px 16px}
 .naf-title{font-weight:700;color:var(--naf-text);margin:0 0 8px;line-height:1.3;font-size:16px}
 .naf-sub{color:var(--naf-muted);font-size:14px;margin:0 0 10px;line-height:1.4}
-.naf-price-row{display:flex;align-items:center;gap:10px;margin:8px 0 10px}
+.naf-price-row{display:flex;align-items:center;gap:8px;margin:8px 0 10px}
 .naf-old{color:var(--naf-muted);text-decoration:line-through}
 .naf-new{color:var(--naf-brand);font-weight:800;font-size:18px}
-.naf-save{background:var(--naf-saving);color:#fff;font-weight:700;font-size:12px;padding:4px 8px;border-radius:8px}
+.naf-save{display:none}
+.naf-from{color:var(--naf-muted);font-weight:700;font-size:12px;letter-spacing:.03em}
 .naf-meta{display:flex;align-items:center;gap:10px;color:var(--naf-muted);font-size:13px}
 .naf-cta-row{display:flex;justify-content:flex-end;margin-top:12px}
 .naf-btn{background:var(--naf-brand);color:#fff;border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;text-decoration:none}

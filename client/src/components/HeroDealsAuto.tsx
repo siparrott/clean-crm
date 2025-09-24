@@ -65,7 +65,6 @@ export default function HeroDealsAuto({ items }: { items: AnyObj[] }) {
     <section className="naf-hero-wrap" aria-label="Top vouchers">
       <div className="naf-hero-grid">
         {top3.map(v => {
-          const save = pctSave(v.price, v.compareAt, language);
           return (
             <article key={v.id} className="naf-card">
               <div className="naf-card-media">
@@ -76,9 +75,8 @@ export default function HeroDealsAuto({ items }: { items: AnyObj[] }) {
                 <h3 className="naf-title">{v.title}</h3>
                 {v.subtitle && <p className="naf-sub">{v.subtitle}</p>}
                 <div className="naf-price-row">
-                  {v.compareAt ? <span className="naf-old">{formatter.format(v.compareAt)}</span> : null}
+                  <span className="naf-from">{language === 'de' ? 'AB' : 'FROM'}</span>
                   <span className="naf-new">{formatter.format(v.price)}</span>
-                  {save && <span className="naf-save">{save}</span>}
                 </div>
                 <div className="naf-cta-row">
                   <a href={v.url} className="naf-btn book-button" data-voucher-id={v.dataVoucherId} aria-label={t('home.bookNowButton')}>
