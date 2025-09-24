@@ -553,6 +553,42 @@ function formatDeDateTime(d) {
   }
 }
 
+// Map DB voucher product row (snake_case) to camelCase expected by admin UI
+function mapVoucherProduct(row) {
+  if (!row) return row;
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description || null,
+    price: row.price != null ? Number(row.price) : null,
+    originalPrice: row.original_price != null ? Number(row.original_price) : null,
+    category: row.category || null,
+    type: row.type || 'voucher',
+    sku: row.sku || null,
+    isActive: row.is_active !== false,
+    features: Array.isArray(row.features) ? row.features : [],
+    termsAndConditions: row.terms_and_conditions || null,
+    validityPeriod: row.validity_period != null ? Number(row.validity_period) : null,
+    displayOrder: row.display_order != null ? Number(row.display_order) : 0,
+    imageUrl: row.image_url || null,
+    thumbnailUrl: row.thumbnail_url || null,
+    metadata: row.metadata || {},
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function requireAdminToken(req, res) {
+  const token = req.headers['x-admin-token'] || req.headers['x_admin_token'];
+  const expected = process.env.ADMIN_TOKEN || process.env.SECRET_ADMIN_TOKEN;
+  if (!expected || token !== expected) {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Unauthorized' }));
+    return false;
+  }
+  return true;
+}
+
 // ===== Voucher Sales schema bootstrap (minimal for admin listing) =====
 let __voucherSalesEnsured = false;
 async function ensureVoucherSalesSchema() {
@@ -1527,7 +1563,7 @@ const server = http.createServer(async (req, res) => {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-admin-token, X-Admin-Token');
   
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
@@ -1755,6 +1791,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname.startsWith('/api/')) {
     // Simple image upload stub for admin UI (returns placeholder URL)
     if (pathname === '/api/upload/image' && req.method === 'POST') {
+      if (!requireAdminToken(req, res)) return;
       try {
         const seed = crypto.randomBytes(6).toString('hex');
         const url = `https://picsum.photos/seed/${seed}/640/480`;
@@ -4124,7 +4161,7 @@ const server = http.createServer(async (req, res) => {
           console.log('📦 Fetching voucher products...');
           const products = await database.getVoucherProducts();
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(products));
+          res.end(JSON.stringify((products || []).map(mapVoucherProduct)));
         } catch (error) {
           console.error('❌ Voucher products API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -4144,7 +4181,7 @@ const server = http.createServer(async (req, res) => {
             return;
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(product));
+          res.end(JSON.stringify(mapVoucherProduct(product)));
         } catch (error) {
           console.error('❌ Voucher product API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -4155,6 +4192,7 @@ const server = http.createServer(async (req, res) => {
 
       // Create voucher product
       if (pathname === '/api/vouchers/products' && req.method === 'POST') {
+        if (!requireAdminToken(req, res)) return;
         try {
           let raw = '';
           req.on('data', c => raw += c.toString());
@@ -4187,7 +4225,7 @@ const server = http.createServer(async (req, res) => {
               };
               const created = await database.createVoucherProduct(productPayload);
               res.writeHead(201, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify(created));
+              res.end(JSON.stringify(mapVoucherProduct(created)));
             } catch (e) {
               console.error('❌ Create voucher product error:', e.message);
               res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -4203,6 +4241,7 @@ const server = http.createServer(async (req, res) => {
 
       // Update voucher product
       if (pathname.startsWith('/api/vouchers/products/') && req.method === 'PUT') {
+        if (!requireAdminToken(req, res)) return;
         try {
           const id = pathname.split('/').pop();
           let raw = '';
@@ -4229,7 +4268,7 @@ const server = http.createServer(async (req, res) => {
               };
               const updated = await database.updateVoucherProduct(id, updatePayload);
               res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify(updated));
+              res.end(JSON.stringify(mapVoucherProduct(updated)));
             } catch (e) {
               console.error('❌ Update voucher product error:', e.message);
               res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -4245,6 +4284,7 @@ const server = http.createServer(async (req, res) => {
 
       // Delete voucher product
       if (pathname.startsWith('/api/vouchers/products/') && req.method === 'DELETE') {
+        if (!requireAdminToken(req, res)) return;
         try {
           const id = pathname.split('/').pop();
           const deleted = await database.deleteVoucherProduct(id);
@@ -4259,6 +4299,7 @@ const server = http.createServer(async (req, res) => {
 
       // Public coupons list for admin UI (merged DB/env/fallback)
       if (pathname === '/api/vouchers/coupons' && req.method === 'GET') {
+        if (!requireAdminToken(req, res)) return;
         try {
           await refreshDbCoupons();
           const coupons = getCoupons();
@@ -4289,6 +4330,7 @@ const server = http.createServer(async (req, res) => {
 
       // Create coupon (simple)
       if (pathname === '/api/vouchers/coupons' && req.method === 'POST') {
+        if (!requireAdminToken(req, res)) return;
         try {
           if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
           let raw = '';
@@ -4338,8 +4380,79 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // Update coupon by id or code
+      if (pathname.startsWith('/api/vouchers/coupons/') && req.method === 'PUT') {
+        if (!requireAdminToken(req, res)) return;
+        try {
+          if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+          const ident = pathname.split('/').pop();
+          let raw = '';
+          req.on('data', c => raw += c.toString());
+          req.on('end', async () => {
+            try {
+              const body = raw ? JSON.parse(raw) : {};
+              const code = String(body.code || '').trim();
+              const discountType = String(body.discountType || 'percentage');
+              const value = Number(body.discountValue || 0);
+              const type = discountType === 'fixed_amount' ? 'amount' : 'percentage';
+              const percent = type === 'percentage' ? value : null;
+              const amount = type === 'amount' ? value : null;
+              const allowed = body.applicableProductSlug ? [String(body.applicableProductSlug)] : (Array.isArray(body.applicable_products) ? body.applicable_products : (Array.isArray(body.allowed_skus) ? body.allowed_skus : []));
+              const starts_at = body.startDate ? new Date(body.startDate) : null;
+              const ends_at = body.endDate ? new Date(body.endDate) : null;
+              const is_active = body.isActive !== false;
+              const sqlText = `
+                UPDATE discount_coupons SET
+                  code = COALESCE($2, code),
+                  type = $3,
+                  percent = $4,
+                  amount = $5,
+                  allowed_skus = $6,
+                  starts_at = $7,
+                  ends_at = $8,
+                  is_active = $9,
+                  updated_at = NOW()
+                WHERE id = $1 OR code = $1
+                RETURNING *`;
+              const rows = await sql(sqlText, [ident, code || null, type, percent, amount, JSON.stringify(allowed || []), starts_at, ends_at, is_active]);
+              await refreshDbCoupons();
+              forceRefreshCoupons();
+              res.writeHead(rows?.length ? 200 : 404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(rows?.[0] ? { success: true } : { error: 'Not found' }));
+            } catch (e) {
+              console.error('❌ Update coupon error:', e.message);
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Invalid payload' }));
+            }
+          });
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+
+      // Delete coupon by id or code
+      if (pathname.startsWith('/api/vouchers/coupons/') && req.method === 'DELETE') {
+        if (!requireAdminToken(req, res)) return;
+        try {
+          if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+          const ident = pathname.split('/').pop();
+          const del = await sql`DELETE FROM discount_coupons WHERE id = ${ident} OR code = ${ident} RETURNING id`;
+          await refreshDbCoupons();
+          forceRefreshCoupons();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, deleted: del?.[0]?.id || ident }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+      }
+
       // Voucher sales list for admin UI
       if (pathname === '/api/vouchers/sales' && req.method === 'GET') {
+        if (!requireAdminToken(req, res)) return;
         try {
           if (!sql) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify([])); return; }
           await ensureVoucherSalesSchema();

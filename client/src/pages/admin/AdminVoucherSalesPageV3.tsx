@@ -84,6 +84,11 @@ export default function AdminVoucherSalesPageV3() {
 
   const queryClient = useQueryClient();
 
+  // Admin token helper (read fresh from localStorage each call)
+  const getAdminToken = () => (typeof window !== 'undefined' ? (localStorage.getItem('ADMIN_TOKEN') || '') : '');
+  const withAdminJsonHeaders = () => ({ 'Content-Type': 'application/json', 'x-admin-token': getAdminToken() });
+  const withAdminHeaders = () => ({ 'x-admin-token': getAdminToken() });
+
   // State for image upload
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -140,10 +145,20 @@ export default function AdminVoucherSalesPageV3() {
 
   const { data: discountCoupons, isLoading: isLoadingCoupons } = useQuery<DiscountCoupon[]>({
     queryKey: ['/api/vouchers/coupons'],
+    queryFn: async () => {
+      const response = await fetch('/api/vouchers/coupons', { headers: withAdminHeaders() });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return response.json();
+    },
   });
 
   const { data: voucherSales, isLoading: isLoadingSales } = useQuery<VoucherSale[]>({
     queryKey: ['/api/vouchers/sales'],
+    queryFn: async () => {
+      const response = await fetch('/api/vouchers/sales', { headers: withAdminHeaders() });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return response.json();
+    },
   });
 
   // Calculate statistics
@@ -161,7 +176,7 @@ export default function AdminVoucherSalesPageV3() {
     mutationFn: async (data: VoucherProductFormData) => {
       const response = await fetch("/api/vouchers/products", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withAdminJsonHeaders(),
         body: JSON.stringify({
           ...data,
           price: data.price,
@@ -195,7 +210,7 @@ export default function AdminVoucherSalesPageV3() {
     mutationFn: async (data: VoucherProductFormData & { id: string }) => {
       const response = await fetch(`/api/vouchers/products/${data.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: withAdminJsonHeaders(),
         body: JSON.stringify({
           ...data,
           price: data.price,
@@ -224,7 +239,7 @@ export default function AdminVoucherSalesPageV3() {
     mutationFn: async (data: DiscountCouponFormData) => {
       const response = await fetch("/api/vouchers/coupons", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withAdminJsonHeaders(),
         body: JSON.stringify({
           ...data,
           discountValue: data.discountValue,
@@ -249,6 +264,35 @@ export default function AdminVoucherSalesPageV3() {
     },
   });
 
+  const updateCouponMutation = useMutation({
+    mutationFn: async (payload: DiscountCouponFormData & { id: string }) => {
+      const response = await fetch(`/api/vouchers/coupons/${payload.id}`, {
+        method: 'PUT',
+        headers: withAdminJsonHeaders(),
+        body: JSON.stringify({
+          ...payload,
+          discountValue: payload.discountValue,
+          minOrderAmount: payload.minOrderAmount || undefined,
+          maxDiscountAmount: payload.maxDiscountAmount || undefined,
+          usageLimit: payload.usageLimit ? parseInt(payload.usageLimit) : undefined,
+          applicableProductSlug: payload.applicableProductSlug || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to update coupon');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vouchers/coupons"] });
+      setIsCouponDialogOpen(false);
+      setSelectedCoupon(null);
+      couponForm.reset();
+      alert('Discount coupon updated successfully!');
+    },
+    onError: () => {
+      alert('Failed to update discount coupon');
+    }
+  });
+
   // Image upload handler
   const handleImageUpload = async (file: File) => {
     if (!file) return;
@@ -260,6 +304,7 @@ export default function AdminVoucherSalesPageV3() {
       
       const response = await fetch('/api/upload/image', {
         method: 'POST',
+        headers: withAdminHeaders(),
         body: formData,
       });
       
@@ -303,6 +348,7 @@ export default function AdminVoucherSalesPageV3() {
     mutationFn: async (id: string) => {
       const response = await fetch(`/api/vouchers/products/${id}`, {
         method: "DELETE",
+        headers: withAdminHeaders(),
       });
       if (!response.ok) throw new Error("Failed to delete product");
       return response.json();
@@ -353,7 +399,7 @@ export default function AdminVoucherSalesPageV3() {
 
   const handleCouponSubmit = (data: DiscountCouponFormData) => {
     if (selectedCoupon) {
-      // updateCouponMutation.mutate({ ...data, id: selectedCoupon.id });
+      updateCouponMutation.mutate({ ...data, id: selectedCoupon.id });
     } else {
       createCouponMutation.mutate(data);
     }
@@ -1252,7 +1298,7 @@ const CouponDialog: React.FC<{
               <Input 
                 id="code" 
                 placeholder="e.g., WELCOME15"
-                defaultValue={coupon?.code || ''}
+                {...form.register('code')}
               />
             </div>
             <div className="space-y-2">
@@ -1260,7 +1306,7 @@ const CouponDialog: React.FC<{
               <Input 
                 id="coupon-name" 
                 placeholder="e.g., Welcome Discount"
-                defaultValue={coupon?.name || ''}
+                {...form.register('name')}
               />
             </div>
           </div>
@@ -1270,13 +1316,16 @@ const CouponDialog: React.FC<{
               id="coupon-description" 
               placeholder="Describe this discount offer..."
               rows={2}
-              defaultValue={coupon?.description || ''}
+              {...form.register('description')}
             />
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="discount-type">Discount Type</Label>
-              <Select defaultValue={coupon?.discountType || 'percentage'}>
+              <Select 
+                value={form.watch('discountType') || 'percentage'}
+                onValueChange={(val) => form.setValue('discountType', val)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
@@ -1292,7 +1341,7 @@ const CouponDialog: React.FC<{
                 id="discount-value" 
                 type="number" 
                 placeholder="15"
-                defaultValue={coupon?.discountValue || ''}
+                {...form.register('discountValue')}
               />
             </div>
             <div className="space-y-2">
@@ -1301,7 +1350,7 @@ const CouponDialog: React.FC<{
                 id="min-order" 
                 type="number" 
                 placeholder="100"
-                defaultValue={coupon?.minOrderAmount || ''}
+                {...form.register('minOrderAmount')}
               />
             </div>
           </div>
@@ -1335,13 +1384,14 @@ const CouponDialog: React.FC<{
                 id="usage-limit" 
                 type="number" 
                 placeholder="100"
-                defaultValue={coupon?.usageLimit || ''}
+                {...form.register('usageLimit')}
               />
             </div>
             <div className="space-y-2 flex items-center space-x-2 pt-6">
               <Switch 
                 id="coupon-active" 
-                defaultChecked={coupon?.isActive ?? true}
+                checked={!!form.watch('isActive')}
+                onCheckedChange={(val) => form.setValue('isActive', val)}
               />
               <Label htmlFor="coupon-active">Active</Label>
             </div>
