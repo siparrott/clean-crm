@@ -161,6 +161,68 @@ async function ensureLeadsSchema() {
   }
 }
 
+// Helper: insert a lead into unified leads table and send notifications
+async function insertLeadAndNotify({ req, formType, fullName = null, email, phone = null, preferredDate = null, message = null, consent = false, sourcePath = null }) {
+  if (!sql) throw new Error('Database not available');
+  await ensureLeadsSchema();
+  // Capture client details
+  let ip = req?.headers?.['x-forwarded-for'] || req?.socket?.remoteAddress || '';
+  if (Array.isArray(ip)) ip = ip[0] || '';
+  if (typeof ip === 'string' && ip.includes(',')) ip = ip.split(',')[0].trim();
+  const userAgent = String(req?.headers?.['user-agent'] || '');
+  const src = typeof sourcePath === 'string' && sourcePath ? sourcePath : (req?.headers?.referer || '');
+
+  const rows = await sql`
+    INSERT INTO leads(form_type, full_name, email, phone, preferred_date, message, consent, source_path, user_agent, ip, meta, status)
+    VALUES (${formType}, ${fullName}, ${email}, ${phone}, ${preferredDate}, ${message}, ${!!consent}, ${src}, ${userAgent}, ${ip}, ${JSON.stringify({})}, 'new')
+    RETURNING id
+  `;
+
+  // Best-effort emails (studio and optional acknowledgement)
+  try {
+    const nodemailer = require('nodemailer');
+    const tx = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      secure: false,
+      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+      tls: { rejectUnauthorized: false }
+    });
+    const studioTo = (process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com').trim();
+    if (studioTo) {
+      const lines = [
+        `Form: ${formType}`,
+        `Name: ${fullName || '-'}`,
+        `Email: ${email}`,
+        `Phone: ${phone || '-'}`,
+        `Preferred Date: ${preferredDate || '-'}`,
+        `Message: ${message || '-'}`,
+        `Consent: ${consent ? 'yes' : 'no'}`,
+        `Source: ${src}`,
+        `IP: ${ip}`,
+      ];
+      await tx.sendMail({
+        from: process.env.FROM_EMAIL || process.env.SMTP_USER || 'hallo@newagefotografie.com',
+        to: studioTo,
+        subject: '📥 New Lead received',
+        text: lines.join('\n')
+      });
+    }
+    if (email && (formType === 'waitlist' || formType === 'contact')) {
+      await tx.sendMail({
+        from: process.env.FROM_EMAIL || process.env.SMTP_USER || 'hallo@newagefotografie.com',
+        to: email,
+        subject: 'Thanks — we’ve received your message ✅',
+        html: `<div style="font-family:system-ui;line-height:1.55"><p>Hi ${fullName || ''}</p><p>Thanks for reaching out to New Age Fotografie. We’ll get back to you shortly.</p><p>– New Age Fotografie</p></div>`
+      });
+    }
+  } catch (mailErr) {
+    console.warn('⚠️ Lead email notification failed:', mailErr.message);
+  }
+
+  return { id: rows[0]?.id };
+}
+
 // ===== CRM Clients schema ensure =====
 let __crmClientsEnsured = false;
 async function ensureCrmClientsSchema() {
@@ -703,6 +765,52 @@ async function handleGalleryAPI(req, res, pathname, query) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Database not available' }));
     return;
+  }
+
+  // Ensure required gallery tables exist (idempotent, protects after migrations)
+  try {
+    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS galleries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title TEXT NOT NULL,
+        slug TEXT UNIQUE,
+        description TEXT,
+        cover_image TEXT,
+        is_public BOOLEAN DEFAULT true,
+        is_password_protected BOOLEAN DEFAULT false,
+        password TEXT,
+        client_id TEXT,
+        created_by TEXT,
+        sort_order INTEGER DEFAULT 0,
+        download_enabled BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS gallery_images (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        gallery_id TEXT NOT NULL,
+        filename TEXT,
+        url TEXT,
+        title TEXT,
+        description TEXT,
+        sort_order INTEGER DEFAULT 0,
+        metadata JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS gallery_access_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        gallery_id TEXT NOT NULL,
+        visitor_email TEXT,
+        visitor_name TEXT,
+        ip_address INET,
+        user_agent TEXT,
+        accessed_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+  } catch (e) {
+    console.warn('⚠️ Gallery schema ensure failed:', e.message);
   }
 
   // Parse the pathname to get the specific endpoint
@@ -3059,202 +3167,115 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
-      // Contact form submission endpoint
+      // Contact form submission endpoint (compat shim -> unified leads)
       if (pathname === '/api/contact' && req.method === 'POST') {
         try {
           let body = '';
           req.on('data', chunk => { body += chunk.toString(); });
           req.on('end', async () => {
             try {
-              const { fullName, email, phone, message } = JSON.parse(body);
-              
+              const { fullName, email, phone, message, consent, sourcePath } = JSON.parse(body || '{}');
               console.log('📞 New contact form submission:', { fullName, email, phone });
-              
-              // Create lead in database
-              const leadData = {
-                name: fullName,
-                email: email,
-                phone: phone,
-                source: 'contact_form',
-                status: 'new',
-                notes: message,
-                created_at: new Date().toISOString()
-              };
-              
-              // Store lead in database
-              await sql`
-                INSERT INTO leads (name, email, phone, source, status, notes, created_at)
-                VALUES (${leadData.name}, ${leadData.email}, ${leadData.phone}, ${leadData.source}, ${leadData.status}, ${leadData.notes}, ${leadData.created_at})
-              `;
-              
-              console.log('✅ Lead created successfully for contact form submission');
-              
-              // Send notification email to hallo@newagefotografie.com
-              const notificationEmailData = {
-                to: 'hallo@newagefotografie.com',
-                subject: `Neue Kontaktanfrage von ${fullName}`,
-                html: `
-                  <h2>Neue Kontaktanfrage</h2>
-                  <p><strong>Name:</strong> ${fullName}</p>
-                  <p><strong>E-Mail:</strong> ${email}</p>
-                  <p><strong>Telefon:</strong> ${phone}</p>
-                  <p><strong>Nachricht:</strong></p>
-                  <p>${message}</p>
-                  <p><em>Eingegangen am: ${new Date().toLocaleString('de-DE')}</em></p>
-                `,
-                text: `Neue Kontaktanfrage von ${fullName}\n\nE-Mail: ${email}\nTelefon: ${phone}\n\nNachricht:\n${message}\n\nEingegangen am: ${new Date().toLocaleString('de-DE')}`
-              };
-              
-              await database.sendEmail(notificationEmailData);
-              console.log('📧 Contact form notification email sent to hallo@newagefotografie.com');
-              
+              if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Valid email is required' }));
+                return;
+              }
+              if (!fullName) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'fullName is required' }));
+                return;
+              }
+              await insertLeadAndNotify({ req, formType: 'contact', fullName, email, phone, message, consent, sourcePath });
               res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ 
-                success: true, 
-                message: 'Kontaktformular erfolgreich übermittelt' 
-              }));
+              res.end(JSON.stringify({ success: true, message: 'Kontaktformular erfolgreich übermittelt' }));
             } catch (error) {
               console.error('❌ Contact form submission error:', error.message);
               res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Fehler beim Übermitteln des Kontaktformulars' }));
+              res.end(JSON.stringify({ success: false, error: 'Fehler beim Übermitteln des Kontaktformulars' }));
             }
           });
         } catch (error) {
           console.error('❌ Contact form API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'API-Fehler' }));
+          res.end(JSON.stringify({ success: false, error: 'API-Fehler' }));
         }
         return;
       }
       
-      // Waitlist (Warteliste) form submission endpoint  
+      // Waitlist (Warteliste) form submission endpoint (compat shim -> unified leads)
       if (pathname === '/api/waitlist' && req.method === 'POST') {
         try {
           let body = '';
           req.on('data', chunk => { body += chunk.toString(); });
           req.on('end', async () => {
             try {
-              const { fullName, email, phone, preferredDate, message } = JSON.parse(body);
-              
+              const { fullName, email, phone, preferredDate, message, consent, sourcePath } = JSON.parse(body || '{}');
               console.log('📅 New waitlist submission:', { fullName, email, phone, preferredDate });
-              
-              // Create lead in database
-              const leadData = {
-                name: fullName,
-                email: email,
-                phone: phone,
-                source: 'warteliste',
-                status: 'new',
-                notes: `Bevorzugtes Datum: ${preferredDate}${message ? '\n\nNachricht: ' + message : ''}`,
-                created_at: new Date().toISOString()
-              };
-              
-              // Store lead in database
-              await sql`
-                INSERT INTO leads (name, email, phone, source, status, notes, created_at)
-                VALUES (${leadData.name}, ${leadData.email}, ${leadData.phone}, ${leadData.source}, ${leadData.status}, ${leadData.notes}, ${leadData.created_at})
-              `;
-              
-              console.log('✅ Lead created successfully for waitlist submission');
-              
-              // Send notification email to hallo@newagefotografie.com
-              const notificationEmailData = {
-                to: 'hallo@newagefotografie.com',
-                subject: `Neue Warteliste-Anfrage von ${fullName}`,
-                html: `
-                  <h2>Neue Warteliste-Anfrage</h2>
-                  <p><strong>Name:</strong> ${fullName}</p>
-                  <p><strong>E-Mail:</strong> ${email}</p>
-                  <p><strong>Telefon:</strong> ${phone}</p>
-                  <p><strong>Bevorzugtes Datum:</strong> ${preferredDate}</p>
-                  ${message ? `<p><strong>Nachricht:</strong></p><p>${message}</p>` : ''}
-                  <p><em>Eingegangen am: ${new Date().toLocaleString('de-DE')}</em></p>
-                `,
-                text: `Neue Warteliste-Anfrage von ${fullName}\n\nE-Mail: ${email}\nTelefon: ${phone}\nBevorzugtes Datum: ${preferredDate}${message ? '\n\nNachricht:\n' + message : ''}\n\nEingegangen am: ${new Date().toLocaleString('de-DE')}`
-              };
-              
-              await database.sendEmail(notificationEmailData);
-              console.log('📧 Waitlist notification email sent to hallo@newagefotografie.com');
-              
+              if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Valid email is required' }));
+                return;
+              }
+              if (!fullName) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'fullName is required' }));
+                return;
+              }
+              await insertLeadAndNotify({ req, formType: 'waitlist', fullName, email, phone, preferredDate, message, consent, sourcePath });
               res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ 
-                success: true, 
-                message: 'Warteliste-Anfrage erfolgreich übermittelt' 
-              }));
+              res.end(JSON.stringify({ success: true, message: 'Warteliste-Anfrage erfolgreich übermittelt' }));
             } catch (error) {
               console.error('❌ Waitlist submission error:', error.message);
               res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Fehler beim Übermitteln der Warteliste-Anfrage' }));
+              res.end(JSON.stringify({ success: false, error: 'Fehler beim Übermitteln der Warteliste-Anfrage' }));
             }
           });
         } catch (error) {
           console.error('❌ Waitlist API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'API-Fehler' }));
+          res.end(JSON.stringify({ success: false, error: 'API-Fehler' }));
         }
         return;
       }
       
-      // Newsletter signup endpoint
+      // Newsletter signup endpoint (compat shim -> unified leads)
       if (pathname === '/api/newsletter/signup' && req.method === 'POST') {
         try {
           let body = '';
           req.on('data', chunk => { body += chunk.toString(); });
           req.on('end', async () => {
             try {
-              const { email } = JSON.parse(body);
-              
+              const { email, consent, sourcePath } = JSON.parse(body || '{}');
               console.log('📧 New newsletter signup:', { email });
-              
-              // Create lead in database
-              const leadData = {
-                name: 'Newsletter Subscriber',
-                email: email,
-                phone: '',
-                source: 'newsletter',
-                status: 'new',
-                notes: 'Newsletter subscription',
-                created_at: new Date().toISOString()
-              };
-              
-              // Store lead in database
-              await sql`
-                INSERT INTO leads (name, email, phone, source, status, notes, created_at)
-                VALUES (${leadData.name}, ${leadData.email}, ${leadData.phone}, ${leadData.source}, ${leadData.status}, ${leadData.notes}, ${leadData.created_at})
-              `;
-              
-              console.log('✅ Lead created successfully for newsletter signup');
-              
-              // Send notification email to hallo@newagefotografie.com
-              const notificationEmailData = {
-                to: 'hallo@newagefotografie.com',
-                subject: `Neue Newsletter-Anmeldung: ${email}`,
-                html: `
-                  <h2>Neue Newsletter-Anmeldung</h2>
-                  <p><strong>E-Mail:</strong> ${email}</p>
-                  <p><em>Angemeldet am: ${new Date().toLocaleString('de-DE')}</em></p>
-                `,
-                text: `Neue Newsletter-Anmeldung\n\nE-Mail: ${email}\n\nAngemeldet am: ${new Date().toLocaleString('de-DE')}`
-              };
-              
-              await database.sendEmail(notificationEmailData);
-              console.log('📧 Newsletter signup notification email sent to hallo@newagefotografie.com');
-              
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ 
-                success: true, 
-                message: 'Newsletter-Anmeldung erfolgreich' 
-              }));
+              if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Valid email is required' }));
+                return;
+              }
+              try {
+                const { id } = await insertLeadAndNotify({ req, formType: 'newsletter', email, consent, sourcePath });
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, id, message: 'Newsletter-Anmeldung erfolgreich' }));
+              } catch (e) {
+                const msg = String(e?.message || '');
+                if (msg.includes('uniq_newsletter_email')) {
+                  res.writeHead(200, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({ success: true, duplicate: true, message: 'Already subscribed' }));
+                  return;
+                }
+                throw e;
+              }
             } catch (error) {
               console.error('❌ Newsletter signup error:', error.message);
               res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Fehler bei der Newsletter-Anmeldung' }));
+              res.end(JSON.stringify({ success: false, error: 'Fehler bei der Newsletter-Anmeldung' }));
             }
           });
         } catch (error) {
           console.error('❌ Newsletter API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'API-Fehler' }));
+          res.end(JSON.stringify({ success: false, error: 'API-Fehler' }));
         }
         return;
       }
