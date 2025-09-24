@@ -380,6 +380,30 @@ const DEFAULT_FALLBACK_COUPONS = [
     allowedSkus: [
       'maternity-basic', 'family-basic', 'newborn-basic'
     ]
+  },
+  {
+    code: 'CL50',
+    type: 'percentage',
+    percent: 50,
+    allowedSkus: [
+      'maternity-basic', 'family-basic', 'newborn-basic'
+    ]
+  },
+  {
+    code: 'WL50',
+    type: 'percentage',
+    percent: 50,
+    allowedSkus: [
+      'maternity-basic', 'family-basic', 'newborn-basic'
+    ]
+  },
+  {
+    code: 'VW50',
+    type: 'percentage',
+    percent: 50,
+    allowedSkus: [
+      'maternity-basic', 'family-basic', 'newborn-basic'
+    ]
   }
 ];
 
@@ -430,6 +454,20 @@ function findCouponByCode(code) {
   // Also search in fallback if env was present but missing this code
   const fb = DEFAULT_FALLBACK_COUPONS.find(c => String(c.code || '').trim().toUpperCase() === target);
   return fb || null;
+}
+
+// Helper: which coupon codes must only apply to exact €95 voucher items
+function get95OnlyCodes() {
+  const env = (process.env.COUPONS_95_ONLY || '').trim();
+  const base = ['VCWIEN', 'CL50', 'WL50', 'VW50'];
+  if (!env) return new Set(base);
+  // Allow comma-separated list in env to override/extend
+  const fromEnv = env.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  return new Set(fromEnv.length ? fromEnv : base);
+}
+function is95OnlyCode(code) {
+  if (!code) return false;
+  return get95OnlyCodes().has(String(code).toUpperCase());
 }
 
 function isCouponActive(coupon) {
@@ -4940,10 +4978,12 @@ New Age Fotografie Team`;
 
                   // Apply discount only to non-delivery items
                   if (remainingDiscount > 0 && !looksLikeDelivery(item)) {
-                    // For VCWIEN, enforce that item unit price is exactly 9500 cents
-                    const isVCWIEN = String(checkoutData.appliedVoucherCode || '').toUpperCase() === 'VCWIEN';
-                    const vcwienEligible = baseCents === 9500;
-                    if (isVCWIEN && !vcwienEligible) {
+                    // For specific 95-only codes (e.g., VCWIEN, CL50, WL50, VW50),
+                    // enforce that item unit price is exactly 9500 cents
+                    const appliedCode = String(checkoutData.appliedVoucherCode || '').toUpperCase();
+                    const is95Only = is95OnlyCode(appliedCode);
+                    const codeEligible = baseCents === 9500;
+                    if (is95Only && !codeEligible) {
                       // Skip discount for this item
                     } else {
                       const reduceBy = Math.min(unitCents, remainingDiscount);
@@ -5616,8 +5656,8 @@ New Age Fotografie Team`;
                 }
               }
 
-              // Special constraint: VCWIEN only valid for €95 vouchers
-              if (String(code).toUpperCase() === 'VCWIEN' && !hasExact95) {
+              // Special constraint: certain codes only valid for €95 vouchers
+              if (is95OnlyCode(code) && !hasExact95) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ valid: false, error: 'Gutschein nur für 95€ Gutscheine gültig' }));
                 return;
