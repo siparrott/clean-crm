@@ -13,7 +13,8 @@ const createTransporter = () => {
   const useJson = process.env.EMAIL_TRANSPORT === 'json' || process.env.NODE_ENV === 'test';
 
   // If SMTP creds missing, fall back to json transport to avoid runtime failures
-  const hasSmtp = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD;
+  const hasSmtp = !!(process.env.SMTP_HOST && process.env.SMTP_USER && smtpPass);
 
   if (useJson || !hasSmtp) {
     return nodemailer.createTransport({ jsonTransport: true });
@@ -26,7 +27,7 @@ const createTransporter = () => {
     secure,
     auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      pass: smtpPass,
     },
   });
 };
@@ -450,8 +451,9 @@ class QuestionnaireService {
         }).join('\n');
       
       // Studio notification email
+      const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.FROM_EMAIL || 'noreply@newagefotografie.com';
       const studioEmailData = {
-        from: process.env.FROM_EMAIL || 'noreply@newagefotografie.com',
+        from: fromEmail,
         to: process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com',
         subject: `New Questionnaire Response: ${clientName}`,
         html: `
@@ -487,7 +489,7 @@ This questionnaire was submitted via the New Age Fotografie CRM system.
       // Client confirmation email (if email provided)
       if (clientEmail) {
         const clientEmailData = {
-          from: process.env.FROM_EMAIL || 'hallo@newagefotografie.com',
+          from: fromEmail,
           to: clientEmail,
           subject: 'Thank you for your questionnaire response - New Age Fotografie',
           html: `

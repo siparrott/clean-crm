@@ -38,7 +38,7 @@ const VouchersPage: React.FC = () => {
       name: t('home.familyShootingTitle'),
       description: t('home.familyShootingDescription'),
       originalPrice: 295,
-      price: 195,
+      price: 95,
       image: 'https://i.postimg.cc/bw7ZyvPK/Familienfotoshooting-im-Fotostudio-Wien-Krexner-2777.jpg',
       category: 'family',
       route: '/gutschein/family'
@@ -48,7 +48,7 @@ const VouchersPage: React.FC = () => {
       name: t('home.newbornShootingTitle'),
       description: t('home.newbornShootingDescription'),
       originalPrice: 395,
-      price: 295,
+      price: 95,
       image: 'https://i.imgur.com/QWOgLqX.jpg',
       category: 'newborn',
       route: '/gutschein/newborn'

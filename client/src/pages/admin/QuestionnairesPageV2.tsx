@@ -156,6 +156,12 @@ const QuestionnairesPageV2: React.FC = () => {
     fetchSurveys();
   }, []);
 
+  // Auto-load latest responses on initial mount
+  useEffect(() => {
+    handleViewResponses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleAddClick = () => {
     setIsAdding(true);
     setEditingId(null);

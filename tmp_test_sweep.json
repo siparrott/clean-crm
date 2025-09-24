@@ -1,4 +1,4 @@
-[dotenv@17.2.2] injecting env (5) from .env -- tip: ­ƒøá´©Å  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.2.2] injecting env (5) from .env -- tip: ­ƒôí auto-backup env with Radar: https://dotenvx.com/radar
 ­ƒöî Connecting to Neon database...
 Ô£à DATABASE_URL found, creating connection pool...
 Ô£à Neon SQL client initialized
@@ -11,46 +11,46 @@
 ­ƒîÉ Website: http://localhost:0
 ­ƒöî API: http://localhost:0/api/status
 ­ƒôè Health: http://localhost:0/healthz
-Server listening on { address: '0.0.0.0', family: 'IPv4', port: 56601 }
+Server listening on { address: '0.0.0.0', family: 'IPv4', port: 56809 }
 Request: GET /healthz
 Request: POST /api/newsletter/signup
-­ƒôº New newsletter signup: { email: 'qa+1758716934822@example.com' }
+­ƒôº New newsletter signup: { email: 'qa+1758717600992@example.com' }
 Ô£à Database connected successfully
 ­ƒö¿ Initializing database schema...
 Ô£à Loaded 7 coupons from DB
+Ô£à Database schema initialized successfully
 Ô£à Leads schema ensured
 Request: POST /api/contact
 ­ƒô× New contact form submission: {
   fullName: 'QA Tester',
-  email: 'qa+1758716936053@example.com',
+  email: 'qa+1758717602756@example.com',
   phone: '123'
 }
 Request: POST /api/waitlist
 ­ƒôà New waitlist submission: {
   fullName: 'QA Wait',
-  email: 'qa+1758716936119@example.com',
+  email: 'qa+1758717602809@example.com',
   phone: undefined,
   preferredDate: '2025-10-10'
 }
-Ô£à Database schema initialized successfully
 Request: POST /api/galleries
-Request: POST /api/galleries/qa-gallery-q6jk6/auth
-Request: GET /api/galleries/qa-gallery-q6jk6/images
+Request: POST /api/galleries/qa-gallery-54118/auth
+Request: GET /api/galleries/qa-gallery-54118/images
 No database records found, providing sample images...
 Request: POST /api/admin/create-questionnaire-link
-[dotenv@17.2.2] injecting env (0) from .env -- tip: ­ƒöÉ encrypt with Dotenvx: https://dotenvx.com
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ­ƒôí observe env with Radar: https://dotenvx.com/radar
 Ô£à Questionnaire link created: {
   clientId: 'test-client-123',
-  token: '67ee2bd82ea68b1997644209e6a4aa1215b1c1e65439b25a58cfa96839653928',
-  link: 'http://localhost:3001/q/67ee2bd82ea68b1997644209e6a4aa1215b1c1e65439b25a58cfa96839653928'
+  token: '31c2bc939bbdd812f168d9635a689e2312a22e774e1a7130e04735c12051a8c6',
+  link: 'http://localhost:3001/q/31c2bc939bbdd812f168d9635a689e2312a22e774e1a7130e04735c12051a8c6'
 }
-Request: GET /api/questionnaire/67ee2bd82ea68b1997644209e6a4aa1215b1c1e65439b25a58cfa96839653928
+Request: GET /api/questionnaire/31c2bc939bbdd812f168d9635a689e2312a22e774e1a7130e04735c12051a8c6
 Request: POST /api/email-questionnaire
 ­ƒôº Studio notification email sent
 ­ƒôº Client confirmation email sent
 Ô£à Questionnaire response submitted: {
-  responseId: 'e834b132-7279-41ac-a178-79fec79383a2',
-  token: '67ee2bd82ea68b1997644209e6a4aa1215b1c1e65439b25a58cfa96839653928',
+  responseId: '2fd45aa3-81f7-406c-b770-b260369dac21',
+  token: '31c2bc939bbdd812f168d9635a689e2312a22e774e1a7130e04735c12051a8c6',
   clientName: 'QA User',
   clientEmail: 'qa@example.com'
 }
@@ -59,8 +59,8 @@ Request: POST /api/email-questionnaire
     "status": 200,
     "body": {
       "status": "ONLINE",
-      "timestamp": "2025-09-24T12:28:54.813Z",
-      "uptime": 1.06758,
+      "timestamp": "2025-09-24T12:40:00.988Z",
+      "uptime": 1.3135481,
       "database": "Neon PostgreSQL (ready)"
     }
   },
@@ -68,7 +68,7 @@ Request: POST /api/email-questionnaire
     "status": 200,
     "body": {
       "success": true,
-      "id": "13036a54-0947-41e6-b51b-8d8faded8efb",
+      "id": "52d19603-8a89-4227-984a-20d123000ad4",
       "message": "Newsletter-Anmeldung erfolgreich"
     }
   },
@@ -89,9 +89,9 @@ Request: POST /api/email-questionnaire
   "galleryCreate": {
     "status": 201,
     "body": {
-      "id": "a9b2c6c6-c09d-49cb-8cf4-cd61dfa35c31",
+      "id": "591a9236-f54c-4526-95b9-564bdb0f5152",
       "title": "QA Gallery",
-      "slug": "qa-gallery-q6jk6",
+      "slug": "qa-gallery-54118",
       "description": "Test",
       "cover_image": null,
       "is_public": true,
@@ -100,8 +100,8 @@ Request: POST /api/email-questionnaire
       "client_id": null,
       "created_by": null,
       "sort_order": 0,
-      "created_at": "2025-09-24T10:28:55.819Z",
-      "updated_at": "2025-09-24T10:28:55.819Z",
+      "created_at": "2025-09-24T10:40:02.509Z",
+      "updated_at": "2025-09-24T10:40:02.509Z",
       "client_email": null,
       "download_enabled": true,
       "watermark_enabled": false,
@@ -112,7 +112,7 @@ Request: POST /api/email-questionnaire
   "galleryAuth": {
     "status": 200,
     "body": {
-      "token": "YTliMmM2YzYtYzA5ZC00OWNiLThjZjQtY2Q2MWRmYTM1YzMxOmNsaWVudEBleGFtcGxlLmNvbToxNzU4NzE2OTM2Nzc5"
+      "token": "NTkxYTkyMzYtZjU0Yy00NTI2LTk1YjktNTY0YmRiMGY1MTUyOmNsaWVudEBleGFtcGxlLmNvbToxNzU4NzE3NjAzNDk2"
     }
   },
   "galleryImages": {
@@ -120,7 +120,7 @@ Request: POST /api/email-questionnaire
     "body": [
       {
         "id": "sample-1",
-        "galleryId": "a9b2c6c6-c09d-49cb-8cf4-cd61dfa35c31",
+        "galleryId": "591a9236-f54c-4526-95b9-564bdb0f5152",
         "filename": "mountain_landscape.jpg",
         "originalUrl": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
         "displayUrl": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
@@ -128,7 +128,7 @@ Request: POST /api/email-questionnaire
         "title": "Mountain Vista",
         "description": "Beautiful mountain landscape captured during golden hour",
         "orderIndex": 0,
-        "createdAt": "2025-09-24T12:28:57.154Z",
+        "createdAt": "2025-09-24T12:40:03.812Z",
         "sizeBytes": 2500000,
         "contentType": "image/jpeg",
         "capturedAt": null,
@@ -136,7 +136,7 @@ Request: POST /api/email-questionnaire
       },
       {
         "id": "sample-2",
-        "galleryId": "a9b2c6c6-c09d-49cb-8cf4-cd61dfa35c31",
+        "galleryId": "591a9236-f54c-4526-95b9-564bdb0f5152",
         "filename": "forest_path.jpg",
         "originalUrl": "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
         "displayUrl": "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
@@ -144,7 +144,7 @@ Request: POST /api/email-questionnaire
         "title": "Forest Trail",
         "description": "Peaceful forest path through autumn trees",
         "orderIndex": 1,
-        "createdAt": "2025-09-24T12:28:57.154Z",
+        "createdAt": "2025-09-24T12:40:03.812Z",
         "sizeBytes": 2500000,
         "contentType": "image/jpeg",
         "capturedAt": null,
@@ -152,7 +152,7 @@ Request: POST /api/email-questionnaire
       },
       {
         "id": "sample-3",
-        "galleryId": "a9b2c6c6-c09d-49cb-8cf4-cd61dfa35c31",
+        "galleryId": "591a9236-f54c-4526-95b9-564bdb0f5152",
         "filename": "lake_reflection.jpg",
         "originalUrl": "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
         "displayUrl": "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
@@ -160,7 +160,7 @@ Request: POST /api/email-questionnaire
         "title": "Lake Reflection",
         "description": "Perfect mirror reflection on a calm mountain lake",
         "orderIndex": 2,
-        "createdAt": "2025-09-24T12:28:57.154Z",
+        "createdAt": "2025-09-24T12:40:03.812Z",
         "sizeBytes": 2500000,
         "contentType": "image/jpeg",
         "capturedAt": null,
@@ -168,7 +168,7 @@ Request: POST /api/email-questionnaire
       },
       {
         "id": "sample-4",
-        "galleryId": "a9b2c6c6-c09d-49cb-8cf4-cd61dfa35c31",
+        "galleryId": "591a9236-f54c-4526-95b9-564bdb0f5152",
         "filename": "city_skyline.jpg",
         "originalUrl": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
         "displayUrl": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
@@ -176,7 +176,7 @@ Request: POST /api/email-questionnaire
         "title": "Urban Evening",
         "description": "City skyline illuminated at twilight",
         "orderIndex": 3,
-        "createdAt": "2025-09-24T12:28:57.154Z",
+        "createdAt": "2025-09-24T12:40:03.812Z",
         "sizeBytes": 2500000,
         "contentType": "image/jpeg",
         "capturedAt": null,
@@ -184,7 +184,7 @@ Request: POST /api/email-questionnaire
       },
       {
         "id": "sample-5",
-        "galleryId": "a9b2c6c6-c09d-49cb-8cf4-cd61dfa35c31",
+        "galleryId": "591a9236-f54c-4526-95b9-564bdb0f5152",
         "filename": "coastal_sunset.jpg",
         "originalUrl": "https://images.unsplash.com/photo-1514565131-fce0801e5785?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2156&q=80",
         "displayUrl": "https://images.unsplash.com/photo-1514565131-fce0801e5785?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2156&q=80",
@@ -192,7 +192,7 @@ Request: POST /api/email-questionnaire
         "title": "Coastal Sunset",
         "description": "Golden hour over the ocean coastline",
         "orderIndex": 4,
-        "createdAt": "2025-09-24T12:28:57.154Z",
+        "createdAt": "2025-09-24T12:40:03.812Z",
         "sizeBytes": 2500000,
         "contentType": "image/jpeg",
         "capturedAt": null,
@@ -204,16 +204,16 @@ Request: POST /api/email-questionnaire
     "status": 200,
     "body": {
       "success": true,
-      "token": "67ee2bd82ea68b1997644209e6a4aa1215b1c1e65439b25a58cfa96839653928",
-      "link": "http://localhost:3001/q/67ee2bd82ea68b1997644209e6a4aa1215b1c1e65439b25a58cfa96839653928",
+      "token": "31c2bc939bbdd812f168d9635a689e2312a22e774e1a7130e04735c12051a8c6",
+      "link": "http://localhost:3001/q/31c2bc939bbdd812f168d9635a689e2312a22e774e1a7130e04735c12051a8c6",
       "questionnaire_id": "2f3992e7-be10-471a-b1eb-4f676bc35cf1",
-      "expires_at": "2025-10-24T12:28:57.582Z"
+      "expires_at": "2025-10-24T12:40:04.193Z"
     }
   },
   "qGet": {
     "status": 200,
     "body": {
-      "token": "67ee2bd82ea68b1997644209e6a4aa1215b1c1e65439b25a58cfa96839653928",
+      "token": "31c2bc939bbdd812f168d9635a689e2312a22e774e1a7130e04735c12051a8c6",
       "clientName": "",
       "clientEmail": "",
       "isUsed": false,
@@ -252,7 +252,7 @@ Request: POST /api/email-questionnaire
     "status": 200,
     "body": {
       "success": true,
-      "response_id": "e834b132-7279-41ac-a178-79fec79383a2",
+      "response_id": "2fd45aa3-81f7-406c-b770-b260369dac21",
       "message": "Questionnaire submitted successfully"
     }
   }
