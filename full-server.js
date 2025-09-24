@@ -88,6 +88,22 @@ initializeStripe();
 
 console.log('🚀 Starting PRODUCTION server with Neon database...');
 
+// Cached invoice column detection to avoid per-request information_schema scans
+let __invoiceColsCache = { set: null, ts: 0 };
+async function getInvoiceColumnSet() {
+  try {
+    if (!sql) return new Set();
+    const now = Date.now();
+    if (!__invoiceColsCache.set || (now - __invoiceColsCache.ts) > 60_000) {
+      const rows = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'invoices'`;
+      __invoiceColsCache = { set: new Set(rows.map(r => r.column_name)), ts: now };
+    }
+    return __invoiceColsCache.set;
+  } catch (_) {
+    return new Set();
+  }
+}
+
 // ===== Leads schema bootstrap (compatible with existing table) =====
 let __leadsSchemaEnsured = false;
 async function ensureLeadsSchema() {
@@ -2215,23 +2231,45 @@ const server = http.createServer(async (req, res) => {
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
         const status = String(urlObj.searchParams.get('status') || 'any');
         const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
-        const conds = [];
-        const params = [];
-        let i = 1;
-        if (status !== 'any') { conds.push(`status = $${i++}`); params.push(status); }
-        if (q) { conds.push(`(lower(invoice_no) LIKE $${i} OR lower(client_name) LIKE $${i})`); params.push('%' + q + '%'); i++; }
-        const whereClause = conds.length ? (' WHERE ' + conds.join(' AND ')) : '';
+        // Detect available columns to avoid referencing non-existent ones
+        const colRows = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'invoices'`;
+        const cols = new Set(colRows.map(r => r.column_name));
+
+        const has = (c) => cols.has(c);
+  const invoiceNoExpr = has('invoice_no') ? 'invoice_no' : (has('invoice_number') ? 'invoice_number' : "''");
+  const clientNameExpr = has('client_name') ? 'client_name' : "''";
+  const subtotalExpr = has('subtotal') ? 'subtotal' : (has('subtotal_amount') ? 'subtotal_amount' : '0');
+  const taxExpr = has('tax') ? 'tax' : (has('tax_amount') ? 'tax_amount' : '0');
+  const totalExpr = has('total') ? 'total' : (has('total_amount') ? 'total_amount' : `(${subtotalExpr} + ${taxExpr})`);
+  const currencyExpr = has('currency') ? 'currency' : (has('currency_code') ? 'currency_code' : `'EUR'`);
+  const statusExpr = has('status') ? 'status' : `'draft'`;
+  const issueDateExpr = has('issue_date') ? 'issue_date' : (has('invoice_date') ? 'invoice_date' : 'created_at::date');
+  const dueDateExpr = has('due_date') ? 'due_date' : (has('invoice_due') ? 'invoice_due' : 'created_at::date');
+  const publicIdExpr = has('public_id') ? 'public_id' : '(id::text)';
+  const orderByExpr = has('created_at') ? 'created_at' : (has('updated_at') ? 'updated_at' : 'id');
+
         const query = `
-          SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
+          SELECT
+            id::text               AS id,
+            ${invoiceNoExpr}       AS invoice_no,
+            ${clientNameExpr}      AS client_name,
+            ${subtotalExpr}        AS subtotal,
+            ${taxExpr}             AS tax,
+            ${totalExpr}           AS total,
+            ${currencyExpr}        AS currency,
+            ${statusExpr}          AS status,
+            ${issueDateExpr}       AS issue_date,
+            ${dueDateExpr}         AS due_date,
+            ${publicIdExpr}        AS public_id,
+            ${orderByExpr}         AS created_at
           FROM invoices
-          ${whereClause}
-          ORDER BY created_at DESC
+          ORDER BY ${orderByExpr} DESC
           LIMIT 200`;
-        const rows = await sql(query, params);
+        const rows = await sql(query);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ rows }));
       } catch (e) {
-        console.error('❌ /api/invoices/list error:', e.message);
+        console.error('❌ /api/invoices/list error:', e?.message || e);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'List failed' }));
       }
@@ -2246,24 +2284,46 @@ const server = http.createServer(async (req, res) => {
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
         const status = String(urlObj.searchParams.get('status') || 'any');
         const q = String(urlObj.searchParams.get('q') || '').toLowerCase();
-        const conds = [];
-        const params = [];
-        let i = 1;
-        if (status !== 'any') { conds.push(`status = $${i++}`); params.push(status); }
-        if (q) { conds.push(`(lower(invoice_no) LIKE $${i} OR lower(client_name) LIKE $${i})`); params.push('%' + q + '%'); i++; }
-        const whereClause = conds.length ? (' WHERE ' + conds.join(' AND ')) : '';
+        // Detect available columns to avoid referencing non-existent ones
+        const colRows = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'invoices'`;
+        const cols = new Set(colRows.map(r => r.column_name));
+
+        const has = (c) => cols.has(c);
+  const invoiceNoExpr = has('invoice_no') ? 'invoice_no' : (has('invoice_number') ? 'invoice_number' : "''");
+  const clientNameExpr = has('client_name') ? 'client_name' : "''";
+  const subtotalExpr = has('subtotal') ? 'subtotal' : (has('subtotal_amount') ? 'subtotal_amount' : '0');
+  const taxExpr = has('tax') ? 'tax' : (has('tax_amount') ? 'tax_amount' : '0');
+  const totalExpr = has('total') ? 'total' : (has('total_amount') ? 'total_amount' : `(${subtotalExpr} + ${taxExpr})`);
+  const currencyExpr = has('currency') ? 'currency' : (has('currency_code') ? 'currency_code' : `'EUR'`);
+  const statusExpr = has('status') ? 'status' : `'draft'`;
+  const issueDateExpr = has('issue_date') ? 'issue_date' : (has('invoice_date') ? 'invoice_date' : 'created_at::date');
+  const dueDateExpr = has('due_date') ? 'due_date' : (has('invoice_due') ? 'invoice_due' : 'created_at::date');
+  const publicIdExpr = has('public_id') ? 'public_id' : '(id::text)';
+  const orderByExpr = has('created_at') ? 'created_at' : (has('updated_at') ? 'updated_at' : 'id');
+
         const query = `
-          SELECT id::text as id, invoice_no, client_name, subtotal, tax, total, currency, status, issue_date, due_date, public_id, created_at
+          SELECT
+            id::text               AS id,
+            ${invoiceNoExpr}       AS invoice_no,
+            ${clientNameExpr}      AS client_name,
+            ${subtotalExpr}        AS subtotal,
+            ${taxExpr}             AS tax,
+            ${totalExpr}           AS total,
+            ${currencyExpr}        AS currency,
+            ${statusExpr}          AS status,
+            ${issueDateExpr}       AS issue_date,
+            ${dueDateExpr}         AS due_date,
+            ${publicIdExpr}        AS public_id,
+            ${orderByExpr}         AS created_at
           FROM invoices
-          ${whereClause}
-          ORDER BY created_at DESC
+          ORDER BY ${orderByExpr} DESC
           LIMIT 200`;
-        const rows = await sql(query, params);
+        const rows = await sql(query);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         // Return the same shape as /api/invoices/list for consistency
         res.end(JSON.stringify({ rows }));
       } catch (e) {
-        console.error('❌ /api/crm/invoices list error:', e.message);
+        console.error('❌ /api/crm/invoices legacy list error:', e?.message || e);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'List failed' }));
       }
