@@ -553,6 +553,41 @@ function formatDeDateTime(d) {
   }
 }
 
+// ===== Voucher Sales schema bootstrap (minimal for admin listing) =====
+let __voucherSalesEnsured = false;
+async function ensureVoucherSalesSchema() {
+  if (__voucherSalesEnsured) return;
+  if (!sql) return;
+  try {
+    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS voucher_sales (
+        id uuid primary key default gen_random_uuid(),
+        product_id uuid,
+        purchaser_name text not null,
+        purchaser_email text not null,
+        purchaser_phone text,
+        voucher_code text unique not null,
+        original_amount numeric(12,2) not null,
+        discount_amount numeric(12,2) default 0,
+        final_amount numeric(12,2) not null,
+        currency text default 'EUR',
+        coupon_id uuid,
+        coupon_code text,
+        payment_intent_id text,
+        payment_status text default 'pending',
+        valid_from timestamptz default now(),
+        valid_until timestamptz,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      )`;
+    __voucherSalesEnsured = true;
+    console.log('✅ Voucher sales schema ensured');
+  } catch (e) {
+    console.warn('⚠️ ensureVoucherSalesSchema failed:', e.message);
+  }
+}
+
 // ===== Helper: base URL, email sender, PDF generator =====
 function getBaseUrl() {
   const base = (process.env.APP_BASE_URL || process.env.APP_URL || '').trim();
@@ -1718,6 +1753,20 @@ const server = http.createServer(async (req, res) => {
   
   // API endpoints
   if (pathname.startsWith('/api/')) {
+    // Simple image upload stub for admin UI (returns placeholder URL)
+    if (pathname === '/api/upload/image' && req.method === 'POST') {
+      try {
+        const seed = crypto.randomBytes(6).toString('hex');
+        const url = `https://picsum.photos/seed/${seed}/640/480`;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ url }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Image upload failed' }));
+      }
+      return;
+    }
+
     // Handle login specifically
     if (pathname === '/api/auth/login' && req.method === 'POST') {
       handleLogin(req, res);
@@ -4100,6 +4149,221 @@ const server = http.createServer(async (req, res) => {
           console.error('❌ Voucher product API error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Create voucher product
+      if (pathname === '/api/vouchers/products' && req.method === 'POST') {
+        try {
+          let raw = '';
+          req.on('data', c => raw += c.toString());
+          req.on('end', async () => {
+            try {
+              const body = raw ? JSON.parse(raw) : {};
+              const name = String(body.name || '').trim();
+              const price = Number(body.price);
+              if (!name || !isFinite(price)) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'name and price are required' }));
+                return;
+              }
+              const productPayload = {
+                name,
+                description: body.description || null,
+                price,
+                original_price: body.originalPrice ? Number(body.originalPrice) : null,
+                category: body.category || null,
+                type: 'voucher',
+                sku: (name.toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$|/g,'').slice(0,12) + '-' + Math.floor(Math.random()*900+100)),
+                is_active: body.isActive !== false,
+                features: Array.isArray(body.features) ? body.features : [],
+                terms_and_conditions: body.termsAndConditions || null,
+                validity_period: body.validityPeriod ? parseInt(body.validityPeriod, 10) : 365,
+                display_order: body.displayOrder ? parseInt(body.displayOrder, 10) : 0,
+                image_url: body.imageUrl || null,
+                thumbnail_url: body.thumbnailUrl || null,
+                metadata: body.metadata || {}
+              };
+              const created = await database.createVoucherProduct(productPayload);
+              res.writeHead(201, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(created));
+            } catch (e) {
+              console.error('❌ Create voucher product error:', e.message);
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: 'Invalid payload' }));
+            }
+          });
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Update voucher product
+      if (pathname.startsWith('/api/vouchers/products/') && req.method === 'PUT') {
+        try {
+          const id = pathname.split('/').pop();
+          let raw = '';
+          req.on('data', c => raw += c.toString());
+          req.on('end', async () => {
+            try {
+              const body = raw ? JSON.parse(raw) : {};
+              const updatePayload = {
+                name: body.name !== undefined ? String(body.name) : undefined,
+                description: body.description !== undefined ? body.description : undefined,
+                price: body.price !== undefined ? Number(body.price) : undefined,
+                original_price: body.originalPrice !== undefined ? Number(body.originalPrice) : undefined,
+                category: body.category !== undefined ? body.category : undefined,
+                type: body.type !== undefined ? body.type : undefined,
+                sku: body.sku !== undefined ? body.sku : undefined,
+                is_active: body.isActive !== undefined ? !!body.isActive : undefined,
+                features: body.features !== undefined ? (Array.isArray(body.features) ? body.features : []) : undefined,
+                terms_and_conditions: body.termsAndConditions !== undefined ? body.termsAndConditions : undefined,
+                validity_period: body.validityPeriod !== undefined ? parseInt(body.validityPeriod, 10) : undefined,
+                display_order: body.displayOrder !== undefined ? parseInt(body.displayOrder, 10) : undefined,
+                image_url: body.imageUrl !== undefined ? body.imageUrl : undefined,
+                thumbnail_url: body.thumbnailUrl !== undefined ? body.thumbnailUrl : undefined,
+                metadata: body.metadata !== undefined ? body.metadata : undefined
+              };
+              const updated = await database.updateVoucherProduct(id, updatePayload);
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(updated));
+            } catch (e) {
+              console.error('❌ Update voucher product error:', e.message);
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: 'Invalid payload' }));
+            }
+          });
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Delete voucher product
+      if (pathname.startsWith('/api/vouchers/products/') && req.method === 'DELETE') {
+        try {
+          const id = pathname.split('/').pop();
+          const deleted = await database.deleteVoucherProduct(id);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, deleted: deleted?.id || id }));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Public coupons list for admin UI (merged DB/env/fallback)
+      if (pathname === '/api/vouchers/coupons' && req.method === 'GET') {
+        try {
+          await refreshDbCoupons();
+          const coupons = getCoupons();
+          const mapped = (coupons || []).map(c => ({
+            id: c.id || c.code,
+            code: c.code,
+            name: c.name || c.code,
+            description: c.description || null,
+            discountType: String(c.type).toLowerCase() === 'percentage' ? 'percentage' : 'fixed_amount',
+            discountValue: String(c.type).toLowerCase() === 'percentage' ? Number(c.percent || 0) : Number(c.amount || 0),
+            minOrderAmount: c.minOrderAmount || null,
+            maxDiscountAmount: c.maxDiscountAmount || null,
+            usageLimit: c.usageLimit || null,
+            usageCount: c.usageCount || 0,
+            startDate: c.startDate || null,
+            endDate: c.endDate || null,
+            isActive: c.is_active !== false,
+            applicableProducts: c.allowedSkus || ['*']
+          }));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(mapped));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+      }
+
+      // Create coupon (simple)
+      if (pathname === '/api/vouchers/coupons' && req.method === 'POST') {
+        try {
+          if (!sql) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Database unavailable' })); return; }
+          let raw = '';
+          req.on('data', c => raw += c.toString());
+          req.on('end', async () => {
+            try {
+              await refreshDbCoupons();
+              const body = raw ? JSON.parse(raw) : {};
+              const code = String(body.code || '').trim();
+              if (!code) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'code required' })); return; }
+              const discountType = String(body.discountType || 'percentage');
+              const value = Number(body.discountValue || 0);
+              const type = discountType === 'fixed_amount' ? 'amount' : 'percentage';
+              const percent = type === 'percentage' ? value : null;
+              const amount = type === 'amount' ? value : null;
+              const allowed = body.applicableProductSlug ? [String(body.applicableProductSlug)] : (Array.isArray(body.applicable_products) ? body.applicable_products : (Array.isArray(body.allowed_skus) ? body.allowed_skus : []));
+              const starts_at = body.startDate ? new Date(body.startDate) : null;
+              const ends_at = body.endDate ? new Date(body.endDate) : null;
+              const is_active = body.isActive !== false;
+              await sql`
+                INSERT INTO discount_coupons (code, type, percent, amount, allowed_skus, starts_at, ends_at, is_active)
+                VALUES (${code}, ${type}, ${percent}, ${amount}, ${JSON.stringify(allowed)}, ${starts_at}, ${ends_at}, ${is_active})
+                ON CONFLICT (code) DO UPDATE SET
+                  type = EXCLUDED.type,
+                  percent = EXCLUDED.percent,
+                  amount = EXCLUDED.amount,
+                  allowed_skus = EXCLUDED.allowed_skus,
+                  starts_at = EXCLUDED.starts_at,
+                  ends_at = EXCLUDED.ends_at,
+                  is_active = EXCLUDED.is_active,
+                  updated_at = NOW()
+              `;
+              await refreshDbCoupons();
+              forceRefreshCoupons();
+              res.writeHead(201, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: true }));
+            } catch (e) {
+              console.error('❌ Create coupon error:', e.message);
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Invalid payload' }));
+            }
+          });
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+
+      // Voucher sales list for admin UI
+      if (pathname === '/api/vouchers/sales' && req.method === 'GET') {
+        try {
+          if (!sql) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify([])); return; }
+          await ensureVoucherSalesSchema();
+          const rows = await sql`
+            SELECT id, voucher_code, purchaser_name, purchaser_email, original_amount, discount_amount, final_amount, payment_status, created_at
+            FROM voucher_sales
+            ORDER BY created_at DESC
+            LIMIT 500`;
+          const sales = rows.map(r => ({
+            id: r.id,
+            voucherCode: r.voucher_code,
+            purchaserName: r.purchaser_name,
+            purchaserEmail: r.purchaser_email,
+            originalAmount: Number(r.original_amount || 0),
+            discountAmount: Number(r.discount_amount || 0),
+            finalAmount: Number(r.final_amount || 0),
+            paymentStatus: r.payment_status || 'pending',
+            createdAt: r.created_at
+          }));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(sales));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
         }
         return;
       }
