@@ -12,13 +12,34 @@ function normalize(item: AnyObj) {
   const imageUrl = pick<string>(item, ["imageUrl", "image_url", "image", "heroImageUrl", "cover", "photo"]);
   const title    = pick<string>(item, ["name", "title", "label"]);
   const url      = pick<string>(item, ["url", "href", "link", "path", "permalink", "detailsUrl", "route"]);
-  const price    = Number(pick<number>(item, ["salePrice", "price", "currentPrice", "amount", "discountPrice"], 0));
-  const compare  = Number(pick<number>(item, ["compareAtPrice", "originalPrice", "was", "rrp"], 0));
+
+  // Start with broad guesses
+  let current = Number(pick<number>(item, ["salePrice", "discountPrice", "price", "currentPrice", "amount"], 0));
+  let compare = Number(pick<number>(item, ["originalPrice", "compareAtPrice", "was", "rrp", "listPrice"], 0));
+
+  // Heuristics: if both discountPrice/salePrice and price exist and discount < price, treat price as original
+  const hasPrice = Object.prototype.hasOwnProperty.call(item, "price");
+  const hasDiscount = Object.prototype.hasOwnProperty.call(item, "discountPrice");
+  const hasSale = Object.prototype.hasOwnProperty.call(item, "salePrice");
+
+  if ((!compare || compare <= 0) && hasPrice && (hasDiscount || hasSale)) {
+    const p = Number(item.price);
+    const dp = hasDiscount ? Number(item.discountPrice) : Number(item.salePrice);
+    if (isFinite(p) && isFinite(dp) && p > 0 && dp > 0 && dp < p) {
+      current = dp;
+      compare = p;
+    }
+  }
+
+  // Ensure numbers are sane
+  const price = isFinite(current) ? current : 0;
+  const compareAt = isFinite(compare) && compare > 0 ? compare : undefined;
+
   const ribbon   = pick<string>(item, ["ribbonText", "badge", "tag"], "");
   const id       = String(pick<string>(item, ["id", "uuid", "slug"], title || url || Math.random().toString(36).slice(2)));
   const dataId   = pick<string>(item, ["dataVoucherId", "voucherId", "id"], id);
   const subtitle = pick<string>(item, ["subtitle", "tagline", "shortDescription", "excerpt", "description"], "");
-  return { id, imageUrl, title, url, price, compareAt: isNaN(compare) ? undefined : compare, ribbonText: ribbon, dataVoucherId: dataId, subtitle };
+  return { id, imageUrl, title, url, price, compareAt, ribbonText: ribbon, dataVoucherId: dataId, subtitle };
 }
 
 function pctSave(price: number, compareAt?: number) {
