@@ -36,7 +36,8 @@ const AdminLeadsPage: React.FC = () => {
   const pageSize = 25;
   const [notificationEmail, setNotificationEmail] = useState<string | null>(null);
   // Simple toast helper (keeps UI minimal without external deps)
-  const toast = (opts: { title: string; description?: string; variant?: 'success' | 'error' }) => {
+  // Now supports an optional CTA action button.
+  const toast = (opts: { title: string; description?: string; variant?: 'success' | 'error'; action?: { label: string; onClick: () => void } }) => {
     const id = `toast-${Date.now()}`;
     const containerId = 'app-toasts';
     let container = document.getElementById(containerId);
@@ -49,9 +50,25 @@ const AdminLeadsPage: React.FC = () => {
     const el = document.createElement('div');
     el.id = id;
     el.className = `shadow-lg rounded-md px-4 py-3 text-sm ${opts.variant === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`;
-    el.innerHTML = `<div class="font-semibold">${opts.title}</div>${opts.description ? `<div class="opacity-90">${opts.description}</div>` : ''}`;
+    el.innerHTML = `<div class="font-semibold">${opts.title}</div>${opts.description ? `<div class=\"opacity-90\">${opts.description}</div>` : ''}`;
+
+    // Optional CTA button
+    if (opts.action) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = opts.action.label;
+      btn.className = 'mt-2 inline-flex items-center bg-white/20 hover:bg-white/30 text-white font-medium px-3 py-1 rounded';
+      btn.addEventListener('click', () => {
+        try { opts.action && opts.action.onClick(); } finally {
+          el.remove();
+          if (container && container.childElementCount === 0) container.remove();
+        }
+      });
+      el.appendChild(btn);
+    }
     container.appendChild(el);
-    setTimeout(() => { el.remove(); if (container && container.childElementCount === 0) container.remove(); }, 3500);
+    const ttl = opts.action ? 5000 : 3500;
+    setTimeout(() => { el.remove(); if (container && container.childElementCount === 0) container.remove(); }, ttl);
   };
 
   useEffect(() => {
@@ -139,6 +156,33 @@ const AdminLeadsPage: React.FC = () => {
       if (!response.ok) {
         throw new Error('Failed to create lead');
       }
+
+      // Parse response to get new lead ID
+      const data = await response.json().catch(() => ({} as any));
+
+      // Build a minimal lead object we can show in the modal immediately
+      const createdLead: Lead = {
+        id: (data && data.id) || `${Date.now()}`,
+        first_name: newLeadData.first_name,
+        last_name: newLeadData.last_name,
+        email: newLeadData.email,
+        phone: newLeadData.phone,
+        message: newLeadData.message,
+        status: 'NEW',
+        form_source: newLeadData.form_source as any,
+        created_at: new Date().toISOString(),
+      } as Lead;
+
+      // Success toast with CTA to view the lead
+      toast({
+        title: 'Lead created',
+        description: 'The new lead was saved successfully.',
+        variant: 'success',
+        action: {
+          label: 'View lead',
+          onClick: () => setViewingLead(createdLead),
+        },
+      });
 
       // Refresh list to include the new lead
       await fetchLeads();

@@ -52,7 +52,10 @@ const NotificationBell: React.FC = () => {
     }
   };
 
-  const clearNotification = (notificationId: string) => {
+  const clearNotification = async (notificationId: string) => {
+    try {
+      await fetch(`/api/admin/notifications/${encodeURIComponent(notificationId)}/dismiss`, { method: 'POST' });
+    } catch {}
     setNotifications(prev => prev.filter(n => n.id !== notificationId));
   };
 
@@ -173,7 +176,10 @@ const NotificationBell: React.FC = () => {
           {notifications.length > 0 && (
             <div className="p-4 border-t border-gray-200">
               <button
-                onClick={() => setNotifications([])}
+                onClick={async () => {
+                  try { await fetch('/api/admin/notifications/clear', { method: 'POST' }); } catch {}
+                  setNotifications([]);
+                }}
                 className="w-full text-sm text-gray-600 hover:text-gray-800 transition-colors"
               >
                 Clear all notifications

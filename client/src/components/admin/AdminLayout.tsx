@@ -303,7 +303,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                           )}
                         </>
                       )}
-                      {item.badge && item.badge > 0 && (
+                      {(item.badge ?? 0) > 0 && (
                         <div className={`absolute ${sidebarCollapsed ? 'top-2 right-2' : 'top-3 right-4'} flex items-center justify-center`}>
                           {!sidebarCollapsed && <Bell size={14} className="mr-1 text-red-400" />}
                           <span className={`bg-red-500 text-white text-xs font-bold rounded-full ${
@@ -327,7 +327,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                       {!sidebarCollapsed && (
                         <span className="ml-3">{item.label}</span>
                       )}
-                      {item.badge && item.badge > 0 && (
+                      {(item.badge ?? 0) > 0 && (
                         <div className={`absolute ${sidebarCollapsed ? 'top-2 right-2' : 'top-3 right-4'} flex items-center justify-center`}>
                           {!sidebarCollapsed && <Bell size={14} className="mr-1 text-red-400" />}
                           <span className={`bg-red-500 text-white text-xs font-bold rounded-full ${

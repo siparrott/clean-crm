@@ -250,6 +250,25 @@ function createMailerTransportFromSettings(settings) {
   });
 }
 
+// ===== Admin notifications schema (persist read/dismiss) =====
+let __notificationsEnsured = false;
+async function ensureNotificationsSchema() {
+  if (__notificationsEnsured) return;
+  if (!sql) return;
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS admin_notifications_state (
+        id TEXT PRIMARY KEY,
+        read BOOLEAN DEFAULT FALSE,
+        dismissed BOOLEAN DEFAULT FALSE,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+    __notificationsEnsured = true;
+  } catch (e) {
+    console.warn('ensureNotificationsSchema failed:', e.message);
+  }
+}
+
 // Helper: insert a lead into unified leads table and send notifications
 async function insertLeadAndNotify({ req, formType, fullName = null, email, phone = null, preferredDate = null, message = null, consent = false, sourcePath = null }) {
   if (!sql) throw new Error('Database not available');
@@ -4481,9 +4500,10 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
-      // Get notifications endpoint
+      // Get notifications endpoint (persist read/dismiss state)
       if (pathname === '/api/admin/notifications' && req.method === 'GET') {
         try {
+          await ensureNotificationsSchema();
           // Return notifications based on recent questionnaire responses with client name
           const recentResponses = await sql`
             SELECT 
@@ -4502,7 +4522,8 @@ const server = http.createServer(async (req, res) => {
             LIMIT 10
           `;
 
-          const notifications = recentResponses.map(r => {
+          // Map to notifications and join state
+          const notificationsRaw = recentResponses.map(r => {
             const fullName = [r.first_name, r.last_name].filter(Boolean).join(' ').trim();
             const displayName = fullName || (r.client_name || 'Client');
             return {
@@ -4514,6 +4535,19 @@ const server = http.createServer(async (req, res) => {
               read: false
             };
           });
+          // fetch state for these ids
+          const ids = notificationsRaw.map(n => n.id);
+          let states = [];
+          if (ids.length) {
+            states = await sql`SELECT id, read, dismissed FROM admin_notifications_state WHERE id IN (${sql.join(ids, sql`,`)})`;
+          }
+          const stateMap = new Map(states.map(s => [s.id, s]));
+          const notifications = notificationsRaw
+            .map(n => {
+              const s = stateMap.get(n.id);
+              return s ? { ...n, read: !!s.read, dismissed: !!s.dismissed } : n;
+            })
+            .filter(n => !(n as any).dismissed);
           
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(notifications));
@@ -4525,14 +4559,60 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
-      // Mark notification as read endpoint
+      // Mark notification as read endpoint (persist)
       if (pathname.startsWith('/api/admin/notifications/') && pathname.endsWith('/read') && req.method === 'POST') {
         try {
-          // For now, just return success since we're not persisting read status
+          await ensureNotificationsSchema();
+          const id = pathname.split('/')[4];
+          if (!id) throw new Error('Invalid id');
+          await sql`INSERT INTO admin_notifications_state (id, read, dismissed, updated_at)
+                    VALUES (${id}, TRUE, COALESCE((SELECT dismissed FROM admin_notifications_state WHERE id = ${id}), FALSE), NOW())
+                    ON CONFLICT (id) DO UPDATE SET read = EXCLUDED.read, updated_at = EXCLUDED.updated_at`;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: true }));
         } catch (error) {
           console.error('❌ Mark notification read error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+
+      // Dismiss a notification (X button)
+      if (pathname.startsWith('/api/admin/notifications/') && pathname.endsWith('/dismiss') && req.method === 'POST') {
+        try {
+          await ensureNotificationsSchema();
+          const id = pathname.split('/')[4];
+          if (!id) throw new Error('Invalid id');
+          await sql`INSERT INTO admin_notifications_state (id, read, dismissed, updated_at)
+                    VALUES (${id}, TRUE, TRUE, NOW())
+                    ON CONFLICT (id) DO UPDATE SET dismissed = TRUE, read = TRUE, updated_at = NOW()`;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } catch (error) {
+          console.error('❌ Dismiss notification error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+
+      // Clear all notifications (mark all current as dismissed)
+      if (pathname === '/api/admin/notifications/clear' && req.method === 'POST') {
+        try {
+          await ensureNotificationsSchema();
+          // Best-effort: mark last 50 questionnaire notifications as dismissed
+          const recent = await sql`SELECT id FROM questionnaire_responses WHERE submitted_at > NOW() - INTERVAL '7 days' ORDER BY submitted_at DESC LIMIT 50`;
+          const ids = recent.map(r => `questionnaire-${r.id}`);
+          if (ids.length) {
+            const values = ids.map(id => sql`(${id}, TRUE, TRUE, NOW())`);
+            await sql`INSERT INTO admin_notifications_state (id, read, dismissed, updated_at) VALUES ${sql.join(values, sql`,`)}
+                     ON CONFLICT (id) DO UPDATE SET read = TRUE, dismissed = TRUE, updated_at = NOW()`;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } catch (error) {
+          console.error('❌ Clear notifications error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: error.message }));
         }
