@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { Button } from '../../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
@@ -33,6 +34,7 @@ interface Client {
 }
 
 const GalleriesPage: React.FC = () => {
+  const navigate = useNavigate();
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,6 +110,10 @@ const GalleriesPage: React.FC = () => {
           isPasswordProtected: false,
           password: ''
         });
+        // Navigate to the new gallery detail page
+        if (data?.id) {
+          navigate(`/admin/galleries/${data.id}`);
+        }
       }
     } catch (error) {
       console.error('Failed to create gallery:', error);
@@ -318,11 +324,11 @@ const GalleriesPage: React.FC = () => {
                   </div>
                   
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="flex-1">
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => navigate(`/admin/galleries/${gallery.id}/edit`)}>
                       <Edit className="w-3 h-3 mr-1" />
                       Edit
                     </Button>
-                    <Button size="sm" variant="outline">
+                    <Button size="sm" variant="outline" onClick={() => window.open(`/gallery/${gallery.slug}`, '_blank')}>
                       <ExternalLink className="w-3 h-3 mr-1" />
                       View
                     </Button>

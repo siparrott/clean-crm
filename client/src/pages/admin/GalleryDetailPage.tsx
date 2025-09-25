@@ -5,7 +5,7 @@ import ImageUploader from '../../components/galleries/ImageUploader';
 import ImageGrid from '../../components/galleries/ImageGrid';
 import GalleryStats from '../../components/galleries/GalleryStats';
 import { Gallery, GalleryImage, GalleryStats as GalleryStatsType, GalleryVisitor, GalleryAccessLog } from '../../types/gallery';
-import { getGalleryById, getGalleryImages, getGalleryStats, deleteGallery, getGalleryVisitors, getGalleryAccessLogs } from '../../lib/gallery-api';
+import { getGalleryById, getGalleryImages, getGalleryStats, deleteGallery, getGalleryVisitors, getGalleryAccessLogs, sendGalleryEmail, sendGalleryWhatsApp, sendGallerySms } from '../../lib/gallery-api';
 import { ArrowLeft, Upload, BarChart as ChartBar, Edit, Trash2, Share2, Loader2, AlertCircle, Users, Clock } from 'lucide-react';
 
 const GalleryDetailPage: React.FC = () => {
@@ -19,6 +19,11 @@ const GalleryDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'images' | 'upload' | 'stats' | 'visitors'>('images');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [sharePhone, setSharePhone] = useState('');
+  const [shareMessage, setShareMessage] = useState('');
+  const [shareBusy, setShareBusy] = useState(false);
   
   // Refs for scroll position
   const imagesTabRef = useRef<HTMLButtonElement>(null);
@@ -144,23 +149,31 @@ const GalleryDetailPage: React.FC = () => {
     }
   };
 
-  const handleShareGallery = () => {
+  const handleShareGallery = () => setShareOpen(true);
+
+  const doSendEmail = async () => {
+    if (!gallery || !shareEmail) return;
+    try { setShareBusy(true);
+      const resp = await sendGalleryEmail({ galleryId: gallery.id, to: shareEmail, message: shareMessage });
+      alert(`Email sent. Link: ${resp.link}`);
+      setShareOpen(false); setShareEmail(''); setShareMessage('');
+    } catch (e: any) { alert(e?.message || 'Failed to send email'); } finally { setShareBusy(false); }
+  };
+  const doSendWhatsApp = async () => {
     if (!gallery) return;
-    
-    const url = `${window.location.origin}/gallery/${gallery.slug}`;
-    
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url)
-        .then(() => {
-          alert('Gallery link copied to clipboard!');
-        })
-        .catch(err => {
-          // console.error removed
-          prompt('Copy this link:', url);
-        });
-    } else {
-      prompt('Copy this link:', url);
-    }
+    try { setShareBusy(true);
+      const resp = await sendGalleryWhatsApp({ galleryId: gallery.id, toPhone: sharePhone });
+      if (resp.sent) alert('WhatsApp sent.'); else if (resp.share) window.open(resp.share, '_blank'); else alert(`Link: ${resp.link}`);
+      setShareOpen(false); setSharePhone('');
+    } catch (e: any) { alert(e?.message || 'Failed to send WhatsApp'); } finally { setShareBusy(false); }
+  };
+  const doSendSms = async () => {
+    if (!gallery || !sharePhone) return;
+    try { setShareBusy(true);
+      const resp = await sendGallerySms({ galleryId: gallery.id, toPhone: sharePhone });
+      alert(resp.sent ? 'SMS sent.' : 'SMS provider not configured. Link copied.');
+      setShareOpen(false); setSharePhone('');
+    } catch (e: any) { alert(e?.message || 'Failed to send SMS'); } finally { setShareBusy(false); }
   };
 
   return (
@@ -451,6 +464,40 @@ const GalleryDetailPage: React.FC = () => {
               >
                 Return to galleries
               </Link>
+            </div>
+          </div>
+        )}
+        {/* Share Modal */}
+        {shareOpen && gallery && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold mb-2">Share Gallery</h3>
+              <p className="text-sm text-gray-600 mb-4">Send the gallery link to a recipient via Email, WhatsApp, or SMS.</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Recipient email</label>
+                  <input className="w-full border rounded px-3 py-2" value={shareEmail} onChange={e=>setShareEmail(e.target.value)} placeholder="name@example.com" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Recipient phone (for WhatsApp/SMS)</label>
+                  <input className="w-full border rounded px-3 py-2" value={sharePhone} onChange={e=>setSharePhone(e.target.value)} placeholder="+43..." />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Message (optional)</label>
+                  <textarea className="w-full border rounded px-3 py-2" rows={3} value={shareMessage} onChange={e=>setShareMessage(e.target.value)} placeholder={`Gallery: ${gallery.title}`} />
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-gray-500 truncate">Link: {`${window.location.origin}/gallery/${gallery.slug}`}</div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button disabled={shareBusy || !shareEmail} onClick={doSendEmail} className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50">Email</button>
+                <button disabled={shareBusy} onClick={doSendWhatsApp} className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded border">WhatsApp</button>
+                <button disabled={shareBusy || !sharePhone} onClick={doSendSms} className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded border">SMS</button>
+              </div>
+              <div className="flex justify-end mt-3">
+                <button onClick={()=>setShareOpen(false)} className="px-3 py-2 text-sm text-gray-600">Close</button>
+              </div>
             </div>
           </div>
         )}

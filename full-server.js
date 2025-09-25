@@ -1106,14 +1106,187 @@ async function handleGalleryAPI(req, res, pathname, query) {
   };
 
   try {
+    // POST /api/galleries/send-email - Send gallery link via email
+    if (req.method === 'POST' && gallerySlug === 'send-email') {
+      let raw = ''; req.on('data', c => raw += c); await new Promise(r => req.on('end', r));
+      try {
+        const body = raw ? JSON.parse(raw) : {};
+        const gallery_id = body.gallery_id || body.id;
+        const slugParam = body.slug;
+        const to = body.to;
+        const message = body.message || '';
+        if (!to || (!gallery_id && !slugParam)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'to and gallery_id or slug required' }));
+          return;
+        }
+        const galleryRows = slugParam
+          ? await sql`SELECT id, title, slug, is_password_protected, password FROM galleries WHERE slug = ${slugParam} LIMIT 1`
+          : await sql`SELECT id, title, slug, is_password_protected, password FROM galleries WHERE id = ${gallery_id} LIMIT 1`;
+        if (!galleryRows || galleryRows.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Gallery not found' }));
+          return;
+        }
+        const g = galleryRows[0];
+        const link = `${appUrl(req)}/gallery/${g.slug}`;
+        const pwdNote = (g.is_password_protected && g.password) ? `<p>Password: <strong>${g.password}</strong></p>` : '';
+        const html = `
+          <div style="font-family:system-ui;line-height:1.6">
+            <p>Hello,</p>
+            <p>We've shared the photo gallery "<strong>${g.title}</strong>" with you.</p>
+            <p><a href="${link}">Open the gallery</a></p>
+            ${pwdNote}
+            ${message ? `<p>${String(message)}</p>` : ''}
+            <p>— New Age Fotografie</p>
+          </div>`;
+        await sendEmailSimple(to, `Gallery: ${g.title}`, `Gallery link: ${link}${g.is_password_protected && g.password ? `\nPassword: ${g.password}` : ''}${message ? `\n\n${message}` : ''}`, html);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, link }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e?.message || 'send failed' }));
+      }
+      return;
+    }
+
+    // POST /api/galleries/send-whatsapp - Send gallery link via WhatsApp
+    if (req.method === 'POST' && gallerySlug === 'send-whatsapp') {
+      let raw = ''; req.on('data', c => raw += c); await new Promise(r => req.on('end', r));
+      try {
+        const body = raw ? JSON.parse(raw) : {};
+        const gallery_id = body.gallery_id || body.id;
+        const slugParam = body.slug;
+        const to_phone = body.to_phone;
+        if (!to_phone && !(process.env.VONAGE_APPLICATION_ID || (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_WHATSAPP_FROM))) {
+          // If no provider and no phone, we can still return a wa.me share link
+        }
+        if (!gallery_id && !slugParam) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'gallery_id or slug required' }));
+          return;
+        }
+        const galleryRows = slugParam
+          ? await sql`SELECT id, title, slug, is_password_protected, password FROM galleries WHERE slug = ${slugParam} LIMIT 1`
+          : await sql`SELECT id, title, slug, is_password_protected, password FROM galleries WHERE id = ${gallery_id} LIMIT 1`;
+        if (!galleryRows || galleryRows.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Gallery not found' }));
+          return;
+        }
+        const g = galleryRows[0];
+        const link = `${appUrl(req)}/gallery/${g.slug}`;
+        const pwdNote = (g.is_password_protected && g.password) ? `\nPassword: ${g.password}` : '';
+        const text = `New Age Fotografie – ${g.title}\n${link}${pwdNote}`;
+
+        // Try Vonage WA
+        const vonageJwt = generateVonageJwt();
+        const vonageFrom = process.env.VONAGE_WHATSAPP_FROM;
+        if (vonageJwt && vonageFrom && to_phone) {
+          try {
+            const resp = await fetch('https://api.nexmo.com/v1/messages', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${vonageJwt}` },
+              body: JSON.stringify({
+                from: { type: 'whatsapp', number: vonageFrom },
+                to: { type: 'whatsapp', number: String(to_phone).replace(/[^0-9+]/g,'') },
+                message: { content: { type: 'text', text } }
+              })
+            });
+            if (resp.ok) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: true, sent: true, provider: 'vonage', link }));
+              return;
+            }
+          } catch (_) {}
+        }
+        // Try Twilio WA
+        const hasTwilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_WHATSAPP_FROM);
+        if (hasTwilio && to_phone) {
+          try {
+            const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+            await twilio.messages.create({ from: process.env.TWILIO_WHATSAPP_FROM, to: `whatsapp:${to_phone}`, body: text });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, sent: true, provider: 'twilio', link }));
+            return;
+          } catch (_) {}
+        }
+        const share = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, sent: false, share, link }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e?.message || 'whatsapp failed' }));
+      }
+      return;
+    }
+
+    // POST /api/galleries/send-sms - Send gallery link via SMS
+    if (req.method === 'POST' && gallerySlug === 'send-sms') {
+      let raw = ''; req.on('data', c => raw += c); await new Promise(r => req.on('end', r));
+      try {
+        const body = raw ? JSON.parse(raw) : {};
+        const gallery_id = body.gallery_id || body.id;
+        const slugParam = body.slug;
+        const to_phone = body.to_phone;
+        if (!to_phone) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'to_phone required' }));
+          return;
+        }
+        if (!gallery_id && !slugParam) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'gallery_id or slug required' }));
+          return;
+        }
+        const galleryRows = slugParam
+          ? await sql`SELECT id, title, slug, is_password_protected, password FROM galleries WHERE slug = ${slugParam} LIMIT 1`
+          : await sql`SELECT id, title, slug, is_password_protected, password FROM galleries WHERE id = ${gallery_id} LIMIT 1`;
+        if (!galleryRows || galleryRows.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Gallery not found' }));
+          return;
+        }
+        const g = galleryRows[0];
+        const link = `${appUrl(req)}/gallery/${g.slug}`;
+        const pwdNote = (g.is_password_protected && g.password) ? ` Password: ${g.password}` : '';
+        const text = `New Age Fotografie – ${g.title} ${link}${pwdNote}`;
+        const key = process.env.VONAGE_API_KEY;
+        const secret = process.env.VONAGE_API_SECRET;
+        const from = process.env.VONAGE_SMS_FROM || 'NewAgeFoto';
+        if (key && secret) {
+          try {
+            const resp = await fetch('https://rest.nexmo.com/sms/json', {
+              method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ api_key: key, api_secret: secret, to: String(to_phone).replace(/[^0-9+]/g,''), from, text }).toString()
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (resp.ok) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: true, sent: true, provider: 'vonage', data, link }));
+              return;
+            }
+          } catch (_) {}
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, sent: false, info: 'No SMS provider configured', link }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e?.message || 'sms failed' }));
+      }
+      return;
+    }
+
     // GET /api/galleries - Get all galleries
     if (req.method === 'GET' && !gallerySlug) {
       const galleries = await sql`
-        SELECT id, title, slug, description, cover_image, is_public, 
-               is_password_protected, client_id, created_by, sort_order, 
-               created_at, updated_at
-        FROM galleries
-        ORDER BY created_at DESC
+        SELECT 
+          g.id, g.title, g.slug, g.description, g.cover_image, g.is_public,
+          g.is_password_protected, g.client_id, g.created_by, g.sort_order,
+          g.created_at, g.updated_at,
+          (SELECT COUNT(*) FROM gallery_images gi WHERE gi.gallery_id = g.id) AS image_count
+        FROM galleries g
+        ORDER BY g.created_at DESC
       `;
       
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1121,26 +1294,47 @@ async function handleGalleryAPI(req, res, pathname, query) {
       return;
     }
 
-    // GET /api/galleries/[slug] - Get gallery by slug
+    // GET /api/galleries/[slug_or_id] - Get gallery by slug or id
     if (req.method === 'GET' && gallerySlug && !action) {
-      const gallery = await sql`
+      let gallery = await sql`
         SELECT id, title, slug, description, cover_image, is_public, 
                is_password_protected, password, client_id, created_by, 
-               sort_order, created_at, updated_at
+               sort_order, download_enabled, created_at, updated_at
         FROM galleries
         WHERE slug = ${gallerySlug}
       `;
-      
-      if (gallery.length === 0) {
+      if (!gallery || gallery.length === 0) {
+        // Fallback: try by id
+        gallery = await sql`
+          SELECT id, title, slug, description, cover_image, is_public, 
+                 is_password_protected, password, client_id, created_by, 
+                 sort_order, download_enabled, created_at, updated_at
+          FROM galleries
+          WHERE id = ${gallerySlug}
+        `;
+      }
+      if (!gallery || gallery.length === 0) {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Gallery not found' }));
         return;
       }
-      
-      // Don't expose password in response
-      const galleryData = { ...gallery[0] };
-      delete galleryData.password;
-      
+      // Map to camelCase fields expected by client and don't expose password
+      const g = gallery[0];
+      const galleryData = {
+        id: g.id,
+        title: g.title,
+        slug: g.slug,
+        description: g.description,
+        coverImage: g.cover_image,
+        isPublic: g.is_public,
+        isPasswordProtected: g.is_password_protected,
+        clientId: g.client_id,
+        createdBy: g.created_by,
+        sortOrder: g.sort_order,
+        downloadEnabled: g.download_enabled !== false,
+        createdAt: g.created_at,
+        updatedAt: g.updated_at,
+      };
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(galleryData));
       return;
@@ -1288,33 +1482,33 @@ async function handleGalleryAPI(req, res, pathname, query) {
 
     // GET /api/galleries/[slug]/images - Get gallery images (requires auth)
     if (req.method === 'GET' && action === 'images') {
-      const authToken = req.headers.authorization?.replace('Bearer ', '');
-
-      if (!authToken) {
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Authentication token required' }));
-        return;
+      const looksLikeUuid = /^[0-9a-fA-F-]{32,36}$/.test(String(gallerySlug));
+      let galleryId = null;
+      if (looksLikeUuid) {
+        // Admin-style access by id (no token required)
+        galleryId = gallerySlug;
+      } else {
+        const authToken = req.headers.authorization?.replace('Bearer ', '');
+        if (!authToken) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Authentication token required' }));
+          return;
+        }
+        const tokenData = verifyGalleryToken(authToken);
+        if (!tokenData) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid token' }));
+          return;
+        }
+        // Resolve slug to id
+        const gallery = await sql`SELECT id FROM galleries WHERE slug = ${gallerySlug}`;
+        if (!gallery || gallery.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Gallery not found' }));
+          return;
+        }
+        galleryId = gallery[0].id;
       }
-
-      const tokenData = verifyGalleryToken(authToken);
-      if (!tokenData) {
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid token' }));
-        return;
-      }
-
-      // Get the gallery
-      const gallery = await sql`
-        SELECT id FROM galleries WHERE slug = ${gallerySlug}
-      `;
-
-      if (gallery.length === 0) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Gallery not found' }));
-        return;
-      }
-
-      const galleryId = gallery[0].id;
 
       // Get gallery images from database
       let galleryImages = await sql`
@@ -1434,13 +1628,141 @@ async function handleGalleryAPI(req, res, pathname, query) {
         return;
       }
 
-      // For now, return a message - ZIP creation requires additional libraries
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ 
-        success: true, 
-        message: 'Gallery download endpoint ready - requires ZIP implementation',
-        downloadUrl: `/api/galleries/${gallerySlug}/download-zip`
-      }));
+      // Lazy-load archiver to avoid requiring it during cold start if unused
+      let archiver;
+      try {
+        archiver = require('archiver');
+      } catch (e) {
+        res.writeHead(501, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'ZIP support not installed on server', detail: 'Install the "archiver" package' }));
+        return;
+      }
+
+      // Resolve slug to gallery and ensure downloads are enabled
+      const gRows = await sql`SELECT id, title, download_enabled FROM galleries WHERE slug = ${gallerySlug} LIMIT 1`;
+      if (!gRows || gRows.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Gallery not found' }));
+        return;
+      }
+      const gallery = gRows[0];
+      if (gallery.download_enabled === false) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Downloads are disabled for this gallery' }));
+        return;
+      }
+
+      // Fetch images for the gallery
+      let images = await sql`
+        SELECT id, gallery_id, filename, url, title, sort_order, created_at
+        FROM gallery_images
+        WHERE gallery_id = ${gallery.id}
+        ORDER BY sort_order ASC, created_at DESC
+      `;
+
+      if (!images || images.length === 0) {
+        // Provide the same sample images as the images endpoint, so users can test download flow
+        images = [
+          {
+            id: 'sample-1', gallery_id: gallery.id, filename: 'mountain_landscape.jpg',
+            url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=2070&q=80',
+            title: 'Mountain Vista', sort_order: 0, created_at: new Date().toISOString()
+          },
+          {
+            id: 'sample-2', gallery_id: gallery.id, filename: 'forest_path.jpg',
+            url: 'https://images.unsplash.com/photo-1501594907352-04cda38ebc29?auto=format&fit=crop&w=2070&q=80',
+            title: 'Forest Trail', sort_order: 1, created_at: new Date().toISOString()
+          },
+          {
+            id: 'sample-3', gallery_id: gallery.id, filename: 'lake_reflection.jpg',
+            url: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&w=2070&q=80',
+            title: 'Lake Reflection', sort_order: 2, created_at: new Date().toISOString()
+          }
+        ];
+      }
+
+      // Prepare response headers and stream a ZIP archive
+      const safeName = (s) => String(s || 'gallery')
+        .replace(/[^a-z0-9\-_. ]/gi, '_')
+        .replace(/\s+/g, '_')
+        .slice(0, 80) || 'gallery';
+      const zipFileName = `${safeName(gallery.title || 'gallery')}.zip`;
+
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${zipFileName}"`,
+        'Cache-Control': 'no-store'
+      });
+
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      archive.on('error', (err) => {
+        try {
+          res.write('\n');
+        } catch {}
+        try { res.end(); } catch {}
+      });
+      archive.pipe(res);
+
+      const urlFileExt = (u) => {
+        try {
+          const p = new URL(u).pathname;
+          const ext = path.extname(p);
+          return ext && ext.length <= 6 ? ext : '';
+        } catch { return ''; }
+      };
+
+      // Stream each image into the archive sequentially for simplicity
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        const idx = String(i + 1).padStart(3, '0');
+        let base = img.filename || img.title || `image_${idx}`;
+        base = safeName(base);
+        let filename = base;
+        const extHint = urlFileExt(img.url || '');
+
+        try {
+          const resp = await fetch(String(img.url));
+          if (!resp || !resp.ok || !resp.body) {
+            // Skip this image
+            continue;
+          }
+          let ext = extHint;
+          const ct = resp.headers.get('content-type') || '';
+          if (!ext) {
+            if (ct.includes('jpeg')) ext = '.jpg';
+            else if (ct.includes('png')) ext = '.png';
+            else if (ct.includes('webp')) ext = '.webp';
+            else if (ct.includes('gif')) ext = '.gif';
+            else if (ct.includes('bmp')) ext = '.bmp';
+          }
+          if (!filename.toLowerCase().endsWith(ext.toLowerCase())) {
+            filename = `${base}${ext || '.jpg'}`;
+          }
+          // Convert WHATWG ReadableStream to Node.js Readable if needed
+          let nodeStream;
+          try {
+            const { Readable } = require('stream');
+            if (typeof resp.body.getReader === 'function') {
+              nodeStream = Readable.fromWeb(resp.body);
+            } else if (typeof resp.body.pipe === 'function') {
+              nodeStream = resp.body; // already a Node stream
+            }
+          } catch (_) {
+            nodeStream = resp.body;
+          }
+          if (!nodeStream) {
+            // Fallback: buffer then append (less efficient but safe)
+            const arrBuf = await resp.arrayBuffer();
+            archive.append(Buffer.from(arrBuf), { name: `${idx}_${filename}` });
+          } else {
+            archive.append(nodeStream, { name: `${idx}_${filename}` });
+          }
+        } catch (_) {
+          // Skip problematic image
+        }
+      }
+
+      await archive.finalize();
       return;
     }
 

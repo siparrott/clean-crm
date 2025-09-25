@@ -236,7 +236,7 @@ function App() {
                   path="/admin/galleries"
                   element={
                     <NeonProtectedRoute>
-                      <AdminGalleriesPage />
+                      <GalleriesPage />
                     </NeonProtectedRoute>
                   }
                 />
