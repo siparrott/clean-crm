@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { Plus, Search, Filter, Eye, Edit, Trash2, Phone, Mail, Calendar, CheckCircle, MessageSquare, UserCheck } from 'lucide-react';
-import { Lead, getLeads, updateLeadStatus, deleteLead } from '../../lib/leads';
-import { supabase } from '../../lib/supabase';
+import { Lead, getLeads, updateLeadStatus, deleteLead, bulkMarkNewAsContacted } from '../../lib/leads';
 
 const AdminLeadsPage: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('NEW');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,54 +31,77 @@ const AdminLeadsPage: React.FC = () => {
     status: 'NEW' as 'NEW' | 'CONTACTED' | 'CONVERTED'
   });
 
-  useEffect(() => {
-    fetchLeads();
-  }, []);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+  const [notificationEmail, setNotificationEmail] = useState<string | null>(null);
+  // Simple toast helper (keeps UI minimal without external deps)
+  const toast = (opts: { title: string; description?: string; variant?: 'success' | 'error' }) => {
+    const id = `toast-${Date.now()}`;
+    const containerId = 'app-toasts';
+    let container = document.getElementById(containerId);
+    if (!container) {
+      container = document.createElement('div');
+      container.id = containerId;
+      container.className = 'fixed top-4 right-4 z-[9999] space-y-2';
+      document.body.appendChild(container);
+    }
+    const el = document.createElement('div');
+    el.id = id;
+    el.className = `shadow-lg rounded-md px-4 py-3 text-sm ${opts.variant === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`;
+    el.innerHTML = `<div class="font-semibold">${opts.title}</div>${opts.description ? `<div class="opacity-90">${opts.description}</div>` : ''}`;
+    container.appendChild(el);
+    setTimeout(() => { el.remove(); if (container && container.childElementCount === 0) container.remove(); }, 3500);
+  };
 
   useEffect(() => {
-    filterLeads();
-  }, [leads, searchTerm, statusFilter, sourceFilter]);
+    fetchLeads();
+  }, [statusFilter, searchTerm, page]);
+
+  useEffect(() => {
+    // best-effort load of email settings for banner
+    (async () => {
+      try {
+        const resp = await fetch('/api/admin/email-settings');
+        if (resp.ok) {
+          const s = await resp.json();
+          if (s && s.notificationEmail) setNotificationEmail(s.notificationEmail);
+        }
+      } catch {}
+    })();
+  }, []);
 
   const fetchLeads = async () => {
     try {
       setLoading(true);
-      const data = await getLeads();
-      setLeads(data);
+      const { rows, count } = await getLeads({ status: statusFilter as any, q: searchTerm || undefined, limit: pageSize, offset: (page-1)*pageSize });
+      setLeads(rows);
+      setTotalCount(count);
     } catch (err) {
       // console.error removed
       setError('Failed to load leads. Please ensure the database schema is deployed.');
       // Set empty array as fallback
       setLeads([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterLeads = () => {
-    let filtered = [...leads];
-    
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(lead => 
-        (lead.first_name && lead.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (lead.last_name && lead.last_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (lead.phone && lead.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (lead.message && lead.message.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const onSearchChange = (v: string) => { setSearchTerm(v); setPage(1); };
+  const onStatusChange = (v: string) => { setStatusFilter(v === 'all' ? 'ANY' : v); setPage(1); };
+  const handleBulkMarkNew = async () => {
+    try {
+      const res = await fetch('/api/leads/bulk/mark-new-contacted', { method: 'POST' });
+      if (!res.ok) throw new Error('Bulk update failed');
+      const data = await res.json().catch(() => ({ ok: true, updated: 0 }));
+      toast({ title: 'Updated leads', description: `${data.updated || 0} lead(s) marked as Contacted`, variant: 'success' });
+      await fetchLeads();
+    } catch (e) {
+      toast({ title: 'Bulk action failed', description: 'Please try again', variant: 'error' });
+      setError('Failed to apply bulk action.');
     }
-    
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(lead => lead.status === statusFilter);
-    }
-    
-    // Apply source filter
-    if (sourceFilter !== 'all') {
-      filtered = filtered.filter(lead => lead.form_source === sourceFilter);
-    }
-    
-    setFilteredLeads(filtered);
   };
 
   const handleStatusChange = async (leadId: string, newStatus: 'NEW' | 'CONTACTED' | 'CONVERTED') => {
@@ -100,13 +121,13 @@ const AdminLeadsPage: React.FC = () => {
   };
   const handleCreateLead = async () => {
     try {
-      const response = await fetch('/api/crm/leads', {
+      const response = await fetch('/api/leads/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: `${newLeadData.first_name} ${newLeadData.last_name}`.trim(),
+          full_name: `${newLeadData.first_name} ${newLeadData.last_name}`.trim(),
           email: newLeadData.email,
           phone: newLeadData.phone,
           message: newLeadData.message,
@@ -119,10 +140,8 @@ const AdminLeadsPage: React.FC = () => {
         throw new Error('Failed to create lead');
       }
 
-      const data = await response.json();
-
-      // Update local state
-      setLeads(prevLeads => [data, ...prevLeads]);
+      // Refresh list to include the new lead
+      await fetchLeads();
       setShowCreateModal(false);
       setNewLeadData({
         first_name: '',
@@ -169,39 +188,11 @@ const AdminLeadsPage: React.FC = () => {
 
   const handleUpdateLead = async () => {
     if (!editingLead) return;
-    
     try {
-      const { data, error } = await supabase
-        .from('leads')
-        .update({
-          first_name: editFormData.first_name || null,
-          last_name: editFormData.last_name || null,
-          email: editFormData.email,
-          phone: editFormData.phone || null,
-          message: editFormData.message || null,
-          status: editFormData.status
-        })
-        .eq()
-        .select();
-
-      if (error) throw error;
-
-      // Update local state
-      setLeads(prevLeads => prevLeads.map(lead => 
-        lead.id === editingLead.id ? { ...lead, ...data } : lead
-      ));
-      
+      await updateLeadStatus(editingLead.id, editFormData.status as any);
+      setLeads(prev => prev.map(l => l.id === editingLead.id ? { ...l, status: editFormData.status as any } : l));
       setEditingLead(null);
-      setEditFormData({
-        first_name: '',
-        last_name: '',
-        email: '',
-        phone: '',
-        message: '',
-        status: 'NEW'
-      });
-    } catch (err) {
-      // console.error removed
+    } catch (e) {
       setError('Failed to update lead. Please try again.');
     }
   };
@@ -269,7 +260,7 @@ const AdminLeadsPage: React.FC = () => {
             <div>
               <h3 className="text-sm font-medium text-blue-900">Lead Notifications Active</h3>
               <p className="text-sm text-blue-700">
-                New lead notifications are automatically sent to <strong>hallo@newagefotografie.com</strong> when leads are submitted via contact forms, waitlist, or created manually.
+                New lead notifications are automatically sent to <strong>{notificationEmail || 'hallo@newagefotografie.com'}</strong> when leads are submitted via contact forms, waitlist, or created manually.
               </p>
             </div>
           </div>
@@ -282,7 +273,7 @@ const AdminLeadsPage: React.FC = () => {
             <p className="text-gray-600">Manage and track your potential clients</p>
             <div className="mt-2 flex items-center space-x-1 text-sm text-blue-600">
               <Mail size={14} />
-              <span>Email notifications sent to: <strong>hallo@newagefotografie.com</strong></span>
+              <span>Email notifications sent to: <strong>{notificationEmail || 'hallo@newagefotografie.com'}</strong></span>
             </div>
           </div>
           <button
@@ -303,14 +294,14 @@ const AdminLeadsPage: React.FC = () => {
                 type="text"
                 placeholder="Search leads..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => onSearchChange(e.target.value)}
                 className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               />
             </div>
             
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => onStatusChange(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
             >
               <option value="all">All Statuses</option>
@@ -331,8 +322,14 @@ const AdminLeadsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Leads Table */}
+        {/* Bulk actions and Leads Table */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-6 py-3 border-b flex items-center justify-between">
+            <div className="text-sm text-gray-600">{totalCount} results</div>
+            <div className="flex items-center gap-2">
+              <button onClick={handleBulkMarkNew} className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded">Mark all New as Contacted</button>
+            </div>
+          </div>
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
@@ -341,7 +338,7 @@ const AdminLeadsPage: React.FC = () => {
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg m-6">
               {error}
             </div>
-          ) : filteredLeads.length > 0 ? (
+          ) : leads.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -364,7 +361,7 @@ const AdminLeadsPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredLeads.map((lead) => (
+                  {leads.map((lead) => (
                     <tr key={lead.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
@@ -447,10 +444,13 @@ const AdminLeadsPage: React.FC = () => {
               </table>
             </div>
           ) : (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No leads found matching your criteria.</p>
-            </div>
+            <div className="p-6 text-center text-gray-500">No leads found.</div>
           )}
+          <div className="px-6 py-3 border-t flex items-center justify-between">
+            <button disabled={page<=1} onClick={() => setPage(p => Math.max(1, p-1))} className="px-3 py-1.5 rounded border disabled:opacity-50">Previous</button>
+            <div className="text-sm">Page {page} of {totalPages}</div>
+            <button disabled={page>=totalPages} onClick={() => setPage(p => Math.min(totalPages, p+1))} className="px-3 py-1.5 rounded border disabled:opacity-50">Next</button>
+          </div>
         </div>
       </div>      {/* Delete Confirmation Modal */}
       {deleteConfirmation && (

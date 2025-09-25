@@ -78,7 +78,7 @@ export async function importEmailsFromIMAP(config: any) {
                   // Skip sent items and system messages
                   if (!emailData.subject.startsWith('[SENT]') && 
                       !emailData.subject.includes('Auto-Reply') &&
-                      emailData.from !== 'hallo@newagefotografie.com') {
+                      emailData.from !== (process.env.STUDIO_NOTIFY_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER)) {
                     collectedEmails.push(emailData);
                     newEmails++;
                   }

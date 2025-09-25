@@ -160,7 +160,8 @@ const AdminDashboardPage: React.FC = () => {
         invoicesResponse
       ] = await Promise.allSettled([
         fetch('/api/crm/dashboard/metrics'),
-  fetch('/api/leads/list?status=any'),
+        // Pull a small recent window of leads server-side for efficiency
+        fetch('/api/leads/list?status=any&limit=50&offset=0'),
         fetch('/api/photography/sessions'),
         fetch('/api/crm/invoices')
       ]);
@@ -168,8 +169,9 @@ const AdminDashboardPage: React.FC = () => {
       // Process API responses
       const metrics = metricsResponse.status === 'fulfilled' && metricsResponse.value.ok ? 
         await metricsResponse.value.json() : {};
-      const allLeads = leadsResponse.status === 'fulfilled' && leadsResponse.value.ok ? 
-        await leadsResponse.value.json() : [];
+      const leadsPayload = leadsResponse.status === 'fulfilled' && leadsResponse.value.ok ? 
+        await leadsResponse.value.json() : { rows: [], count: 0 };
+      const allLeads = Array.isArray(leadsPayload) ? leadsPayload : (leadsPayload.rows || []);
       const bookings = bookingsResponse.status === 'fulfilled' && bookingsResponse.value.ok ? 
         await bookingsResponse.value.json() : [];
       const invoices = invoicesResponse.status === 'fulfilled' && invoicesResponse.value.ok ? 

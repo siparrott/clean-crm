@@ -64,10 +64,30 @@ import filesRouter from './routes/files';
 import { sessionConfig, requireAuth, requireAdmin } from './auth';
 import { findCoupon, isCouponActive, allowsSku, forceRefreshCoupons } from './services/coupons';
 
+// Helper to resolve contact email from DB settings or env
+// Synchronous fallback (for non-async template helpers)
+function getEnvContactEmailSync(): string {
+  return process.env.SMTP_FROM || process.env.STUDIO_NOTIFY_EMAIL || process.env.SMTP_USER || '';
+}
+
+async function resolveContactEmail(): Promise<string> {
+  try {
+    const settings = await storage.getEmailSettings();
+    return (
+      settings?.from_email ||
+      settings?.smtp_user ||
+      getEnvContactEmailSync()
+    );
+  } catch {
+    return getEnvContactEmailSync();
+  }
+}
+
 // Modern PDF invoice generator with actual logo and all required sections
 async function generateModernInvoicePDF(invoice: any, client: any): Promise<Buffer> {
   // Load invoice items from database
   const invoiceItems = await storage.getCrmInvoiceItems(invoice.id);
+  const contactEmail = await resolveContactEmail();
   
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
@@ -98,7 +118,7 @@ async function generateModernInvoicePDF(invoice: any, client: any): Promise<Buff
   doc.setTextColor(100, 100, 100);
   doc.text('Professionelle Fotografie im Herzen von Wien', 20, yPosition);
   doc.text('Schönbrunner Str. 25, 1050 Wien, Austria', 20, yPosition + 6);
-  doc.text('Tel: +43 677 633 99210 | Email: hallo@newagefotografie.com', 20, yPosition + 12);
+  doc.text(`Tel: +43 677 633 99210 | Email: ${contactEmail || '—'}`, 20, yPosition + 12);
   doc.text('Web: www.newagefotografie.com', 20, yPosition + 18);
 
   // Invoice header section with modern styling
@@ -270,7 +290,7 @@ async function generateModernInvoicePDF(invoice: any, client: any): Promise<Buff
     'Druckmaterialien, um unser Portfolio zu präsentieren.',
     '',
     'Sollten Sie nicht einverstanden sein, dass Ihre Bilder für diese Zwecke verwendet werden,',
-    'bitten wir um eine kurze Mitteilung an hallo@newagefotografie.com vor Ihrem Shooting.'
+    `bitten wir um eine kurze Mitteilung an ${contactEmail || 'unserer Kontaktadresse'} vor Ihrem Shooting.`
   ];
   
   modelReleaseText.forEach(line => {
@@ -299,6 +319,7 @@ async function generateModernInvoicePDF(invoice: any, client: any): Promise<Buff
 // Simple text invoice generator that works immediately
 function generateTextInvoice(invoice: any, client: any): string {
   const today = new Date().toLocaleDateString('de-DE');
+  const contactEmail = getEnvContactEmailSync();
   const invoiceNumber = invoice.invoiceNumber || invoice.invoice_number || invoice.id;
   const clientName = `${client.firstName || client.first_name || ''} ${client.lastName || client.last_name || ''}`.trim();
   const total = parseFloat(invoice.total?.toString() || invoice.total_amount?.toString() || '0');
@@ -332,7 +353,7 @@ Kontakt:
 New Age Fotografie
 Wehrgasse 11A/2+5, 1050 Wien
 Tel: +43 677 633 99210
-Email: hallo@newagefotografie.com
+Email: ${contactEmail}
 Web: www.newagefotografie.com
 
 Vielen Dank für Ihr Vertrauen!
@@ -548,7 +569,8 @@ function generateInvoiceHTML(invoice: any, client: any): string {
             <p><strong>Adresse:</strong> Eingang Ecke Schönbrunnerstraße</p>
             <p>Wehrgasse 11A/2+5, 1050 Wien, Austria</p>
             <p><strong>Telefon:</strong> +43 677 633 99210</p>
-            <p><strong>Email:</strong> hallo@newagefotografie.com</p>
+            <p><strong>Email:</strong> ${getEnvContactEmailSync()}</p>
+            <p><strong>Email:</strong> ${getEnvContactEmailSync()}</p>
             <p><strong>Website:</strong> www.newagefotografie.com</p>
             <p><strong>UID:</strong> ATU12345678 | <strong>FN:</strong> 123456a</p>
           </div>
@@ -648,7 +670,8 @@ function generateInvoiceHTML(invoice: any, client: any): string {
             <p>Eingang Ecke Schönbrunnerstraße</p>
             <p>Wehrgasse 11A/2+5, 1050 Wien</p>
             <p>Tel: +43 677 633 99210</p>
-            <p>Email: hallo@newagefotografie.com</p>
+            <p>Email: ${getEnvContactEmailSync()}</p>
+            <p>Email: ${getEnvContactEmailSync()}</p>
           </div>
           <div class="footer-section">
             <h4>Geschäftsinformationen</h4>
@@ -3536,7 +3559,7 @@ Bitte versuchen Sie es später noch einmal.`;
         });
       }
 
-      // Create email transporter (using EasyName SMTP)
+      // Create email transporter (prefer configured SMTP, fallback to env)
       const transporter = nodemailer.createTransport({
         host: 'smtp.easyname.com',
         port: 465,
@@ -3550,7 +3573,7 @@ Bitte versuchen Sie es später noch einmal.`;
 
       // Send email
       const emailOptions = {
-        from: 'hallo@newagefotografie.com',
+        from: getEnvContactEmailSync() || 'no-reply@localhost',
         to: client.email,
         subject: subject || `Rechnung ${invoice.invoiceNumber} - New Age Fotografie`,
         html: `
@@ -3571,7 +3594,7 @@ Bitte versuchen Sie es später noch einmal.`;
               Schönbrunner Str. 25<br>
               1050 Wien, Austria<br>
               Tel: +43 677 633 99210<br>
-              Email: hallo@newagefotografie.com</p>
+              Email: ${getEnvContactEmailSync()}</p>
             </div>
           </div>
         `,
@@ -3648,7 +3671,7 @@ New Age Fotografie Team`;
       try {
         await storage.createCrmMessage({
           senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
-          senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || 'hallo@newagefotografie.com',
+          senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || getEnvContactEmailSync(),
           subject: `Invoice ${invoice.invoiceNumber} sent via SMS`,
           content: `${finalMessage}\n\nLink: ${invoiceUrl}`,
           messageType: 'sms',
@@ -3727,7 +3750,7 @@ New Age Fotografie Team`;
       try {
         await storage.createCrmMessage({
           senderName: process.env.BUSINESS_NAME || 'New Age Fotografie',
-          senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || 'hallo@newagefotografie.com',
+          senderEmail: process.env.SMTP_FROM || process.env.SMTP_USER || getEnvContactEmailSync(),
           subject: `Invoice ${invoice.invoiceNumber} shared via WhatsApp`,
           content: `${finalMessage}\n\nWhatsApp: ${whatsappUrl}\nInvoice: ${invoiceUrl}`,
           messageType: 'whatsapp',
@@ -3769,7 +3792,7 @@ New Age Fotografie Team`;
 
       // Special handling for business email with EasyName IMAP settings
       // If this looks like the studio's business address, prefer environment-configured mailbox credentials
-      if (username === 'hallo@newagefotografie.com' || username === process.env.BUSINESS_MAILBOX_USER) {
+  if (username === (process.env.STUDIO_NOTIFY_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER) || username === process.env.BUSINESS_MAILBOX_USER) {
         console.log('Using EasyName IMAP settings for business email');
         const mailboxUser = process.env.BUSINESS_MAILBOX_USER || username;
         const mailboxPass = process.env.EMAIL_PASSWORD || password;
@@ -4898,11 +4921,11 @@ New Age Fotografie Team`;
         });
       }
 
-      // For the business email hallo@newagefotografie.com, provide guidance
-      if (username === "hallo@newagefotografie.com") {
+  // For the business email, provide guidance
+  if (username === (process.env.STUDIO_NOTIFY_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER)) {
         return res.json({
           success: true,
-          message: "Business email configuration ready. Contact your hosting provider to set up SMTP authentication for hallo@newagefotografie.com to enable full inbox functionality."
+          message: "Business email configuration ready. Contact your hosting provider to set up SMTP authentication for your studio email to enable full inbox functionality."
         });
       }
 
@@ -5010,7 +5033,7 @@ New Age Fotografie Team`;
           smtp_port: 587,
           smtp_user: '30840mail10',
           smtp_pass: process.env.EMAIL_PASSWORD || 'HoveBN41!',
-          from_email: 'hallo@newagefotografie.com',
+          from_email: getEnvContactEmailSync(),
           from_name: 'New Age Fotografie'
         };
       }
@@ -5060,7 +5083,7 @@ New Age Fotografie Team`;
       try {
         await storage.createCrmMessage({
           senderName: 'New Age Fotografie (Sent)',
-          senderEmail: 'hallo@newagefotografie.com',
+          senderEmail: getEnvContactEmailSync(),
           subject: `[SENT] ${subject}`,
           content: `SENT TO: ${to}\n\n${typeof body === 'string' ? body : ''}`,
           status: 'sent', // Changed from 'archived' to 'sent' for proper categorization
@@ -5710,9 +5733,10 @@ Best regards,
 New Age Fotografie CRM System
     `;
 
+    const studioEmail = getEnvContactEmailSync();
     const mailOptions = {
-      from: 'hallo@newagefotografie.com',
-      to: 'hallo@newagefotografie.com',
+      from: studioEmail || 'no-reply@localhost',
+      to: studioEmail || 'no-reply@localhost',
       subject: emailSubject,
       text: emailBody,
       html: emailBody.replace(/\n/g, '<br>').replace(/━/g, '─')
@@ -5727,7 +5751,7 @@ New Age Fotografie CRM System
         senderName: 'New Age Fotografie System',
         senderEmail: 'system@newagefotografie.com',
         subject: `[LEAD NOTIFICATION] ${emailSubject}`,
-        content: `Lead notification sent to hallo@newagefotografie.com\n\n${emailBody}`,
+        content: `Lead notification sent to ${studioEmail || '<unset>'}\n\n${emailBody}`,
         status: 'archived'
       });
     } catch (dbError) {
@@ -7286,7 +7310,7 @@ What would you like help with today? Just describe the task and I'll guide you t
 
 **Direkter Kontakt:**
 WhatsApp: +43 677 633 99210
-Email: hallo@newagefotografie.com
+Email: ${getEnvContactEmailSync()}
 
 Welches Paket interessiert Sie am meisten?`;
     }
@@ -7348,7 +7372,7 @@ Schönbrunner Str. 25, 1050 Wien
 
 **Kontakt:**
 WhatsApp: +43 677 633 99210
-Email: hallo@newagefotografie.com
+Email: ${getEnvContactEmailSync()}
 
 **Öffnungszeiten:**
 Freitag - Sonntag: 09:00 - 17:00
@@ -7377,7 +7401,7 @@ Möchten Sie einen Termin vereinbaren?`;
 
 **Direkter Kontakt:**
 WhatsApp: +43 677 633 99210
-Email: hallo@newagefotografie.com`;
+Email: ${getEnvContactEmailSync()}`;
       }
       
       // For general questions, provide focused response based on article content
@@ -7397,7 +7421,7 @@ Schönbrunner Str. 25, 1050 Wien
 
 **Direkter Kontakt:**
 WhatsApp: +43 677 633 99210
-Email: hallo@newagefotografie.com
+Email: ${getEnvContactEmailSync()}
 
 Was interessiert Sie am meisten? Preise, Terminbuchung oder spezielle Fotoshootings?`;
     }
@@ -7411,7 +7435,7 @@ Ich bin Alex von New Age Fotografie Wien. Gerne helfe ich Ihnen bei:
 
 **Direkter Kontakt:**
 WhatsApp: +43 677 633 99210
-Email: hallo@newagefotografie.com
+Email: ${getEnvContactEmailSync()}
 
 Was interessiert Sie am meisten?`;
   }
@@ -8022,8 +8046,8 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
         `;
 
         await transporter.sendMail({
-          from: '"New Age Fotografie Website" <hallo@newagefotografie.com>',
-          to: 'hallo@newagefotografie.com',
+          from: `"New Age Fotografie Website" <${getEnvContactEmailSync() || 'no-reply@localhost'}>`,
+          to: getEnvContactEmailSync() || 'no-reply@localhost',
           subject: `Neue Kontaktanfrage von ${fullName}`,
           html: emailHtml
         });
@@ -8150,8 +8174,8 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
         `;
 
         await transporter.sendMail({
-          from: '"New Age Fotografie Website" <hallo@newagefotografie.com>',
-          to: 'hallo@newagefotografie.com',
+          from: `"New Age Fotografie Website" <${getEnvContactEmailSync() || 'no-reply@localhost'}>`,
+          to: getEnvContactEmailSync() || 'no-reply@localhost',
           subject: `📅 Neue Terminanfrage: ${fullName} für ${formatDate(preferredDate)}`,
           html: appointmentEmailHtml
         });
@@ -8185,7 +8209,7 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
               <p style="margin: 10px 0;">
                 <strong>Dringende Anfragen:</strong><br>
                 WhatsApp/Tel: <a href="tel:+43677663992010" style="color: #7C3AED;">+43 677 633 99210</a><br>
-                E-Mail: <a href="mailto:hallo@newagefotografie.com" style="color: #7C3AED;">hallo@newagefotografie.com</a>
+                E-Mail: <a href="mailto:${getEnvContactEmailSync()}" style="color: #7C3AED;">${getEnvContactEmailSync()}</a>
               </p>
             </div>
 
@@ -8202,14 +8226,14 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
             <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
               <p style="margin: 0; color: #666; font-size: 14px;">
                 New Age Fotografie | Wehrgasse 11A/2+5, 1050 Wien<br>
-                Tel/WhatsApp: +43 677 633 99210 | E-Mail: hallo@newagefotografie.com
+                Tel/WhatsApp: +43 677 633 99210 | E-Mail: ${getEnvContactEmailSync()}
               </p>
             </div>
           </div>
         `;
 
         await transporter.sendMail({
-          from: '"New Age Fotografie" <hallo@newagefotografie.com>',
+          from: `"New Age Fotografie" <${getEnvContactEmailSync() || 'no-reply@localhost'}>`,
           to: email,
           subject: '📅 Terminanfrage erhalten - Wir melden uns bald!',
           html: customerConfirmationHtml
@@ -8293,7 +8317,7 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
             <div style="margin: 30px 0;">
               <h3 style="color: #333;">So einfach geht's:</h3>
               <ol style="color: #666; line-height: 1.6;">
-                <li>WhatsApp an <strong>+43 677 633 99210</strong> oder E-Mail an <strong>hallo@newagefotografie.com</strong></li>
+                <li>WhatsApp an <strong>+43 677 633 99210</strong> oder E-Mail an <strong>${getEnvContactEmailSync()}</strong></li>
                 <li>Ihren Wunschtermin nennen</li>
                 <li>Gutscheincode <strong>VOUCHER50</strong> erwähnen</li>
                 <li>50€ sparen und wunderschöne Erinnerungen schaffen!</li>
@@ -8313,14 +8337,14 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
             <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
               <p style="margin: 0; color: #666; font-size: 14px;">
                 New Age Fotografie | Wehrgasse 11A/2+5, 1050 Wien<br>
-                Tel/WhatsApp: +43 677 633 99210 | E-Mail: hallo@newagefotografie.com
+                Tel/WhatsApp: +43 677 633 99210 | E-Mail: ${getEnvContactEmailSync()}
               </p>
             </div>
           </div>
         `;
 
         await transporter.sendMail({
-          from: '"New Age Fotografie" <hallo@newagefotografie.com>',
+          from: `"New Age Fotografie" <${getEnvContactEmailSync() || 'no-reply@localhost'}>`,
           to: email,
           subject: '🎉 Ihr 50€ Fotoshooting-Gutschein ist da!',
           html: voucherEmailHtml
@@ -8328,8 +8352,8 @@ Current system status: The AI agent system is temporarily unavailable. Please tr
 
         // Send notification to business
         await transporter.sendMail({
-          from: '"New Age Fotografie Website" <hallo@newagefotografie.com>',
-          to: 'hallo@newagefotografie.com',
+          from: `"New Age Fotografie Website" <${getEnvContactEmailSync() || 'no-reply@localhost'}>`,
+          to: getEnvContactEmailSync() || 'no-reply@localhost',
           subject: `Neue Newsletter-Anmeldung: ${email}`,
           html: `
             <h3>Neue Newsletter-Anmeldung</h3>

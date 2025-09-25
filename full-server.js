@@ -245,14 +245,16 @@ async function insertLeadAndNotify({ req, formType, fullName = null, email, phon
   const userAgent = String(req?.headers?.['user-agent'] || '');
   const src = typeof sourcePath === 'string' && sourcePath ? sourcePath : (req?.headers?.referer || '');
 
-  // Insert lead (retry without IP if provider supplies bad header)
-  let rows;
-  try {
-    rows = await sql`
-      INSERT INTO leads(form_type, full_name, email, phone, preferred_date, message, consent, source_path, user_agent, ip, meta, status)
-      VALUES (${formType}, ${fullName}, ${email}, ${phone}, ${preferredDate}, ${message}, ${!!consent}, ${src}, ${userAgent}, ${ipValue}, ${JSON.stringify({})}, 'new')
-      RETURNING id
-    `;
+    const settingsPub = await loadEmailSettings().catch(() => null);
+    const contactPubEmail = (settingsPub?.from_email || settingsPub?.smtp_user || process.env.SMTP_USER || '');
+    // Insert lead (retry without IP if provider supplies bad header)
+    let rows;
+    try {
+      rows = await sql`
+        INSERT INTO leads(form_type, full_name, email, phone, preferred_date, message, consent, source_path, user_agent, ip, meta, status)
+        VALUES (${formType}, ${fullName}, ${email}, ${phone}, ${preferredDate}, ${message}, ${!!consent}, ${src}, ${userAgent}, ${ipValue}, ${JSON.stringify({})}, 'new')
+        RETURNING id
+      `;
   } catch (e) {
     const msg = String(e?.message || '');
     if (msg.includes('invalid input syntax for type inet')) {
@@ -269,10 +271,10 @@ async function insertLeadAndNotify({ req, formType, fullName = null, email, phon
 
   // Best-effort emails (studio and optional acknowledgement)
   try {
-    const settings = await loadEmailSettings();
-    const tx = createMailerTransportFromSettings(settings);
-    const studioTo = (settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com').trim();
-    const fromAddr = (settings?.from_email || process.env.FROM_EMAIL || settings?.smtp_user || process.env.SMTP_USER || 'hallo@newagefotografie.com');
+  const settings = await loadEmailSettings();
+  const tx = createMailerTransportFromSettings(settings);
+  const studioTo = (settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || contactPubEmail).trim();
+  const fromAddr = (settings?.from_email || process.env.FROM_EMAIL || settings?.smtp_user || process.env.SMTP_USER || 'no-reply@example.com');
     const useJson = (process.env.EMAIL_TRANSPORT === 'json') || (!process.env.SMTP_HOST && !process.env.SMTP_USER && !settings?.smtp_user && !settings?.smtp_host);
     if (studioTo) {
       const lines = [
@@ -781,8 +783,8 @@ function getBaseUrl() {
 async function sendEmailSimple(to, subject, text, html) {
   try {
     const settings = await loadEmailSettings();
-    const transporter = createMailerTransportFromSettings(settings);
-    const from = (settings?.from_email || process.env.FROM_EMAIL || settings?.smtp_user || process.env.SMTP_USER || 'no-reply@newagefotografie.com');
+  const transporter = createMailerTransportFromSettings(settings);
+  const from = (settings?.from_email || process.env.FROM_EMAIL || settings?.smtp_user || process.env.SMTP_USER || 'no-reply@example.com');
     const info = await transporter.sendMail({ from, to, subject, text, html });
     const envUseJson = (process.env.EMAIL_TRANSPORT === 'json') || (!process.env.SMTP_HOST && !process.env.SMTP_USER && !settings?.smtp_user && !settings?.smtp_host);
     if (envUseJson) {
@@ -2145,9 +2147,11 @@ const server = http.createServer(async (req, res) => {
         const subj = camp.subject || 'Campaign';
         const html = camp.content || '<p>No content</p>';
         const test = !!b.test_send;
+        const settings = await loadEmailSettings();
         const testEmails = Array.isArray(b.test_emails) ? b.test_emails.filter(Boolean) : [];
         if (test) {
-          const toList = (testEmails.length ? testEmails : [(process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com')]);
+          const defaultNotify = (settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || settings?.from_email || settings?.smtp_user || process.env.SMTP_USER || 'info@example.com');
+          const toList = (testEmails.length ? testEmails : [defaultNotify]);
           for (const to of toList) {
             await sendEmailSimple(to, `[TEST] ${subj}`, '', html);
           }
@@ -2157,7 +2161,7 @@ const server = http.createServer(async (req, res) => {
         }
         // Non-test: mark as sent and notify studio (placeholder)
         await sql`UPDATE email_campaigns SET status = 'sent', sent_at = now(), updated_at = now() WHERE id = ${id}`;
-        const to = (process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com');
+        const to = (settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || settings?.from_email || settings?.smtp_user || process.env.SMTP_USER || 'info@example.com');
         await sendEmailSimple(to, `[SENT] ${subj}`, '', html);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true, sent: true }));
@@ -2189,18 +2193,18 @@ const server = http.createServer(async (req, res) => {
         const settings = await loadEmailSettings();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-          notificationEmail: settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com',
+          notificationEmail: settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || settings?.from_email || settings?.smtp_user || process.env.SMTP_USER || '',
           smtpHost: settings?.smtp_host || process.env.SMTP_HOST || '',
           smtpPort: settings?.smtp_port || parseInt(process.env.SMTP_PORT || '587', 10),
           smtpUser: settings?.smtp_user || process.env.SMTP_USER || '',
-          smtpPassword: settings?.smtp_pass ? '***' : '',
+          smtpPassword: '',
           emailSignature: settings?.email_signature || ''
         }));
       } catch (e) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         // Fallback to env if DB missing
         res.end(JSON.stringify({
-          notificationEmail: process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com',
+          notificationEmail: process.env.STUDIO_NOTIFY_EMAIL || process.env.SMTP_USER || '',
           smtpHost: process.env.SMTP_HOST || '',
           smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
           smtpUser: process.env.SMTP_USER || '',
@@ -2268,7 +2272,7 @@ const server = http.createServer(async (req, res) => {
         const body = raw ? JSON.parse(raw) : {};
         const settings = await loadEmailSettings();
         const tx = createMailerTransportFromSettings(settings);
-        const to = String(body.email || settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com');
+  const to = String(body.email || settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || settings?.from_email || settings?.smtp_user || process.env.SMTP_USER || '');
         const subject = String(body.subject || 'New Age Fotografie – SMTP test');
         const msg = String(body.message || 'If you received this, your SMTP is working.');
         const from = (settings?.from_email || process.env.FROM_EMAIL || settings?.smtp_user || process.env.SMTP_USER || 'no-reply@newagefotografie.com');
@@ -3271,7 +3275,7 @@ const server = http.createServer(async (req, res) => {
         </head><body>
         <main>
           <h1 style="margin-bottom:4px">Invoice ${esc(i.invoice_no)}</h1>
-          <div style="opacity:.75;margin-bottom:16px">New Age Fotografie · ${esc(process.env.SMTP_USER || 'hallo@newagefotografie.com')}</div>
+          <div style="opacity:.75;margin-bottom:16px">New Age Fotografie · ${esc((await loadEmailSettings()?.then(s=>s?.from_email||s?.smtp_user)) || process.env.SMTP_USER || '')}</div>
           <section style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
             <div>
               <strong>Bill To:</strong>
@@ -3775,15 +3779,15 @@ const server = http.createServer(async (req, res) => {
           const allowed = new Set(['new','contacted','converted','archived','any']);
           const statusFilter = allowed.has(status) ? status : 'new';
           let baseSql;
-          if (statusFilter === 'any') {
-            baseSql = sql`SELECT id, form_type, full_name, email, phone, preferred_date, source_path, created_at, status FROM leads`;
+          const like = search ? `%${search.toLowerCase()}%` : null;
+          if (statusFilter === 'any' && !search) {
+            baseSql = sql`SELECT id, form_type, full_name, email, phone, preferred_date, message, source_path, created_at, status FROM leads`;
+          } else if (statusFilter === 'any' && search) {
+            baseSql = sql`SELECT id, form_type, full_name, email, phone, preferred_date, message, source_path, created_at, status FROM leads WHERE (lower(coalesce(full_name,'')) LIKE ${like} OR lower(coalesce(email,'')) LIKE ${like} OR lower(coalesce(phone,'')) LIKE ${like} OR lower(coalesce(source_path,'')) LIKE ${like})`;
+          } else if (statusFilter !== 'any' && !search) {
+            baseSql = sql`SELECT id, form_type, full_name, email, phone, preferred_date, message, source_path, created_at, status FROM leads WHERE status = ${statusFilter}`;
           } else {
-            baseSql = sql`SELECT id, form_type, full_name, email, phone, preferred_date, source_path, created_at, status FROM leads WHERE status = ${statusFilter}`;
-          }
-          // Apply search on server side if provided
-          if (search) {
-            const like = `%${search.toLowerCase()}%`;
-            baseSql = sql`${baseSql} AND (lower(coalesce(full_name,'')) LIKE ${like} OR lower(coalesce(email,'')) LIKE ${like} OR lower(coalesce(phone,'')) LIKE ${like} OR lower(coalesce(source_path,'')) LIKE ${like})`;
+            baseSql = sql`SELECT id, form_type, full_name, email, phone, preferred_date, message, source_path, created_at, status FROM leads WHERE status = ${statusFilter} AND (lower(coalesce(full_name,'')) LIKE ${like} OR lower(coalesce(email,'')) LIKE ${like} OR lower(coalesce(phone,'')) LIKE ${like} OR lower(coalesce(source_path,'')) LIKE ${like})`;
           }
           // Count total
           let countRows;
@@ -3805,6 +3809,33 @@ const server = http.createServer(async (req, res) => {
           console.error('leads list error:', e.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: 'Failed to list leads' }));
+        }
+        return;
+      }
+      
+      // Create lead manually (admin)
+      if (pathname === '/api/leads/create' && req.method === 'POST') {
+        try {
+          if (!sql) throw new Error('Database not available');
+          await ensureLeadsSchema();
+          let raw = ''; req.on('data', c => raw += c.toString()); await new Promise(r => req.on('end', r));
+          const b = raw ? JSON.parse(raw) : {};
+          const fullName = String(b.full_name || `${b.first_name || ''} ${b.last_name || ''}`.trim()).trim();
+          const email = String(b.email || '').trim();
+          const phone = b.phone ? String(b.phone).trim() : null;
+          const message = b.message ? String(b.message) : null;
+          const formType = (b.form_type || b.source || 'manual').toString().toLowerCase();
+          if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Valid email required' }));
+            return;
+          }
+          const { id } = await insertLeadAndNotify({ req, formType, fullName, email, phone, message, consent: false, sourcePath: '/admin' });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, id }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
         }
         return;
       }
@@ -5578,6 +5609,8 @@ New Age Fotografie Team`;
                 </tr>
               `).join('');
 
+              const __settings = await loadEmailSettings();
+              const contactEmail = (__settings?.from_email || __settings?.smtp_user || process.env.SMTP_USER || 'info@example.com');
               const emailHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -5656,7 +5689,7 @@ New Age Fotografie Team`;
                       <p><strong>New Age Fotografie</strong><br>
                       Wien, Österreich<br>
                       Telefon: +43 677 633 99210<br>
-                      Email: hallo@newagefotografie.com</p>
+                      Email: ${escapeHtml(contactEmail)}</p>
                       
                       <p>Bei Fragen zu Ihrer Rechnung stehen wir Ihnen gerne zur Verfügung!</p>
                     </div>
@@ -5667,22 +5700,11 @@ New Age Fotografie Team`;
 
               // Initialize nodemailer with EasyName SMTP
               const nodemailer = require('nodemailer');
-              const transporter = nodemailer.createTransport({
-                host: 'mail.easyname.com',
-                port: 587,
-                secure: false,
-                auth: {
-                  user: process.env.SMTP_USER || 'hallo@newagefotografie.com',
-                  pass: process.env.SMTP_PASS || 'your-email-password'
-                },
-                tls: {
-                  rejectUnauthorized: false
-                }
-              });
+              const transporter = createMailerTransportFromSettings(__settings);
 
               // Send email
               const mailOptions = {
-                from: '"New Age Fotografie" <hallo@newagefotografie.com>',
+                from: `${(__settings?.from_name||'New Age Fotografie')} <${(__settings?.from_email||__settings?.smtp_user||process.env.SMTP_USER||'no-reply@example.com')}>`,
                 to: email_address || invoice.client_email,
                 subject: emailSubject,
                 html: emailHtml,
@@ -7356,17 +7378,13 @@ New Age Fotografie Team`;
                     <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">€${parseFloat(item.unit_price).toFixed(2)}</td>
                     <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">€${(parseFloat(item.quantity) * parseFloat(item.unit_price)).toFixed(2)}</td>
                   </tr>`).join('');
+                const __settings = await loadEmailSettings();
+                const contactEmail = (__settings?.from_email || __settings?.smtp_user || process.env.FROM_EMAIL || process.env.SMTP_USER || 'info@example.com');
                 const emailHtml = `<!DOCTYPE html><html><body><div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">${clientName}<br/>Rechnung ${invoice.invoice_number}<br/>${invoiceUrl}<table style="width:100%; border-collapse: collapse;">${itemsHtml}</table></div></body></html>`;
                 const nodemailer = require('nodemailer');
-                const transporter = nodemailer.createTransport({
-                  host: 'mail.easyname.com',
-                  port: 587,
-                  secure: false,
-                  auth: { user: process.env.SMTP_USER || 'hallo@newagefotografie.com', pass: process.env.SMTP_PASS || 'your-email-password' },
-                  tls: { rejectUnauthorized: false }
-                });
+                const transporter = createMailerTransportFromSettings(__settings);
                 await transporter.sendMail({
-                  from: 'hallo@newagefotografie.com',
+                  from: `${(__settings?.from_name||'New Age Fotografie')} <${contactEmail}>`,
                   to: payload.email_address || invoice.client_email,
                   subject: emailSubject,
                   html: emailHtml

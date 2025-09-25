@@ -46,6 +46,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const { language, setLanguage, t } = useLanguage();
   const [newLeadsCount, setNewLeadsCount] = useState(0);
   const [unreadEmailsCount, setUnreadEmailsCount] = useState(0);
+  const [notificationEmail, setNotificationEmail] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
@@ -60,7 +61,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const fetchCounts = async () => {
       try {
         // Fetch new leads count from unified leads API
-        const leadsResponse = await fetch('/api/leads/list?status=new');
+  const leadsResponse = await fetch('/api/leads/list?status=new&limit=1');
         if (leadsResponse.ok) {
           const payload = await leadsResponse.json();
           setNewLeadsCount(payload.count || (payload.rows?.length ?? 0));
@@ -71,6 +72,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         if (emailsResponse.ok) {
           const emails = await emailsResponse.json();
           setUnreadEmailsCount(emails.length);
+        }
+
+        // Fetch notification email settings (best-effort)
+        const settingsResp = await fetch('/api/admin/email-settings');
+        if (settingsResp.ok) {
+          const s = await settingsResp.json();
+          if (s && s.notificationEmail) setNotificationEmail(s.notificationEmail);
         }
       } catch (error) {
         // console.error removed
@@ -212,7 +220,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     {newLeadsCount} unread leads waiting for your attention
                   </p>
                   <p className="text-blue-700 text-xs mt-1">
-                    📧 Email notifications sent to: <span className="font-medium">hallo@newagefotografie.com</span>
+                    📧 Email notifications sent to: <span className="font-medium">{notificationEmail || 'hallo@newagefotografie.com'}</span>
                   </p>
                   <button
                     onClick={() => navigate('/admin/leads')}

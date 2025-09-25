@@ -114,7 +114,8 @@ const ComprehensiveReportsPage: React.FC = () => {
       ] = await Promise.allSettled([
         fetch(`/api/crm/invoices?from=${startDate.toISOString()}`),
         fetch('/api/crm/clients'),
-  fetch(`/api/leads/list?status=any`),
+        // Pull a window of leads server-side for efficiency
+        fetch(`/api/leads/list?status=any&limit=500&offset=0`),
         fetch(`/api/vouchers/sales?from=${startDate.toISOString()}`),
         fetch('/api/blog/posts')
       ]);
@@ -124,8 +125,9 @@ const ComprehensiveReportsPage: React.FC = () => {
         ? await invoicesResponse.value.json() : [];
       const clients = clientsResponse.status === 'fulfilled' && clientsResponse.value.ok 
         ? await clientsResponse.value.json() : [];
-      const leads = leadsResponse.status === 'fulfilled' && leadsResponse.value.ok 
-        ? await leadsResponse.value.json() : [];
+      const leadsPayload = leadsResponse.status === 'fulfilled' && leadsResponse.value.ok 
+        ? await leadsResponse.value.json() : { rows: [], count: 0 };
+      const leads = Array.isArray(leadsPayload) ? leadsPayload : (leadsPayload.rows || []);
       const vouchers = vouchersResponse.status === 'fulfilled' && vouchersResponse.value.ok 
         ? await vouchersResponse.value.json() : [];
       const blogPosts = blogResponse.status === 'fulfilled' && blogResponse.value.ok 
