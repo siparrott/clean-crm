@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+// Supabase is disabled in this app. Use internal API endpoints.
 import {
   EmailCampaign,
   EmailSequence,
@@ -14,40 +14,32 @@ import {
 
 // Campaign Management
 export async function createCampaign(campaign: Partial<EmailCampaign>): Promise<EmailCampaign> {
-  const { data, error } = await supabase
-    .from('email_campaigns')
-    .insert([campaign])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+  const adminToken = localStorage.getItem('ADMIN_TOKEN') || '';
+  const res = await fetch('/api/admin/email/campaigns', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify(campaign)
+  });
+  if (!res.ok) throw new Error('Failed to create campaign');
+  return res.json();
 }
 
 export async function updateCampaign(id: string, updates: Partial<EmailCampaign>): Promise<EmailCampaign> {
-  const { data, error } = await supabase
-    .from('email_campaigns')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+  const adminToken = localStorage.getItem('ADMIN_TOKEN') || '';
+  const res = await fetch(`/api/admin/email/campaigns/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify(updates)
+  });
+  if (!res.ok) throw new Error('Failed to update campaign');
+  return res.json();
 }
 
-export async function getCampaigns(filters?: Record<string, any>): Promise<EmailCampaign[]> {
-  let query = supabase.from('email_campaigns').select('*');
-  
-  if (filters) {
-    Object.entries(filters).forEach(([key, value]) => {
-      query = query.eq(key, value);
-    });
-  }
-  
-  const { data, error } = await query.order('created_at', { ascending: false });
-  if (error) throw error;
-  return data || [];
+export async function getCampaigns(): Promise<EmailCampaign[]> {
+  const adminToken = localStorage.getItem('ADMIN_TOKEN') || '';
+  const res = await fetch('/api/admin/email/campaigns', { headers: { 'x-admin-token': adminToken } });
+  if (!res.ok) throw new Error('Failed to load campaigns');
+  return res.json();
 }
 
 export async function sendCampaign(id: string, options?: { test_send?: boolean; test_emails?: string[] }): Promise<void> {
@@ -63,13 +55,12 @@ export async function sendCampaign(id: string, options?: { test_send?: boolean; 
 }
 
 export async function duplicateCampaign(id: string, name?: string): Promise<EmailCampaign> {
-  const { data: original, error: fetchError } = await supabase
-    .from('email_campaigns')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (fetchError) throw fetchError;
+  const adminToken = localStorage.getItem('ADMIN_TOKEN') || '';
+  const res = await fetch('/api/admin/email/campaigns', { headers: { 'x-admin-token': adminToken } });
+  if (!res.ok) throw new Error('Failed to load campaigns');
+  const list: EmailCampaign[] = await res.json();
+  const original = list.find(c => String(c.id) === String(id));
+  if (!original) throw new Error('Original campaign not found');
 
   const duplicate = {
     ...original,
@@ -87,263 +78,57 @@ export async function duplicateCampaign(id: string, name?: string): Promise<Emai
 
 // Email Sequences (Drip Campaigns)
 export async function createSequence(sequence: Partial<EmailSequence>): Promise<EmailSequence> {
-  const { data, error } = await supabase
-    .from('email_sequences')
-    .insert([sequence])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+  throw new Error('Sequences are not implemented');
 }
 
-export async function getSequences(): Promise<EmailSequence[]> {
-  const { data, error } = await supabase
-    .from('email_sequences')
-    .select('*, emails:sequence_emails(*)')
-    .order('created_at', { ascending: false });
+export async function getSequences(): Promise<EmailSequence[]> { return []; }
 
-  if (error) throw error;
-  return data || [];
-}
+export async function updateSequence(id: string, updates: Partial<EmailSequence>): Promise<EmailSequence> { throw new Error('Sequences are not implemented'); }
 
-export async function updateSequence(id: string, updates: Partial<EmailSequence>): Promise<EmailSequence> {
-  const { data, error } = await supabase
-    .from('email_sequences')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function enrollSubscriberInSequence(subscriberId: string, sequenceId: string): Promise<void> {
-  const { error } = await supabase
-    .from('sequence_enrollments')
-    .insert([{
-      subscriber_id: subscriberId,
-      sequence_id: sequenceId,
-      status: 'active',
-      current_email_index: 0,
-      enrolled_at: new Date().toISOString()
-    }]);
-
-  if (error) throw error;
-}
+export async function enrollSubscriberInSequence(_subscriberId: string, _sequenceId: string): Promise<void> { throw new Error('Sequences are not implemented'); }
 
 // Subscriber Management
-export async function createSubscriber(subscriber: Partial<Subscriber>): Promise<Subscriber> {
-  const { data, error } = await supabase
-    .from('email_subscribers')
-    .insert([subscriber])
-    .select()
-    .single();
+export async function createSubscriber(_subscriber: Partial<Subscriber>): Promise<Subscriber> { throw new Error('Subscribers API not implemented'); }
 
-  if (error) throw error;
-  return data;
-}
+export async function getSubscribers(): Promise<Subscriber[]> { return []; }
 
-export async function getSubscribers(filters?: {
-  status?: string;
-  tags?: string[];
-  segment?: string;
-  search?: string;
-}): Promise<Subscriber[]> {
-  let query = supabase.from('email_subscribers').select('*');
+export async function updateSubscriber(_id: string, _updates: Partial<Subscriber>): Promise<Subscriber> { throw new Error('Subscribers API not implemented'); }
 
-  if (filters?.status) {
-    query = query.eq('status', filters.status);
-  }
+export async function addTagsToSubscriber(_subscriberId: string, _tags: string[]): Promise<void> { throw new Error('Subscribers API not implemented'); }
 
-  if (filters?.tags && filters.tags.length > 0) {
-    query = query.contains('tags', filters.tags);
-  }
-
-  if (filters?.search) {
-    query = query.or(`email.ilike.%${filters.search}%,first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%`);
-  }
-
-  const { data, error } = await query.order('subscription_date', { ascending: false });
-  if (error) throw error;
-  return data || [];
-}
-
-export async function updateSubscriber(id: string, updates: Partial<Subscriber>): Promise<Subscriber> {
-  const { data, error } = await supabase
-    .from('email_subscribers')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function addTagsToSubscriber(subscriberId: string, tags: string[]): Promise<void> {
-  const { data: subscriber, error: fetchError } = await supabase
-    .from('email_subscribers')
-    .select('tags')
-    .eq('id', subscriberId)
-    .single();
-
-  if (fetchError) throw fetchError;
-
-  const existingTags = subscriber.tags || [];
-  const newTags = [...new Set([...existingTags, ...tags])];
-
-  const { error: updateError } = await supabase
-    .from('email_subscribers')
-    .update({ tags: newTags })
-    .eq('id', subscriberId);
-
-  if (updateError) throw updateError;
-}
-
-export async function removeTagsFromSubscriber(subscriberId: string, tags: string[]): Promise<void> {
-  const { data: subscriber, error: fetchError } = await supabase
-    .from('email_subscribers')
-    .select('tags')
-    .eq('id', subscriberId)
-    .single();
-
-  if (fetchError) throw fetchError;
-  const existingTags: string[] = subscriber.tags || [];
-  const newTags = existingTags.filter((tag: string) => !tags.includes(tag));
-
-  const { error: updateError } = await supabase
-    .from('email_subscribers')
-    .update({ tags: newTags })
-    .eq('id', subscriberId);
-
-  if (updateError) throw updateError;
-}
+export async function removeTagsFromSubscriber(_subscriberId: string, _tags: string[]): Promise<void> { throw new Error('Subscribers API not implemented'); }
 
 // Segment Management
-export async function createSegment(segment: Partial<Segment>): Promise<Segment> {
-  const { data, error } = await supabase
-    .from('email_segments')
-    .insert([segment])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
+export async function createSegment(_segment: Partial<Segment>): Promise<Segment> { throw new Error('Segments API not implemented'); }
 
 export async function getSegments(): Promise<Segment[]> {
-  const { data, error } = await supabase
-    .from('email_segments')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data || [];
+  const res = await fetch('/api/email/segments');
+  if (!res.ok) throw new Error('Failed to load segments');
+  return res.json();
 }
 
-export async function updateSegment(id: string, updates: Partial<Segment>): Promise<Segment> {
-  const { data, error } = await supabase
-    .from('email_segments')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
+export async function updateSegment(_id: string, _updates: Partial<Segment>): Promise<Segment> { throw new Error('Segments API not implemented'); }
 
-  if (error) throw error;
-  return data;
-}
-
-export async function getSegmentSubscribers(segmentId: string): Promise<Subscriber[]> {  // This would implement the segment logic based on conditions
-  const { error: segmentError } = await supabase
-    .from('email_segments')
-    .select('*')
-    .eq('id', segmentId)
-    .single();
-
-  if (segmentError) throw segmentError;
-
-  // Apply segment conditions to get matching subscribers
-  // This is a simplified implementation - in reality, you'd build dynamic queries
-  const { data, error } = await supabase
-    .from('email_subscribers')
-    .select('*')
-    .eq('status', 'subscribed');
-
-  if (error) throw error;
-  return data || [];
-}
+export async function getSegmentSubscribers(_segmentId: string): Promise<Subscriber[]> { return []; }
 
 // Template Management
-export async function createTemplate(template: Partial<EmailTemplate>): Promise<EmailTemplate> {
-  const { data, error } = await supabase
-    .from('email_templates')
-    .insert([template])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
+export async function createTemplate(_template: Partial<EmailTemplate>): Promise<EmailTemplate> { throw new Error('Templates API not implemented'); }
 
 export async function getTemplates(category?: string): Promise<EmailTemplate[]> {
-  let query = supabase.from('email_templates').select('*');
-  
-  if (category) {
-    query = query.eq('category', category);
-  }
-
-  const { data, error } = await query.order('created_at', { ascending: false });
-  if (error) throw error;
-  return data || [];
+  const url = category ? `/api/email/templates?category=${encodeURIComponent(category)}` : '/api/email/templates';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to load templates');
+  return res.json();
 }
 
-export async function updateTemplate(id: string, updates: Partial<EmailTemplate>): Promise<EmailTemplate> {
-  const { data, error } = await supabase
-    .from('email_templates')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
+export async function updateTemplate(_id: string, _updates: Partial<EmailTemplate>): Promise<EmailTemplate> { throw new Error('Templates API not implemented'); }
 
 // Automation Rules
-export async function createAutomationRule(rule: Partial<AutomationRule>): Promise<AutomationRule> {
-  const { data, error } = await supabase
-    .from('email_automation_rules')
-    .insert([rule])
-    .select()
-    .single();
+export async function createAutomationRule(_rule: Partial<AutomationRule>): Promise<AutomationRule> { throw new Error('Automation rules not implemented'); }
 
-  if (error) throw error;
-  return data;
-}
+export async function getAutomationRules(): Promise<AutomationRule[]> { return []; }
 
-export async function getAutomationRules(): Promise<AutomationRule[]> {
-  const { data, error } = await supabase
-    .from('email_automation_rules')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data || [];
-}
-
-export async function updateAutomationRule(id: string, updates: Partial<AutomationRule>): Promise<AutomationRule> {
-  const { data, error } = await supabase
-    .from('email_automation_rules')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
+export async function updateAutomationRule(_id: string, _updates: Partial<AutomationRule>): Promise<AutomationRule> { throw new Error('Automation rules not implemented'); }
 
 // Analytics
 export async function getCampaignAnalytics(campaignId: string, period: string = 'month'): Promise<EmailAnalytics> {
@@ -425,13 +210,7 @@ export async function predictEngagement(campaignId: string): Promise<{
 }
 
 // Event Tracking
-export async function trackEmailEvent(event: Partial<EmailEvent>): Promise<void> {
-  const { error } = await supabase
-    .from('email_events')
-    .insert([event]);
-
-  if (error) throw error;
-}
+export async function trackEmailEvent(_event: Partial<EmailEvent>): Promise<void> { /* no-op */ }
 
 export async function getEmailEvents(filters?: {
   campaign_id?: string;
@@ -440,25 +219,7 @@ export async function getEmailEvents(filters?: {
   start_date?: string;
   end_date?: string;
 }): Promise<EmailEvent[]> {
-  let query = supabase.from('email_events').select('*');
-
-  if (filters) {
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) {
-        if (key === 'start_date') {
-          query = query.gte('timestamp', value);
-        } else if (key === 'end_date') {
-          query = query.lte('timestamp', value);
-        } else {
-          query = query.eq(key, value);
-        }
-      }
-    });
-  }
-
-  const { data, error } = await query.order('timestamp', { ascending: false });
-  if (error) throw error;
-  return data || [];
+  return [];
 }
 
 // Advanced Features

@@ -624,6 +624,74 @@ async function ensureVoucherSalesSchema() {
   }
 }
 
+// ===== Email Campaigns schema bootstrap =====
+let __emailCampaignsEnsured = false;
+async function ensureEmailCampaignsSchema() {
+  if (__emailCampaignsEnsured) return;
+  if (!sql) return;
+  try {
+    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS email_campaigns (
+        id uuid primary key default gen_random_uuid(),
+        name text not null,
+        type text not null default 'broadcast',
+        subject text not null,
+        preview_text text,
+        content text,
+        design_template text,
+        sender_name text,
+        sender_email text,
+        reply_to text,
+        status text not null default 'draft',
+        scheduled_at timestamptz,
+        sent_at timestamptz,
+        segments jsonb default '[]'::jsonb,
+        tags_include jsonb default '[]'::jsonb,
+        tags_exclude jsonb default '[]'::jsonb,
+        ab_test jsonb default '{}'::jsonb,
+        send_time_optimization boolean default false,
+        frequency_capping jsonb default '{}'::jsonb,
+        deliverability_settings jsonb default '{}'::jsonb,
+        compliance_settings jsonb default '{}'::jsonb,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      )`;
+
+    // Lightweight supporting tables for UI browsing (optional)
+    await sql`
+      CREATE TABLE IF NOT EXISTS email_templates (
+        id uuid primary key default gen_random_uuid(),
+        name text not null,
+        category text not null default 'custom',
+        thumbnail text,
+        html_content text,
+        css_content text,
+        json_design jsonb default '{}'::jsonb,
+        variables jsonb default '[]'::jsonb,
+        responsive boolean default true,
+        dark_mode_support boolean default true,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      )`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS email_segments (
+        id uuid primary key default gen_random_uuid(),
+        name text not null,
+        description text,
+        type text not null default 'dynamic',
+        conditions jsonb default '[]'::jsonb,
+        subscriber_count integer default 0,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      )`;
+    __emailCampaignsEnsured = true;
+    console.log('✅ Email campaigns schema ensured');
+  } catch (e) {
+    console.warn('⚠️ ensureEmailCampaignsSchema failed:', e.message);
+  }
+}
+
 // ===== Helper: base URL, email sender, PDF generator =====
 function getBaseUrl() {
   const base = (process.env.APP_BASE_URL || process.env.APP_URL || '').trim();
@@ -635,15 +703,21 @@ function getBaseUrl() {
 async function sendEmailSimple(to, subject, text, html) {
   try {
     const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: (process.env.SMTP_SECURE || 'false') === 'true',
-      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-      tls: { rejectUnauthorized: false }
-    });
+    const useJson = (process.env.EMAIL_TRANSPORT === 'json') || (!process.env.SMTP_HOST && !process.env.SMTP_USER);
+    const transporter = useJson
+      ? nodemailer.createTransport({ jsonTransport: true })
+      : nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT || '587', 10),
+          secure: (process.env.SMTP_SECURE || 'false') === 'true',
+          auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+          tls: { rejectUnauthorized: false }
+        });
     const from = process.env.FROM_EMAIL || process.env.SMTP_USER || 'no-reply@newagefotografie.com';
-    await transporter.sendMail({ from, to, subject, text, html });
+    const info = await transporter.sendMail({ from, to, subject, text, html });
+    if (useJson) {
+      try { console.log('📧 [json email]', JSON.stringify(info.message, null, 2)); } catch {}
+    }
   } catch (e) {
     console.warn('sendEmailSimple failed:', e.message);
   }
@@ -1800,6 +1874,230 @@ const server = http.createServer(async (req, res) => {
   
   // API endpoints
   if (pathname.startsWith('/api/')) {
+    // Email AI helpers: subject lines
+    if (pathname === '/api/email/ai/subject-lines' && req.method === 'POST') {
+      try {
+        let raw = ''; req.on('data', c => raw += c); await new Promise(r => req.on('end', r));
+        const body = raw ? JSON.parse(raw) : {};
+        const content = String(body.content || '');
+        const audience = String(body.audience || 'subscribers');
+        const base = content.replace(/<[^>]+>/g, ' ').slice(0, 120).trim();
+        const suggestions = [
+          `Neu: ${base || 'Exklusive Angebote für Sie'}`.slice(0, 60),
+          `Für ${audience}: ${base || 'Jetzt entdecken'}`.slice(0, 60),
+          `Nur kurz: ${base || 'Sichern Sie sich Ihren Platz'}`.slice(0, 60)
+        ];
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ suggestions }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to generate suggestions' }));
+      }
+      return;
+    }
+
+    // Email AI helpers: predict engagement
+    if (pathname.startsWith('/api/email/ai/predict-engagement/') && req.method === 'GET') {
+      try {
+        const parts = pathname.split('/');
+        const id = parts[parts.length - 1];
+        // Basic deterministic mock
+        const hash = [...id].reduce((a, c) => a + c.charCodeAt(0), 0);
+        const predicted_open_rate = 0.25 + ((hash % 15) / 100);
+        const predicted_click_rate = 0.03 + ((hash % 7) / 100);
+        const confidence = 0.6 + ((hash % 20) / 100);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ predicted_open_rate, predicted_click_rate, confidence }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Prediction failed' }));
+      }
+      return;
+    }
+
+    // Email resources: templates and segments (public read)
+    if (pathname === '/api/email/templates' && req.method === 'GET') {
+      try {
+        const samples = [
+          { name: 'Newsletter Classic', category: 'newsletter', html_content: '<h1>Hallo!</h1><p>Neuigkeiten aus dem Studio…</p>' },
+          { name: 'Promo Angebot', category: 'promotional', html_content: '<h2>Spar-Aktion</h2><p>Jetzt Termin sichern.</p>' },
+          { name: 'Event Einladung', category: 'event', html_content: '<h2>Einladung</h2><p>Wir freuen uns auf Sie!</p>' },
+          { name: 'Willkommen', category: 'welcome', html_content: '<h2>Willkommen</h2><p>Schön, dass Sie da sind.</p>' }
+        ];
+        let rows = [];
+        if (sql) {
+          try {
+            await ensureEmailCampaignsSchema();
+            rows = await sql`SELECT id, name, category, thumbnail, html_content, css_content, json_design, variables, responsive, dark_mode_support, created_at, updated_at FROM email_templates ORDER BY created_at DESC LIMIT 12`;
+          } catch { rows = []; }
+        }
+        const out = (rows && rows.length ? rows : samples.map((s, i) => ({ id: `sample-${i+1}`, thumbnail: '', css_content: '', json_design: {}, variables: [], responsive: true, dark_mode_support: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...s })));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(out));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to load templates' }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/email/segments' && req.method === 'GET') {
+      try {
+        const samples = [
+          { id: 'recent-subscribers', name: 'Recent Subscribers', description: 'Signed up in last 30 days', type: 'dynamic', conditions: [], subscriber_count: 850, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), growth_rate: 0.08, engagement_rate: 0.31 },
+          { id: 'high-engagers', name: 'High Engagers', description: 'Opened or clicked in last 60 days', type: 'dynamic', conditions: [], subscriber_count: 540, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), growth_rate: 0.05, engagement_rate: 0.52 },
+          { id: 'vienna', name: 'Vienna Area', description: 'Location in Vienna', type: 'dynamic', conditions: [], subscriber_count: 420, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), growth_rate: 0.03, engagement_rate: 0.29 }
+        ];
+        let rows = [];
+        if (sql) {
+          try {
+            await ensureEmailCampaignsSchema();
+            rows = await sql`SELECT id, name, description, type, conditions, subscriber_count, created_at, updated_at FROM email_segments ORDER BY created_at DESC LIMIT 50`;
+          } catch { rows = []; }
+        }
+        const out = (rows && rows.length ? rows : samples);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(out));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to load segments' }));
+      }
+      return;
+    }
+
+    // Admin: campaigns CRUD
+    if (pathname === '/api/admin/email/campaigns' && req.method === 'GET') {
+      if (!requireAdminToken(req, res)) return;
+      try {
+        if (!sql) throw new Error('Database not available');
+        await ensureEmailCampaignsSchema();
+        const rows = await sql`SELECT * FROM email_campaigns ORDER BY created_at DESC`;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(rows));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/admin/email/campaigns' && req.method === 'POST') {
+      if (!requireAdminToken(req, res)) return;
+      try {
+        if (!sql) throw new Error('Database not available');
+        await ensureEmailCampaignsSchema();
+        let raw = ''; req.on('data', c => raw += c); await new Promise(r => req.on('end', r));
+        const b = raw ? JSON.parse(raw) : {};
+        const ins = await sql`
+          INSERT INTO email_campaigns (
+            name, type, subject, preview_text, content, design_template,
+            sender_name, sender_email, reply_to, status, scheduled_at, sent_at,
+            segments, tags_include, tags_exclude, ab_test,
+            send_time_optimization, frequency_capping, deliverability_settings, compliance_settings
+          ) VALUES (
+            ${b.name || ''}, ${b.type || 'broadcast'}, ${b.subject || ''}, ${b.preview_text || ''}, ${b.content || ''}, ${b.design_template || null},
+            ${b.sender_name || null}, ${b.sender_email || null}, ${b.reply_to || null}, ${b.status || 'draft'}, ${b.scheduled_at || null}, ${b.sent_at || null},
+            ${JSON.stringify(b.segments || [])}::jsonb, ${JSON.stringify(b.tags_include || [])}::jsonb, ${JSON.stringify(b.tags_exclude || [])}::jsonb, ${JSON.stringify(b.ab_test || {})}::jsonb,
+            ${!!b.send_time_optimization}, ${JSON.stringify(b.frequency_capping || {})}::jsonb, ${JSON.stringify(b.deliverability_settings || {})}::jsonb, ${JSON.stringify(b.compliance_settings || {})}::jsonb
+          ) RETURNING *`;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(ins[0]));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    if (pathname.startsWith('/api/admin/email/campaigns/') && req.method === 'PUT') {
+      if (!requireAdminToken(req, res)) return;
+      try {
+        if (!sql) throw new Error('Database not available');
+        await ensureEmailCampaignsSchema();
+        const id = pathname.split('/').pop();
+        let raw = ''; req.on('data', c => raw += c); await new Promise(r => req.on('end', r));
+        const b = raw ? JSON.parse(raw) : {};
+        const upd = await sql`
+          UPDATE email_campaigns SET
+            name = COALESCE(${b.name}, name),
+            type = COALESCE(${b.type}, type),
+            subject = COALESCE(${b.subject}, subject),
+            preview_text = COALESCE(${b.preview_text}, preview_text),
+            content = COALESCE(${b.content}, content),
+            design_template = COALESCE(${b.design_template}, design_template),
+            sender_name = COALESCE(${b.sender_name}, sender_name),
+            sender_email = COALESCE(${b.sender_email}, sender_email),
+            reply_to = COALESCE(${b.reply_to}, reply_to),
+            status = COALESCE(${b.status}, status),
+            scheduled_at = COALESCE(${b.scheduled_at}, scheduled_at),
+            sent_at = COALESCE(${b.sent_at}, sent_at),
+            segments = COALESCE(${b.segments ? JSON.stringify(b.segments) : null}::jsonb, segments),
+            tags_include = COALESCE(${b.tags_include ? JSON.stringify(b.tags_include) : null}::jsonb, tags_include),
+            tags_exclude = COALESCE(${b.tags_exclude ? JSON.stringify(b.tags_exclude) : null}::jsonb, tags_exclude),
+            ab_test = COALESCE(${b.ab_test ? JSON.stringify(b.ab_test) : null}::jsonb, ab_test),
+            send_time_optimization = COALESCE(${typeof b.send_time_optimization === 'boolean' ? b.send_time_optimization : null}, send_time_optimization),
+            frequency_capping = COALESCE(${b.frequency_capping ? JSON.stringify(b.frequency_capping) : null}::jsonb, frequency_capping),
+            deliverability_settings = COALESCE(${b.deliverability_settings ? JSON.stringify(b.deliverability_settings) : null}::jsonb, deliverability_settings),
+            compliance_settings = COALESCE(${b.compliance_settings ? JSON.stringify(b.compliance_settings) : null}::jsonb, compliance_settings),
+            updated_at = now()
+          WHERE id = ${id}
+          RETURNING *`;
+        if (!upd.length) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Not found' }));
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(upd[0]));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    // Send or test-send a campaign
+    if (pathname === '/api/email/campaigns/send' && req.method === 'POST') {
+      try {
+        if (!sql) throw new Error('Database not available');
+        await ensureEmailCampaignsSchema();
+        let raw = ''; req.on('data', c => raw += c); await new Promise(r => req.on('end', r));
+        const b = raw ? JSON.parse(raw) : {};
+        const id = b.campaign_id;
+        if (!id) throw new Error('campaign_id required');
+        const rows = await sql`SELECT * FROM email_campaigns WHERE id = ${id}`;
+        if (!rows.length) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Campaign not found' }));
+          return;
+        }
+        const camp = rows[0];
+        const subj = camp.subject || 'Campaign';
+        const html = camp.content || '<p>No content</p>';
+        const test = !!b.test_send;
+        const testEmails = Array.isArray(b.test_emails) ? b.test_emails.filter(Boolean) : [];
+        if (test) {
+          const toList = (testEmails.length ? testEmails : [(process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com')]);
+          for (const to of toList) {
+            await sendEmailSimple(to, `[TEST] ${subj}`, '', html);
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, test: true, recipients: toList }));
+          return;
+        }
+        // Non-test: mark as sent and notify studio (placeholder)
+        await sql`UPDATE email_campaigns SET status = 'sent', sent_at = now(), updated_at = now() WHERE id = ${id}`;
+        const to = (process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com');
+        await sendEmailSimple(to, `[SENT] ${subj}`, '', html);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, sent: true }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
     // Admin debug: ping-db
     if (pathname === '/api/admin/ping-db' && req.method === 'GET') {
       try {

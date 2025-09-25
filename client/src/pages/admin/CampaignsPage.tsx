@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { 
   Plus, 
@@ -17,6 +17,7 @@ import AdvancedCampaignBuilder from '../../components/admin/AdvancedCampaignBuil
 import EmailSequenceBuilder from '../../components/admin/EmailSequenceBuilder';
 import EmailAnalyticsDashboard from '../../components/admin/EmailAnalyticsDashboard';
 import { EmailCampaign } from '../../types/email-marketing';
+import { getCampaigns } from '../../lib/email-marketing';
 
 type TabType = 'overview' | 'campaigns' | 'sequences' | 'analytics' | 'templates' | 'subscribers';
 
@@ -24,15 +25,31 @@ const AdvancedEmailMarketingHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [showCampaignBuilder, setShowCampaignBuilder] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<EmailCampaign | null>(null);
+  const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const loadCampaigns = async () => {
+    try {
+      setLoading(true);
+      const list = await getCampaigns();
+      setCampaigns(list);
+    } catch (e) {
+      // no-op
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadCampaigns(); }, []);
   const handleCreateCampaign = () => {
     setEditingCampaign(null);
     setShowCampaignBuilder(true);
   };
 
   const handleSaveCampaign = (campaign: EmailCampaign) => {
-    // Handle campaign save
-    // console.log removed
     setShowCampaignBuilder(false);
+    // Refresh list after save/send
+    loadCampaigns();
   };
 
   const tabs = [
@@ -288,19 +305,53 @@ const AdvancedEmailMarketingHub: React.FC = () => {
           Create Campaign
         </button>
       </div>
-
-      {/* Campaign management interface would go here */}
-      <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
-        <Mail className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Campaign management interface</h3>
-        <p className="text-gray-600 mb-6">Advanced campaign list with filtering, sorting, and bulk actions.</p>
-        <button
-          onClick={handleCreateCampaign}
-          className="flex items-center mx-auto px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-        >
-          <Plus size={16} className="mr-2" />
-          Create Your First Campaign
-        </button>
+      <div className="bg-white border border-gray-200 rounded-lg p-0">
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">Loading campaigns…</div>
+        ) : campaigns.length === 0 ? (
+          <div className="p-8 text-center">
+            <Mail className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No campaigns yet</h3>
+            <p className="text-gray-600 mb-6">Create your first campaign to get started.</p>
+            <button
+              onClick={handleCreateCampaign}
+              className="flex items-center mx-auto px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+            >
+              <Plus size={16} className="mr-2" />
+              Create Your First Campaign
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Updated</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {campaigns.map((c) => (
+                  <tr key={c.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{c.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        c.status === 'sent' ? 'bg-green-100 text-green-800' :
+                        c.status === 'sending' ? 'bg-blue-100 text-blue-800' :
+                        c.status === 'scheduled' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>{c.status}</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{c.subject}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(c.updated_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

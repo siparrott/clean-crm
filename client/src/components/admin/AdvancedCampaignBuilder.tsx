@@ -29,6 +29,7 @@ import {
   generateSubjectLine,
   predictEngagement 
 } from '../../lib/email-marketing';
+import { sendCampaign } from '../../lib/email-marketing';
 
 interface AdvancedCampaignBuilderProps {
   campaign?: EmailCampaign;
@@ -100,6 +101,7 @@ const AdvancedCampaignBuilder: React.FC<AdvancedCampaignBuilderProps> = ({
   const [engagementPrediction, setEngagementPrediction] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -164,11 +166,48 @@ const AdvancedCampaignBuilder: React.FC<AdvancedCampaignBuilderProps> = ({
         });
       }
 
-      onSave(savedCampaign);
+      // If Send Campaign was clicked, trigger backend send after save
+      if (shouldSend && savedCampaign?.id) {
+        setSending(true);
+        try {
+          await sendCampaign(savedCampaign.id);
+          onSave(savedCampaign);
+        } finally {
+          setSending(false);
+        }
+      } else {
+        onSave(savedCampaign);
+      }
     } catch (error) {
       // console.error removed
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendTest = async () => {
+    try {
+      // Ensure minimal required fields
+      if (!campaignData.subject || !campaignData.content) {
+        alert('Please add a subject and content first.');
+        return;
+      }
+      setSending(true);
+      // Save or update first to get an id
+      let saved: EmailCampaign | null = null;
+      if (campaign?.id) {
+        saved = await updateCampaign(campaign.id, { ...campaignData, updated_at: new Date().toISOString() } as any);
+      } else {
+        saved = await createCampaign({ ...campaignData, status: 'draft', created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+      }
+      const testEmail = window.prompt('Send test email to:', 'hallo@newagefotografie.com') || undefined;
+      await sendCampaign(saved.id, { test_send: true, test_emails: testEmail ? [testEmail] : undefined });
+      alert('Test email queued successfully.');
+      onSave(saved);
+    } catch (e) {
+      alert('Failed to send test email.');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -740,6 +779,18 @@ const AdvancedCampaignBuilder: React.FC<AdvancedCampaignBuilderProps> = ({
             Cancel
           </button>
           <button
+            onClick={handleSendTest}
+            disabled={saving || sending}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+          >
+            {sending ? (
+              <Loader2 size={16} className="mr-2 animate-spin" />
+            ) : (
+              <TestTube size={16} className="mr-2" />
+            )}
+            Send Test
+          </button>
+          <button
             onClick={() => handleSave(false)}
             disabled={saving}
             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center"
@@ -753,10 +804,10 @@ const AdvancedCampaignBuilder: React.FC<AdvancedCampaignBuilderProps> = ({
           </button>
           <button
             onClick={() => handleSave(true)}
-            disabled={saving}
+            disabled={saving || sending}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
           >
-            {saving ? (
+            {saving || sending ? (
               <Loader2 size={16} className="mr-2 animate-spin" />
             ) : (
               <Send size={16} className="mr-2" />
