@@ -220,7 +220,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     {newLeadsCount} unread leads waiting for your attention
                   </p>
                   <p className="text-blue-700 text-xs mt-1">
-                    📧 Email notifications sent to: <span className="font-medium">{notificationEmail || 'hallo@newagefotografie.com'}</span>
+                    📧 Email notifications sent to: <span className="font-medium">{notificationEmail || 'Not configured'}</span>
+                    {!notificationEmail && (
+                      <>
+                        {' '}
+                        <button
+                          onClick={() => navigate('/admin/settings/email')}
+                          className="text-blue-600 underline hover:text-blue-800 ml-1"
+                        >
+                          configure now
+                        </button>
+                      </>
+                    )}
                   </p>
                   <button
                     onClick={() => navigate('/admin/leads')}

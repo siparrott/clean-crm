@@ -3005,6 +3005,7 @@ Bitte versuchen Sie es später noch einmal.`;
     try {
       const { limit = 10, orderBy = 'lifetime_value', minRevenue, yearFilter } = req.query;
       
+      // Compute metrics based on PAID invoices only (status 'paid') and cast numerics for JS consumers
       let query = `
         SELECT 
           c.id,
@@ -3013,27 +3014,33 @@ Bitte versuchen Sie es später noch einmal.`;
           c.email,
           c.phone,
           c.city,
-          COALESCE(SUM(i.total), 0) as total_revenue,
-          COUNT(DISTINCT i.id) as invoice_count,
-          COUNT(DISTINCT s.id) as session_count,
-          MAX(i.created_at) as last_invoice_date,
-          MAX(s.session_date) as last_session_date,
-          COALESCE(SUM(i.total), 0) as lifetime_value
+          COALESCE(SUM(CASE WHEN i.status = 'paid' THEN i.total ELSE 0 END)::double precision, 0)::double precision AS total_revenue,
+          COALESCE(COUNT(DISTINCT CASE WHEN i.status = 'paid' THEN i.id END), 0)::int AS invoice_count,
+          COALESCE(COUNT(DISTINCT s.id), 0)::int AS session_count,
+          MAX(CASE WHEN i.status = 'paid' THEN i.created_at END) AS last_invoice_date,
+          MAX(s.session_date) AS last_session_date,
+          COALESCE(SUM(CASE WHEN i.status = 'paid' THEN i.total ELSE 0 END)::double precision, 0)::double precision AS lifetime_value,
+          COALESCE(
+            (SUM(CASE WHEN i.status = 'paid' THEN i.total ELSE 0 END)::double precision) /
+            NULLIF(COUNT(DISTINCT CASE WHEN i.status = 'paid' THEN i.id END), 0),
+            0
+          )::double precision AS average_invoice
         FROM crm_clients c
-        LEFT JOIN crm_invoices i ON c.id = i.client_id AND i.status = 'PAID'
+        LEFT JOIN crm_invoices i ON c.id = i.client_id
         LEFT JOIN photography_sessions s ON c.id::text = s.client_id
       `;
       
       // Add year filter if specified
       if (yearFilter) {
-        query += ` AND EXTRACT(YEAR FROM i.created_at) = ${yearFilter}`;
+        // Apply year filter only to invoice-based aggregations by excluding non-matching years
+        query += ` AND (i.created_at IS NULL OR EXTRACT(YEAR FROM i.created_at) = ${Number(yearFilter)})`;
       }
       
       query += ` GROUP BY c.id, c.first_name, c.last_name, c.email, c.phone, c.city`;
       
       // Add minimum revenue filter
       if (minRevenue) {
-        query += ` HAVING SUM(i.total) >= ${minRevenue}`;
+        query += ` HAVING SUM(CASE WHEN i.status = 'paid' THEN i.total ELSE 0 END) >= ${Number(minRevenue)}`;
       }
       
       // Add ordering
@@ -3052,7 +3059,7 @@ Bitte versuchen Sie es später noch einmal.`;
       
       query += ` LIMIT ${limit}`;
       
-  const topClients = await runSql(query);
+      const topClients = await runSql(query);
       res.json(topClients);
     } catch (error) {
       console.error('Error fetching top clients:', error);
@@ -3078,14 +3085,14 @@ Bitte versuchen Sie es später noch einmal.`;
                 ELSE 'No Revenue'
               END as segment,
               COUNT(*) as client_count,
-              SUM(total_revenue) as segment_revenue,
-              AVG(total_revenue) as avg_revenue_per_client
+              SUM(total_revenue)::double precision as segment_revenue,
+              AVG(total_revenue)::double precision as avg_revenue_per_client
             FROM (
               SELECT 
                 c.id,
-                COALESCE(SUM(i.total), 0) as total_revenue
+                COALESCE(SUM(CASE WHEN i.status = 'paid' THEN i.total ELSE 0 END)::double precision, 0)::double precision as total_revenue
               FROM crm_clients c
-              LEFT JOIN crm_invoices i ON c.id = i.client_id AND i.status = 'PAID'
+              LEFT JOIN crm_invoices i ON c.id = i.client_id
               GROUP BY c.id
             ) client_revenues
             GROUP BY segment
@@ -3103,8 +3110,8 @@ Bitte versuchen Sie es später noch einmal.`;
                 ELSE 'No Sessions'
               END as segment,
               COUNT(*) as client_count,
-              SUM(session_count) as total_sessions,
-              AVG(session_count) as avg_sessions_per_client
+              SUM(session_count)::int as total_sessions,
+              AVG(session_count)::double precision as avg_sessions_per_client
             FROM (
               SELECT 
                 c.id,
@@ -3123,13 +3130,13 @@ Bitte versuchen Sie es später noch einmal.`;
             SELECT 
               COALESCE(city, 'Unknown') as segment,
               COUNT(*) as client_count,
-              COALESCE(SUM(total_revenue), 0) as segment_revenue
+              COALESCE(SUM(total_revenue)::double precision, 0)::double precision as segment_revenue
             FROM (
               SELECT 
                 c.city,
-                COALESCE(SUM(i.total), 0) as total_revenue
+                COALESCE(SUM(CASE WHEN i.status = 'paid' THEN i.total ELSE 0 END)::double precision, 0)::double precision as total_revenue
               FROM crm_clients c
-              LEFT JOIN crm_invoices i ON c.id = i.client_id AND i.status = 'PAID'
+              LEFT JOIN crm_invoices i ON c.id = i.client_id
               GROUP BY c.id, c.city
             ) client_geo
             GROUP BY city

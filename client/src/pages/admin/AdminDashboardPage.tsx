@@ -38,8 +38,8 @@ interface DashboardData {
   upcomingBookings: number;
   
   // Charts Data
-  revenueChart: { month: string; revenue: number; bookings: number; }[];
-  leadConversionChart: { month: string; leads: number; converted: number; }[];
+  revenueChart: { label: string; revenue: number; bookings: number; }[];
+  leadConversionChart: { label: string; leads: number; converted: number; }[];
   serviceDistribution: { service: string; count: number; revenue: number; }[];
   
   // Recent Activity
@@ -194,11 +194,18 @@ const AdminDashboardPage: React.FC = () => {
       const paidInvoices = invoices.filter((inv: any) => inv.status === 'paid');
 
       // Create simplified chart data
-      const chartData = createMockChartData(
-        metrics.totalRevenue || 0,
-        metrics.paidInvoices || 0,
-        allLeads.length
-      );
+      // Build revenue chart from server trendData (last 7 days)
+      const revenueChart = Array.isArray(metrics.trendData)
+        ? metrics.trendData.map((d: any) => ({
+            label: (() => { try { return format(new Date(d.date), 'MMM dd'); } catch { return String(d.date); } })(),
+            revenue: Number(d.value || 0),
+            bookings: 0
+          }))
+        : [];
+
+      // Build a simple lead conversion summary for the last 30 days
+      const convertedCount = newLeads.filter((l: any) => (l.status === 'CONVERTED' || l.status === 'converted')).length;
+      const leadConversionChart = [{ label: 'Last 30 days', leads: newLeads.length, converted: convertedCount }];
 
       const dashboardData: DashboardData = {
         totalRevenue: metrics.totalRevenue || 0,
@@ -207,9 +214,9 @@ const AdminDashboardPage: React.FC = () => {
         newLeads: newLeads.length,
         pendingInvoices: invoices.filter((inv: any) => inv.status === 'pending').length,
         upcomingBookings: metrics.upcomingSessions || 0,
-        revenueChart: chartData.revenueChart,
-        leadConversionChart: chartData.leadConversionChart,
-        serviceDistribution: chartData.serviceDistribution,
+  revenueChart,
+  leadConversionChart,
+  serviceDistribution: [],
         recentLeads: newLeads.slice(0, 5),
         recentBookings: bookings.slice(0, 5),
         recentInvoices: paidInvoices.slice(0, 5),
@@ -227,20 +234,7 @@ const AdminDashboardPage: React.FC = () => {
     }
   };
 
-  // Simplified chart processing without date parsing
-  const createMockChartData = (revenue: number, invoiceCount: number, leadCount: number) => {
-    return {
-      revenueChart: [
-        { month: 'Jul 2025', revenue: revenue, bookings: invoiceCount }
-      ],
-      leadConversionChart: [
-        { month: 'Jul 2025', leads: leadCount, converted: 0 }
-      ],
-      serviceDistribution: [
-        { service: 'Photography Services', count: invoiceCount, revenue: revenue }
-      ]
-    };
-  };
+  // No mock chart data; we rely on real metrics. If empty, UI shows an empty state message.
 
   const MetricCard = ({ title, value, change, icon: Icon, color }: any) => (
     <div className="bg-white rounded-lg shadow p-6">
@@ -272,26 +266,26 @@ const AdminDashboardPage: React.FC = () => {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <MetricCard
         title="Total Revenue"
-        value={`€${dashboardData?.totalRevenue.toLocaleString()}`}
+        value={`€${(dashboardData?.totalRevenue ?? 0).toLocaleString()}`}
         change={dashboardData?.monthlyGrowth}
         icon={DollarSign}
         color="bg-purple-500"
       />
       <MetricCard
         title="New Leads"
-        value={dashboardData?.newLeads}
+        value={dashboardData?.newLeads ?? 0}
         icon={Users}
         color="bg-blue-500"
       />
       <MetricCard
         title="Upcoming Bookings"
-        value={dashboardData?.upcomingBookings}
+        value={dashboardData?.upcomingBookings ?? 0}
         icon={CalendarIcon}
         color="bg-green-500"
       />
       <MetricCard
         title="Conversion Rate"
-        value={`${dashboardData?.conversionRate.toFixed(1)}%`}
+        value={`${(dashboardData?.conversionRate ?? 0).toFixed(1)}%`}
         icon={TrendingUp}
         color="bg-orange-500"
       />
@@ -305,7 +299,7 @@ const AdminDashboardPage: React.FC = () => {
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={dashboardData?.revenueChart || []}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
+            <XAxis dataKey="label" />
             <YAxis />
             <Tooltip />
             <Area type="monotone" dataKey="revenue" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.3} />
@@ -315,25 +309,29 @@ const AdminDashboardPage: React.FC = () => {
 
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Service Distribution</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <PieChart>
-            <Pie
-              data={dashboardData?.serviceDistribution || []}
-              cx="50%"
-              cy="50%"
-              labelLine={false}
-              label={({service, count}) => `${service} (${count})`}
-              outerRadius={80}
-              fill="#8884d8"
-              dataKey="revenue"
-            >
-              {(dashboardData?.serviceDistribution || []).map((_, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(value) => [`€${value}`, 'Revenue']} />
-          </PieChart>
-        </ResponsiveContainer>
+        {dashboardData?.serviceDistribution && dashboardData.serviceDistribution.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={dashboardData.serviceDistribution}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({service, count}) => `${service} (${count})`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="revenue"
+              >
+                {dashboardData.serviceDistribution.map((_, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value) => [`€${value}`, 'Revenue']} />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="text-sm text-gray-500">No service distribution data yet.</div>
+        )}
       </div>
     </div>
   );

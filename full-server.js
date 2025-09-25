@@ -6730,8 +6730,23 @@ New Age Fotografie Team`;
           }
           await ensureVouchersSchema();
           const rows = await sql`SELECT session_id, email, amount, currency, delivery, variant, personalization, preview_url, shipping, status, pdf_url, created_at FROM vouchers WHERE status = 'print_queue' ORDER BY created_at DESC LIMIT 100`;
+          // Normalize shape minimally for UI compatibility
+          const vouchers = rows.map(r => ({
+            session_id: r.session_id,
+            email: r.email,
+            amount: Number(r.amount || 0),
+            currency: r.currency || 'eur',
+            delivery: r.delivery || 'pdf',
+            variant: r.variant || null,
+            personalization: r.personalization || null,
+            preview_url: r.preview_url || null,
+            shipping: r.shipping || null,
+            status: r.status || null,
+            pdf_url: r.pdf_url || null,
+            created_at: r.created_at
+          }));
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: true, count: rows.length, vouchers: rows }));
+          res.end(JSON.stringify({ success: true, count: vouchers.length, vouchers }));
         } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: e.message }));

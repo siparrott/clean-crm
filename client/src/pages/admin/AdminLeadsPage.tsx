@@ -260,7 +260,12 @@ const AdminLeadsPage: React.FC = () => {
             <div>
               <h3 className="text-sm font-medium text-blue-900">Lead Notifications Active</h3>
               <p className="text-sm text-blue-700">
-                New lead notifications are automatically sent to <strong>{notificationEmail || 'hallo@newagefotografie.com'}</strong> when leads are submitted via contact forms, waitlist, or created manually.
+                New lead notifications are automatically sent to <strong>{notificationEmail || 'Not configured'}</strong> when leads are submitted via contact forms, waitlist, or created manually.
+                {!notificationEmail && (
+                  <>
+                    {' '}<button onClick={() => window.location.assign('/admin/settings/email')} className="underline text-blue-700 hover:text-blue-900">configure now</button>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -273,7 +278,10 @@ const AdminLeadsPage: React.FC = () => {
             <p className="text-gray-600">Manage and track your potential clients</p>
             <div className="mt-2 flex items-center space-x-1 text-sm text-blue-600">
               <Mail size={14} />
-              <span>Email notifications sent to: <strong>{notificationEmail || 'hallo@newagefotografie.com'}</strong></span>
+              <span>Email notifications sent to: <strong>{notificationEmail || 'Not configured'}</strong></span>
+              {!notificationEmail && (
+                <button onClick={() => window.location.assign('/admin/settings/email')} className="ml-2 underline text-blue-700 hover:text-blue-900">configure</button>
+              )}
             </div>
           </div>
           <button

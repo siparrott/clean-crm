@@ -72,7 +72,7 @@ const HighValueClientsPage: React.FC = () => {
     return new Intl.NumberFormat('de-AT', {
       style: 'currency',
       currency: 'EUR'
-    }).format(amount);
+    }).format(isFinite(amount as any) ? amount || 0 : 0);
   };
 
   const formatDate = (dateString: string) => {
@@ -130,7 +130,11 @@ const HighValueClientsPage: React.FC = () => {
 
             <div className="grid gap-4">
               {topClients.map((client, index) => {
-                const tier = getClientTier(client.total_revenue);
+                const safeRevenue = Number(client.total_revenue || 0);
+                const safeInvoiceCount = Number(client.invoice_count || 0);
+                const safeSessionCount = Number(client.session_count || 0);
+                const avgInvoice = Number((client as any).average_invoice || (safeInvoiceCount ? safeRevenue / safeInvoiceCount : 0));
+                const tier = getClientTier(safeRevenue);
                 const TierIcon = tier.icon;
                 
                 return (
@@ -161,7 +165,7 @@ const HighValueClientsPage: React.FC = () => {
                         
                         <div className="text-right">
                           <div className="text-2xl font-bold text-green-600">
-                            {formatCurrency(client.total_revenue)}
+                            {formatCurrency(safeRevenue)}
                           </div>
                           <div className="text-sm text-gray-500">Lifetime Value</div>
                         </div>
@@ -169,15 +173,15 @@ const HighValueClientsPage: React.FC = () => {
                       
                       <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t">
                         <div className="text-center">
-                          <div className="text-lg font-semibold">{client.invoice_count}</div>
+                          <div className="text-lg font-semibold">{safeInvoiceCount}</div>
                           <div className="text-xs text-gray-500">Invoices</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-lg font-semibold">{client.session_count}</div>
+                          <div className="text-lg font-semibold">{safeSessionCount}</div>
                           <div className="text-xs text-gray-500">Sessions</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-lg font-semibold">{formatCurrency(client.average_invoice)}</div>
+                          <div className="text-lg font-semibold">{formatCurrency(avgInvoice)}</div>
                           <div className="text-xs text-gray-500">Avg Invoice</div>
                         </div>
                         <div className="text-center">
@@ -250,10 +254,13 @@ const HighValueClientsPage: React.FC = () => {
                 <CardContent>
                   <div className="text-center">
                     <div className="text-2xl font-bold">
-                      {topClients.length > 0 && (
-                        Math.round((topClients.slice(0, 5).reduce((sum, client) => sum + client.total_revenue, 0) / 
-                        topClients.reduce((sum, client) => sum + client.total_revenue, 0)) * 100)
-                      )}%
+                      {(() => {
+                        if (topClients.length === 0) return '0%';
+                        const top5 = topClients.slice(0, 5).reduce((sum, c) => sum + Number(c.total_revenue || 0), 0);
+                        const total = topClients.reduce((sum, c) => sum + Number(c.total_revenue || 0), 0);
+                        const pct = total > 0 ? Math.round((top5 / total) * 100) : 0;
+                        return `${pct}%`;
+                      })()}
                     </div>
                     <p className="text-sm text-gray-600">Top 5 clients revenue share</p>
                   </div>

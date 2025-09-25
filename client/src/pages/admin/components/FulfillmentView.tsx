@@ -13,6 +13,7 @@ type VoucherItem = {
   preview_url?: string;
   pdf_url?: string | null;
   status?: string;
+  shipping?: any; // raw JSON (string or object) from Stripe shipping_details
 };
 
 export default function FulfillmentView({ adminToken }: { adminToken: string }) {
@@ -107,6 +108,45 @@ export default function FulfillmentView({ adminToken }: { adminToken: string }) 
                     <div className="text-xs text-gray-500">No preview available</div>
                   )}
                 </div>
+              </div>
+              {/* Shipping (for postal delivery) */}
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-sm font-medium">Delivery</div>
+                  <div className="text-sm text-gray-700 capitalize">{v.delivery || 'pdf'}</div>
+                </div>
+                {(() => {
+                  // Accept string or object input for shipping field
+                  let ship: any = null;
+                  try {
+                    ship = typeof v.shipping === 'string' ? JSON.parse(v.shipping) : v.shipping;
+                  } catch (e) {
+                    ship = null;
+                  }
+                  const addr = ship?.address || ship?.shipping?.address || null;
+                  const name = ship?.name || ship?.recipient || v.personalization?.recipient_name || '';
+                  if (!addr && v.delivery !== 'post') return null;
+                  return (
+                    <div>
+                      <div className="text-sm font-medium">Shipping Address</div>
+                      {addr ? (
+                        <div className="text-sm text-gray-700 leading-5">
+                          {name && <div className="font-medium">{name}</div>}
+                          {addr.line1 && <div>{addr.line1}</div>}
+                          {addr.line2 && <div>{addr.line2}</div>}
+                          <div>
+                            {(addr.postal_code || addr.zip) && <span>{addr.postal_code || addr.zip}</span>} {addr.city || addr.town}
+                          </div>
+                          <div>{addr.state || ''}</div>
+                          <div>{addr.country || ''}</div>
+                          {ship?.phone && <div className="mt-1 text-gray-600">Phone: {ship.phone}</div>}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-500">No shipping details</div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               <div className="flex gap-2">
                 <Button variant="secondary" onClick={() => regeneratePdf.mutate(v.session_id)} disabled={regeneratePdf.isPending}>

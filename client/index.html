@@ -34,64 +34,49 @@
     <meta name="robots" content="index, follow">
     <link rel="sitemap" type="application/xml" href="/sitemap.xml">
 
-    <!-- Structured Data -->
+    <!-- Structured Data (PhotoStudio) -->
     <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "PhotoStudio",
+  "name": "New Age Fotografie",
+  "image": "https://www.newagefotografie.com/wp-content/uploads/2023/11/logo.png",
+  "@id": "https://www.newagefotografie.com",
+  "url": "https://www.newagefotografie.com",
+  "telephone": "+43 677 633 99210",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Wehrgasse 11A/2+5",
+    "addressLocality": "Wien",
+    "postalCode": "1050",
+    "addressCountry": "AT"
+  },
+  "geo": {
+    "@type": "GeoCoordinates",
+    "latitude": "48.1907",
+    "longitude": "16.3574"
+  },
+  "openingHoursSpecification": [
     {
-      "@context": "https://schema.org",
-      "@type": "PhotoStudio",
-      "@id": "https://www.newagefotografie.com#studio",
-      "name": "New Age Fotografie",
-      "url": "https://www.newagefotografie.com/",
-      "logo": "https://www.newagefotografie.com/logo.svg",
-      "image": "https://www.newagefotografie.com/og-cover.jpg",
-      "description": "Familien-, Neugeborenen-, Babybauch- und Businessfotografie in Wien.",
-      "telephone": "+43 677 633 99210",
-      "email": "hallo@newagefotografie.com",
-      "address": {
-        "@type": "PostalAddress",
-        "streetAddress": "Schönbrunner Str. 25",
-        "addressLocality": "Wien",
-        "postalCode": "1050",
-        "addressCountry": "AT"
-      },
-      "geo": {
-        "@type": "GeoCoordinates",
-        "latitude": 48.1851,
-        "longitude": 16.3569
-      },
-      "openingHoursSpecification": [{
-        "@type": "OpeningHoursSpecification",
-        "dayOfWeek": ["Friday","Saturday","Sunday"],
-        "opens": "09:00",
-        "closes": "17:00"
-      }],
-      "sameAs": [
-        "https://www.facebook.com/NewAgeFotografie",
-        "https://www.instagram.com/newagefotografie"
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday"
       ],
-      "makesOffer": [
-        {
-          "@type": "Service",
-          "name": "Familienfotografie",
-          "description": "Professionelle Familienporträts in Wien"
-        },
-        {
-          "@type": "Service", 
-          "name": "Neugeborenenfotos",
-          "description": "Einfühlsame Babyfotografie und Neugeborenenfotos"
-        },
-        {
-          "@type": "Service",
-          "name": "Businessfotografie", 
-          "description": "Moderne Business-Headshots und Corporate Fotografie"
-        },
-        {
-          "@type": "Service",
-          "name": "Schwangerschaftsfotos",
-          "description": "Künstlerische Babybauch-Fotografie"
-        }
-      ]
+      "opens": "09:00",
+      "closes": "18:00"
     }
+  ],
+  "description": "New Age Fotografie Studio Eingang Ecke Schönbrunnerstraße. Familien-, Baby-, Neugeborenen- und Businessfotografie in entspannter Atmosphäre.",
+  "sameAs": [
+    "https://www.facebook.com/newagefotografie",
+    "https://www.instagram.com/newagefotografie",
+    "https://www.linkedin.com/company/new-age-fotografie"
+  ]
+}
     </script>
   </head>
   <body>
