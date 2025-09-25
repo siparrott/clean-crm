@@ -420,7 +420,7 @@ const HomePage: React.FC = () => {
             <div className="bg-white rounded-lg shadow-lg overflow-hidden">
               <div className="aspect-[4/3] overflow-hidden">
                 <img 
-                  src="https://i.imgur.com/4m5hoL9.jpg"
+                  src="https://i.postimg.cc/tJ4kNYW7/Familienfotoshooting-im-Fotostudio-Wien-Krexner-2777.jpg"
                   alt="Family photoshoot"
                   className="w-full h-full object-cover"
                 />

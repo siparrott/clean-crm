@@ -109,9 +109,6 @@ const Footer: React.FC = () => {
             <h3 className="text-lg font-semibold mb-4">{t('footer.contact')}</h3>
             <ul className="space-y-2 text-gray-300">
               <li>
-                <span className="text-sm">{t('footer.officeAddress')}:</span>
-              </li>
-              <li>
                 <span className="text-sm">{t('contact.studioAddress')}</span>
               </li>
               <li>
@@ -143,49 +140,44 @@ const Footer: React.FC = () => {
             <h3 className="text-lg font-semibold mb-4">{t('footer.categories')}</h3>
             <ul className="space-y-2">
               <li>
-                <Link 
-                  to="/fotoshootings?category=Familie" 
-                  onClick={scrollToTop}
+                <a 
+                  href="https://www.newagefotografie.com/gutschein/family"
                   className="text-gray-300 hover:text-white transition-colors"
                 >
                   {t('footer.family')}
-                </Link>
+                </a>
               </li>
               <li>
-                <Link 
-                  to="/fotoshootings?category=Baby" 
-                  onClick={scrollToTop}
+                <a 
+                  href="https://www.newagefotografie.com/gutschein/newborn"
                   className="text-gray-300 hover:text-white transition-colors"
                 >
                   {t('footer.baby')}
-                </Link>
+                </a>
               </li>
               <li>
-                <Link 
-                  to="/fotoshootings?category=Hochzeit" 
-                  onClick={scrollToTop}
+                <a 
+                  href="https://www.newagefotografie.com/fotoshootings/wedding"
                   className="text-gray-300 hover:text-white transition-colors"
                 >
                   {t('footer.wedding')}
-                </Link>
+                </a>
               </li>
               <li>
-                <Link 
-                  to="/fotoshootings?category=Business" 
-                  onClick={scrollToTop}
+                <a 
+                  href="https://www.newagefotografie.com/fotoshootings/business"
                   className="text-gray-300 hover:text-white transition-colors"
                 >
                   {t('footer.business')}
-                </Link>
+                </a>
               </li>
               <li>
-                <Link 
-                  to="/fotoshootings?category=Event" 
-                  onClick={scrollToTop}
+                <a 
+                  href="https://www.newagefotografie.com/fotoshootings/event"
                   className="text-gray-300 hover:text-white transition-colors"
                 >
                   {t('footer.event')}
-                </Link>
+                </a>
               </li>
             </ul>
           </div>
