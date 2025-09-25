@@ -110,46 +110,67 @@ async function ensureLeadsSchema() {
   if (__leadsSchemaEnsured) return;
   if (!sql) return; // will be re-attempted on first use when SQL ready
   try {
-    // Ensure pgcrypto for gen_random_uuid
-    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
-    // Create table if missing (keeps existing if present)
+    // Try to enable pgcrypto for gen_random_uuid if available (ignore if not permitted)
+    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`.catch(() => {});
+
+    // Create table if missing (avoid hard dependency on pgcrypto/uuid)
+    // Use TEXT id to be portable across Neon/Heroku; existing installs with uuid remain compatible
     await sql`
       CREATE TABLE IF NOT EXISTS leads (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        form_type text,
-        full_name text,
-        email text,
-        phone text,
-        preferred_date date,
-        message text,
-        consent boolean DEFAULT false,
-        source_path text,
-        user_agent text,
-        ip inet,
-        meta jsonb DEFAULT '{}'::jsonb,
-        status text DEFAULT 'new',
-        created_at timestamptz DEFAULT now()
+        id TEXT PRIMARY KEY DEFAULT md5(random()::text || clock_timestamp()::text),
+        form_type TEXT,
+        full_name TEXT,
+        email TEXT,
+        phone TEXT,
+        preferred_date DATE,
+        message TEXT,
+        consent BOOLEAN DEFAULT false,
+        source_path TEXT,
+        user_agent TEXT,
+        ip INET,
+        meta JSONB DEFAULT '{}'::jsonb,
+        status TEXT DEFAULT 'new',
+        created_at TIMESTAMPTZ DEFAULT now()
       )
     `;
-    // Add/align columns on existing installs (no-throw if already present)
+
+    // Back-compat columns from older installs or scripts (no-throw if already present)
     const alters = [
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS form_type text`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS full_name text`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS email text`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone text`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_date date`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS message text`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent boolean DEFAULT false`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_path text`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS user_agent text`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS ip inet`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS meta jsonb DEFAULT '{}'::jsonb`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS status text DEFAULT 'new'`,
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now()`
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS form_type TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS full_name TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS email TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_date DATE`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS message TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent BOOLEAN DEFAULT false`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_path TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS user_agent TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS ip INET`,
+      // If INET type is not available/allowed, add a text fallback
+      `DO $$ BEGIN
+         BEGIN
+           PERFORM 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='ip_text';
+           IF NOT FOUND THEN
+             ALTER TABLE leads ADD COLUMN ip_text TEXT;
+           END IF;
+         EXCEPTION WHEN others THEN
+           -- ignore
+         END;
+       END $$;`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS meta JSONB DEFAULT '{}'::jsonb`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'new'`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()`,
+      // legacy columns some codepaths referenced
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS name TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS first_name TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_name TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS source TEXT`,
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes TEXT`
     ];
     for (const stmt of alters) {
       await sql(stmt).catch(() => {});
     }
+
     // Helpful indexes (idempotent)
     await sql`CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_leads_created ON leads(created_at DESC)`;
@@ -3658,7 +3679,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
-      // POST /api/crm/leads - Create new lead
+      // POST /api/crm/leads - Create new lead (admin/manual)
       if (pathname === '/api/crm/leads' && req.method === 'POST') {
         try {
           let body = '';
@@ -3666,34 +3687,24 @@ const server = http.createServer(async (req, res) => {
           req.on('end', async () => {
             try {
               const { name, email, phone, message, source, status } = JSON.parse(body);
-              
+
               console.log('📝 Creating new lead via CRM API:', { name, email, source });
-              
-              // Create lead in database
-              const leadData = {
-                name: name,
-                email: email,
-                phone: phone,
-                source: source || 'manual',
-                status: status || 'new',
-                notes: message || '',
-                created_at: new Date().toISOString()
-              };
-              
-              // Store lead in database
-              await sql`
-                INSERT INTO leads (name, email, phone, source, status, notes, created_at)
-                VALUES (${leadData.name}, ${leadData.email}, ${leadData.phone}, ${leadData.source}, ${leadData.status}, ${leadData.notes}, ${leadData.created_at})
-              `;
-              
+
+              if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Valid email is required' }));
+                return;
+              }
+
+              const fullName = String(name || '').trim();
+              await ensureLeadsSchema();
+
+              // Insert via unified helper so email notifications are consistent
+              const { id } = await insertLeadAndNotify({ req, formType: (source || 'manual').toString().toLowerCase(), fullName, email, phone, message, consent: false, sourcePath: '/admin' });
+
               console.log('✅ Lead created successfully via CRM API');
-              
               res.writeHead(201, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ 
-                success: true, 
-                message: 'Lead created successfully',
-                data: leadData
-              }));
+              res.end(JSON.stringify({ success: true, id }));
             } catch (error) {
               console.error('❌ CRM Lead creation error:', error.message);
               res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -3794,6 +3805,41 @@ const server = http.createServer(async (req, res) => {
         } catch (error) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+        return;
+      }
+
+      // Leads-specific diagnostics: columns + indexes
+      if (pathname === '/api/db/schema/leads' && req.method === 'GET') {
+        try {
+          if (!sql) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Database not available' }));
+            return;
+          }
+          await ensureLeadsSchema();
+          const existsRows = await sql`SELECT to_regclass('public.leads') AS reg`;
+          const exists = !!(existsRows && existsRows[0] && existsRows[0].reg);
+          const columns = await sql`
+            SELECT column_name, data_type, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'leads'
+            ORDER BY ordinal_position
+          `;
+          const indexes = await sql`
+            SELECT indexname, indexdef
+            FROM pg_indexes
+            WHERE schemaname = 'public' AND tablename = 'leads'
+            ORDER BY indexname
+          `;
+          const newsletterUniquePresent = Array.isArray(indexes)
+            ? indexes.some(i => String(i.indexname || '').includes('uniq_newsletter_email') || String(i.indexdef || '').toLowerCase().includes('newsletter'))
+            : false;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, exists, columns, indexes, checks: { newsletterUniquePresent } }));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: error.message }));
         }
         return;
       }
@@ -3956,7 +4002,7 @@ const server = http.createServer(async (req, res) => {
       
       // === LEAD CAPTURE ENDPOINTS ===
 
-      // Unified leads submit endpoint (newsletter, waitlist, contact)
+  // Unified leads submit endpoint (newsletter, waitlist, contact)
       if (pathname === '/api/leads/submit') {
         if (req.method !== 'POST') {
           res.writeHead(405, { 'Content-Type': 'application/json' });
@@ -4013,58 +4059,11 @@ const server = http.createServer(async (req, res) => {
             if (typeof ip === 'string' && ip.includes(',')) ip = ip.split(',')[0].trim();
             const userAgent = String(req.headers['user-agent'] || '');
 
-            // Insert
+            // Insert via shared helper (handles inet, notifications)
             try {
-              const rows = await sql`
-                INSERT INTO leads(form_type, full_name, email, phone, preferred_date, message, consent, source_path, user_agent, ip, meta, status)
-                VALUES (${formType}, ${fullName}, ${email}, ${phone}, ${preferredDate}, ${message}, ${consent}, ${sourcePath}, ${userAgent}, ${ip}, ${JSON.stringify({})}, 'new')
-                RETURNING id, created_at
-              `;
-
-              // Send emails (studio + optional client acknowledgement)
-              try {
-                const nodemailer = require('nodemailer');
-                const tx = nodemailer.createTransport({
-                  host: process.env.SMTP_HOST,
-                  port: parseInt(process.env.SMTP_PORT || '587', 10),
-                  secure: false,
-                  auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-                  tls: { rejectUnauthorized: false }
-                });
-                const studioTo = (process.env.STUDIO_NOTIFY_EMAIL || '').trim();
-                if (studioTo) {
-                  const lines = [
-                    `Form: ${formType}`,
-                    `Name: ${fullName || '-'}`,
-                    `Email: ${email}`,
-                    `Phone: ${phone || '-'}`,
-                    `Preferred Date: ${preferredDate || '-'}`,
-                    `Message: ${message || '-'}`,
-                    `Consent: ${consent ? 'yes' : 'no'}`,
-                    `Source: ${sourcePath}`,
-                    `IP: ${ip}`,
-                  ];
-                  await tx.sendMail({
-                    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
-                    to: studioTo,
-                    subject: '📥 New Lead received',
-                    text: lines.join('\n')
-                  });
-                }
-                if (email && (formType === 'waitlist' || formType === 'contact')) {
-                  await tx.sendMail({
-                    from: process.env.FROM_EMAIL || process.env.SMTP_USER,
-                    to: email,
-                    subject: 'Thanks — we’ve received your message ✅',
-                    html: `<div style="font-family:system-ui;line-height:1.55"><p>Hi ${fullName || ''}</p><p>Thanks for reaching out to New Age Fotografie. We’ll get back to you shortly.</p><p>– New Age Fotografie</p></div>`
-                  });
-                }
-              } catch (mailErr) {
-                console.warn('⚠️ Lead email notification failed:', mailErr.message);
-              }
-
+              const { id } = await insertLeadAndNotify({ req, formType, fullName, email, phone, preferredDate, message, consent, sourcePath });
               res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ ok: true, id: rows[0]?.id }));
+              res.end(JSON.stringify({ ok: true, id }));
             } catch (e) {
               const msg = String(e?.message || '');
               if (msg.includes('uniq_newsletter_email') && formType === 'newsletter') {
