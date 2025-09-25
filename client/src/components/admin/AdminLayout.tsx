@@ -59,11 +59,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        // Fetch new leads count (database uses lowercase status values)
-        const leadsResponse = await fetch('/api/crm/leads?status=new');
+        // Fetch new leads count from unified leads API
+        const leadsResponse = await fetch('/api/leads/list?status=new');
         if (leadsResponse.ok) {
-          const leads = await leadsResponse.json();
-          setNewLeadsCount(leads.length);
+          const payload = await leadsResponse.json();
+          setNewLeadsCount(payload.count || (payload.rows?.length ?? 0));
         }
 
         // Fetch unread emails count

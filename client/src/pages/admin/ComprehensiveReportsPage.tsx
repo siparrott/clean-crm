@@ -114,7 +114,7 @@ const ComprehensiveReportsPage: React.FC = () => {
       ] = await Promise.allSettled([
         fetch(`/api/crm/invoices?from=${startDate.toISOString()}`),
         fetch('/api/crm/clients'),
-        fetch(`/api/crm/leads?from=${startDate.toISOString()}`),
+  fetch(`/api/leads/list?status=any`),
         fetch(`/api/vouchers/sales?from=${startDate.toISOString()}`),
         fetch('/api/blog/posts')
       ]);

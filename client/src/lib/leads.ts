@@ -12,10 +12,14 @@ export interface Lead {
   status: 'NEW' | 'CONTACTED' | 'CONVERTED';
 }
 
-export async function getLeads(status?: 'NEW' | 'CONTACTED' | 'CONVERTED') {
+export async function getLeads(params?: { status?: 'NEW' | 'CONTACTED' | 'CONVERTED' | 'ARCHIVED' | 'ANY'; q?: string; limit?: number; offset?: number }) {
   try {
-    const url = status ? `/api/crm/leads?status=${status.toLowerCase()}` : '/api/crm/leads';
-    // Fetching leads from API
+    const status = params?.status || 'NEW';
+    const search = params?.q ? `&q=${encodeURIComponent(params.q)}` : '';
+    const limit = typeof params?.limit === 'number' ? `&limit=${params!.limit}` : '';
+    const offset = typeof params?.offset === 'number' ? `&offset=${params!.offset}` : '';
+    const url = `/api/leads/list?status=${status.toLowerCase()}${search}${limit}${offset}`;
+    // Fetching leads from unified API
     
     const response = await fetch(url, {
       credentials: 'include', // Include cookies for authentication
@@ -32,33 +36,31 @@ export async function getLeads(status?: 'NEW' | 'CONTACTED' | 'CONVERTED') {
       throw new Error(`Failed to fetch leads: ${response.status} - ${errorText}`);
     }
     
-    const data = await response.json();
-    // Raw API data received
-    
-    // Transform the CRM lead data to match the expected Lead interface
-    const transformedData = data.map((lead: any) => ({
+  const payload = await response.json();
+    // Transform unified leads rows to expected interface shape used by AdminLeadsPage
+    const transformedData = (payload.rows || []).map((lead: any) => ({
       id: lead.id,
-      first_name: lead.name ? lead.name.split(' ')[0] : '',
-      last_name: lead.name ? lead.name.split(' ').slice(1).join(' ') : '',
+      first_name: lead.full_name ? String(lead.full_name).split(' ')[0] : '',
+      last_name: lead.full_name ? String(lead.full_name).split(' ').slice(1).join(' ') : '',
       email: lead.email,
       phone: lead.phone,
       message: lead.message,
-      form_source: lead.source || 'MANUAL',
-      status: lead.status ? lead.status.toUpperCase() : 'NEW',
-      created_at: lead.createdAt
+      form_source: (lead.form_type || 'MANUAL').toUpperCase(),
+      status: (lead.status || 'new').toUpperCase(),
+      created_at: lead.created_at
     }));
     
     // Data transformation completed
-    return transformedData;
+    return { rows: transformedData, count: payload.count || transformedData.length };
   } catch (error) {
     // console.error removed
     throw error;
   }
 }
 
-export async function updateLeadStatus(id: string, status: 'NEW' | 'CONTACTED' | 'CONVERTED') {
+export async function updateLeadStatus(id: string, status: 'NEW' | 'CONTACTED' | 'CONVERTED' | 'ARCHIVED') {
   try {
-    const response = await fetch(`/api/crm/leads/${id}`, {
+    const response = await fetch(`/api/leads/${id}/status`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -79,8 +81,11 @@ export async function updateLeadStatus(id: string, status: 'NEW' | 'CONTACTED' |
 
 export async function deleteLead(id: string) {
   try {
-    const response = await fetch(`/api/crm/leads/${id}`, {
-      method: 'DELETE',
+    // Not supported in minimal API; treat as archive instead
+    const response = await fetch(`/api/leads/${id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'archived' })
     });
     
     if (!response.ok) {
@@ -92,4 +97,10 @@ export async function deleteLead(id: string) {
     // console.error removed
     throw error;
   }
+}
+
+export async function bulkMarkNewAsContacted() {
+  const r = await fetch('/api/leads/bulk/mark-new-contacted', { method: 'POST' });
+  if (!r.ok) throw new Error('Failed to bulk update leads');
+  return r.json();
 }

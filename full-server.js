@@ -161,34 +161,119 @@ async function ensureLeadsSchema() {
   }
 }
 
+// ===== Email settings schema and helpers =====
+let __emailSettingsEnsured = false;
+async function ensureEmailSettingsSchema() {
+  if (__emailSettingsEnsured) return;
+  if (!sql) return;
+  try {
+    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS email_settings (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        notification_email text,
+        smtp_host text,
+        smtp_port integer,
+        smtp_user text,
+        smtp_pass text,
+        from_email text,
+        from_name text,
+        email_signature text,
+        created_at timestamptz DEFAULT now(),
+        updated_at timestamptz DEFAULT now()
+      )
+    `;
+    __emailSettingsEnsured = true;
+    console.log('✅ Email settings schema ensured');
+  } catch (e) {
+    console.warn('⚠️ ensureEmailSettingsSchema failed:', e.message);
+  }
+}
+
+let __emailSettingsCache = { data: null, ts: 0 };
+async function loadEmailSettings() {
+  try {
+    if (!sql) return null;
+    await ensureEmailSettingsSchema();
+    const now = Date.now();
+    // cache for 60s
+    if (__emailSettingsCache.data && (now - __emailSettingsCache.ts) < 60_000) {
+      return __emailSettingsCache.data;
+    }
+    const rows = await sql`SELECT notification_email, smtp_host, smtp_port, smtp_user, smtp_pass, from_email, from_name, email_signature FROM email_settings ORDER BY updated_at DESC LIMIT 1`;
+    const data = rows && rows[0] ? rows[0] : null;
+    __emailSettingsCache = { data, ts: now };
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+function createMailerTransportFromSettings(settings) {
+  const nodemailer = require('nodemailer');
+  const envHasSmtp = !!(process.env.SMTP_HOST || process.env.SMTP_USER);
+  const hasDbSmtp = !!(settings && (settings.smtp_host || settings.smtp_user));
+  const useJson = (process.env.EMAIL_TRANSPORT === 'json') || (!envHasSmtp && !hasDbSmtp);
+  if (useJson) return nodemailer.createTransport({ jsonTransport: true });
+  const host = (settings && settings.smtp_host) || process.env.SMTP_HOST;
+  const port = parseInt((settings && settings.smtp_port) || process.env.SMTP_PORT || '587', 10);
+  const user = (settings && settings.smtp_user) || process.env.SMTP_USER;
+  const pass = (settings && settings.smtp_pass) || process.env.SMTP_PASS;
+  const secure = (process.env.SMTP_SECURE || 'false') === 'true';
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: user ? { user, pass } : undefined,
+    tls: { rejectUnauthorized: false }
+  });
+}
+
 // Helper: insert a lead into unified leads table and send notifications
 async function insertLeadAndNotify({ req, formType, fullName = null, email, phone = null, preferredDate = null, message = null, consent = false, sourcePath = null }) {
   if (!sql) throw new Error('Database not available');
   await ensureLeadsSchema();
-  // Capture client details
-  let ip = req?.headers?.['x-forwarded-for'] || req?.socket?.remoteAddress || '';
-  if (Array.isArray(ip)) ip = ip[0] || '';
-  if (typeof ip === 'string' && ip.includes(',')) ip = ip.split(',')[0].trim();
+
+  // Capture and normalize client details
+  let ipRaw = req?.headers?.['x-forwarded-for'] || req?.socket?.remoteAddress || '';
+  if (Array.isArray(ipRaw)) ipRaw = ipRaw[0] || '';
+  if (typeof ipRaw === 'string' && ipRaw.includes(',')) ipRaw = ipRaw.split(',')[0].trim();
+  const ipStr = String(ipRaw || '').trim();
+  // Basic IPv4/IPv6 sanity check; if empty/invalid, store as null to avoid inet cast errors
+  const isValidIp = (s) => /^(?:(?:\d{1,3}\.){3}\d{1,3}|[0-9a-fA-F:]+)$/.test(s);
+  const ipValue = ipStr && isValidIp(ipStr) ? ipStr : null;
   const userAgent = String(req?.headers?.['user-agent'] || '');
   const src = typeof sourcePath === 'string' && sourcePath ? sourcePath : (req?.headers?.referer || '');
 
-  const rows = await sql`
-    INSERT INTO leads(form_type, full_name, email, phone, preferred_date, message, consent, source_path, user_agent, ip, meta, status)
-    VALUES (${formType}, ${fullName}, ${email}, ${phone}, ${preferredDate}, ${message}, ${!!consent}, ${src}, ${userAgent}, ${ip}, ${JSON.stringify({})}, 'new')
-    RETURNING id
-  `;
+  // Insert lead (retry without IP if provider supplies bad header)
+  let rows;
+  try {
+    rows = await sql`
+      INSERT INTO leads(form_type, full_name, email, phone, preferred_date, message, consent, source_path, user_agent, ip, meta, status)
+      VALUES (${formType}, ${fullName}, ${email}, ${phone}, ${preferredDate}, ${message}, ${!!consent}, ${src}, ${userAgent}, ${ipValue}, ${JSON.stringify({})}, 'new')
+      RETURNING id
+    `;
+  } catch (e) {
+    const msg = String(e?.message || '');
+    if (msg.includes('invalid input syntax for type inet')) {
+      // Retry with null IP just in case an edge case slipped through validation
+      rows = await sql`
+        INSERT INTO leads(form_type, full_name, email, phone, preferred_date, message, consent, source_path, user_agent, ip, meta, status)
+        VALUES (${formType}, ${fullName}, ${email}, ${phone}, ${preferredDate}, ${message}, ${!!consent}, ${src}, ${userAgent}, ${null}, ${JSON.stringify({})}, 'new')
+        RETURNING id
+      `;
+    } else {
+      throw e;
+    }
+  }
 
   // Best-effort emails (studio and optional acknowledgement)
   try {
-    const nodemailer = require('nodemailer');
-    const tx = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: false,
-      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-      tls: { rejectUnauthorized: false }
-    });
-    const studioTo = (process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com').trim();
+    const settings = await loadEmailSettings();
+    const tx = createMailerTransportFromSettings(settings);
+    const studioTo = (settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com').trim();
+    const fromAddr = (settings?.from_email || process.env.FROM_EMAIL || settings?.smtp_user || process.env.SMTP_USER || 'hallo@newagefotografie.com');
+    const useJson = (process.env.EMAIL_TRANSPORT === 'json') || (!process.env.SMTP_HOST && !process.env.SMTP_USER && !settings?.smtp_user && !settings?.smtp_host);
     if (studioTo) {
       const lines = [
         `Form: ${formType}`,
@@ -199,22 +284,15 @@ async function insertLeadAndNotify({ req, formType, fullName = null, email, phon
         `Message: ${message || '-'}`,
         `Consent: ${consent ? 'yes' : 'no'}`,
         `Source: ${src}`,
-        `IP: ${ip}`,
+        `IP: ${ipValue || '-'}`,
       ];
-      await tx.sendMail({
-        from: process.env.FROM_EMAIL || process.env.SMTP_USER || 'hallo@newagefotografie.com',
-        to: studioTo,
-        subject: '📥 New Lead received',
-        text: lines.join('\n')
-      });
+      const info = await tx.sendMail({ from: fromAddr, to: studioTo, subject: '📥 New Lead received', text: lines.join('\n') });
+      if (useJson) { try { console.log('📧 [json lead notify]', JSON.stringify(info.message || info, null, 2)); } catch {} }
     }
     if (email && (formType === 'waitlist' || formType === 'contact')) {
-      await tx.sendMail({
-        from: process.env.FROM_EMAIL || process.env.SMTP_USER || 'hallo@newagefotografie.com',
-        to: email,
-        subject: 'Thanks — we’ve received your message ✅',
-        html: `<div style="font-family:system-ui;line-height:1.55"><p>Hi ${fullName || ''}</p><p>Thanks for reaching out to New Age Fotografie. We’ll get back to you shortly.</p><p>– New Age Fotografie</p></div>`
-      });
+      const html = `<div style="font-family:system-ui;line-height:1.55"><p>Hi ${fullName || ''}</p><p>Thanks for reaching out to New Age Fotografie. We’ll get back to you shortly.</p><p>– New Age Fotografie</p></div>`;
+      const info = await tx.sendMail({ from: fromAddr, to: email, subject: 'Thanks — we’ve received your message ✅', html });
+      if (useJson) { try { console.log('📧 [json lead ack]', JSON.stringify(info.message || info, null, 2)); } catch {} }
     }
   } catch (mailErr) {
     console.warn('⚠️ Lead email notification failed:', mailErr.message);
@@ -702,20 +780,12 @@ function getBaseUrl() {
 
 async function sendEmailSimple(to, subject, text, html) {
   try {
-    const nodemailer = require('nodemailer');
-    const useJson = (process.env.EMAIL_TRANSPORT === 'json') || (!process.env.SMTP_HOST && !process.env.SMTP_USER);
-    const transporter = useJson
-      ? nodemailer.createTransport({ jsonTransport: true })
-      : nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: parseInt(process.env.SMTP_PORT || '587', 10),
-          secure: (process.env.SMTP_SECURE || 'false') === 'true',
-          auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-          tls: { rejectUnauthorized: false }
-        });
-    const from = process.env.FROM_EMAIL || process.env.SMTP_USER || 'no-reply@newagefotografie.com';
+    const settings = await loadEmailSettings();
+    const transporter = createMailerTransportFromSettings(settings);
+    const from = (settings?.from_email || process.env.FROM_EMAIL || settings?.smtp_user || process.env.SMTP_USER || 'no-reply@newagefotografie.com');
     const info = await transporter.sendMail({ from, to, subject, text, html });
-    if (useJson) {
+    const envUseJson = (process.env.EMAIL_TRANSPORT === 'json') || (!process.env.SMTP_HOST && !process.env.SMTP_USER && !settings?.smtp_user && !settings?.smtp_host);
+    if (envUseJson) {
       try { console.log('📧 [json email]', JSON.stringify(info.message, null, 2)); } catch {}
     }
   } catch (e) {
@@ -2112,18 +2182,99 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Admin debug: test-email
+    // Admin email settings: GET current
+    if (pathname === '/api/admin/email-settings' && req.method === 'GET') {
+      try {
+        if (!sql) throw new Error('Database not available');
+        const settings = await loadEmailSettings();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          notificationEmail: settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com',
+          smtpHost: settings?.smtp_host || process.env.SMTP_HOST || '',
+          smtpPort: settings?.smtp_port || parseInt(process.env.SMTP_PORT || '587', 10),
+          smtpUser: settings?.smtp_user || process.env.SMTP_USER || '',
+          smtpPassword: settings?.smtp_pass ? '***' : '',
+          emailSignature: settings?.email_signature || ''
+        }));
+      } catch (e) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        // Fallback to env if DB missing
+        res.end(JSON.stringify({
+          notificationEmail: process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com',
+          smtpHost: process.env.SMTP_HOST || '',
+          smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+          smtpUser: process.env.SMTP_USER || '',
+          smtpPassword: '',
+          emailSignature: ''
+        }));
+      }
+      return;
+    }
+
+    // Admin email settings: POST save
+    if (pathname === '/api/admin/email-settings' && req.method === 'POST') {
+      try {
+        if (!sql) throw new Error('Database not available');
+        await ensureEmailSettingsSchema();
+        let raw = ''; req.on('data', c => raw += c); await new Promise(r => req.on('end', r));
+        const body = raw ? JSON.parse(raw) : {};
+        const notification_email = String(body.notificationEmail || '').trim();
+        const smtp_host = body.smtpHost || null;
+        const smtp_port = body.smtpPort ? parseInt(body.smtpPort, 10) : null;
+        const smtp_user = body.smtpUser || null;
+        const smtp_pass = body.smtpPassword || null; // store as provided; client may send '' to keep unchanged
+        const from_email = body.fromEmail || body.smtpUser || null;
+        const from_name = body.fromName || 'New Age Fotografie';
+        const email_signature = body.emailSignature || '';
+        const existing = await sql`SELECT id, smtp_pass FROM email_settings ORDER BY updated_at DESC LIMIT 1`;
+        let passToUse = smtp_pass;
+        if (existing.length && (smtp_pass === '' || smtp_pass === undefined || smtp_pass === null)) {
+          passToUse = existing[0].smtp_pass; // keep existing if not provided
+        }
+        if (existing.length) {
+          await sql`
+            UPDATE email_settings SET
+              notification_email = ${notification_email || null},
+              smtp_host = ${smtp_host},
+              smtp_port = ${smtp_port},
+              smtp_user = ${smtp_user},
+              smtp_pass = ${passToUse || null},
+              from_email = ${from_email},
+              from_name = ${from_name},
+              email_signature = ${email_signature},
+              updated_at = now()
+            WHERE id = ${existing[0].id}
+          `;
+        } else {
+          await sql`
+            INSERT INTO email_settings (notification_email, smtp_host, smtp_port, smtp_user, smtp_pass, from_email, from_name, email_signature)
+            VALUES (${notification_email || null}, ${smtp_host}, ${smtp_port}, ${smtp_user}, ${passToUse || null}, ${from_email}, ${from_name}, ${email_signature})
+          `;
+        }
+        __emailSettingsCache = { data: null, ts: 0 }; // bust cache
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+      return;
+    }
+
+    // Admin debug: test-email (accepts { email, subject, message })
     if (pathname === '/api/admin/test-email' && req.method === 'POST') {
       try {
         let raw = ''; req.on('data', c => raw += c); await new Promise(r => req.on('end', r));
         const body = raw ? JSON.parse(raw) : {};
-        const { mailer } = require('./lib/mailer');
-        const { ENV } = require('./lib/env');
-        const to = String(body.to || ENV?.SMTP_USER || ENV?.EMAIL_FROM || '').trim();
-        const tx = mailer();
-        await tx.sendMail({ from: (ENV && (ENV.EMAIL_FROM || ENV.SMTP_USER)) || 'no-reply@newagefotografie.com', to: to || 'hallo@newagefotografie.com', subject: 'New Age Fotografie – SMTP test', text: 'If you received this, your SMTP is working.' });
+        const settings = await loadEmailSettings();
+        const tx = createMailerTransportFromSettings(settings);
+        const to = String(body.email || settings?.notification_email || process.env.STUDIO_NOTIFY_EMAIL || 'hallo@newagefotografie.com');
+        const subject = String(body.subject || 'New Age Fotografie – SMTP test');
+        const msg = String(body.message || 'If you received this, your SMTP is working.');
+        const from = (settings?.from_email || process.env.FROM_EMAIL || settings?.smtp_user || process.env.SMTP_USER || 'no-reply@newagefotografie.com');
+        await tx.sendMail({ from, to, subject, text: msg });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, to: to || 'default' }));
+        res.end(JSON.stringify({ ok: true, to }));
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: e.message }));
@@ -3607,7 +3758,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // List new leads (minimal admin helper)
+      // List leads (admin helper) — supports ?status=new|contacted|converted|archived|any, plus limit/offset/q
       if (pathname === '/api/leads/list' && req.method === 'GET') {
         if (!sql) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -3616,19 +3767,101 @@ const server = http.createServer(async (req, res) => {
         }
         await ensureLeadsSchema();
         try {
-          const rows = await sql`
-            SELECT id, form_type, full_name, email, phone, preferred_date, created_at
-            FROM leads
-            WHERE status = 'new'
-            ORDER BY created_at DESC
-          `;
+          const q = url.parse(req.url || '', true).query || {};
+          const status = String(q.status || 'new').toLowerCase();
+          const limit = Math.max(1, Math.min(parseInt(q.limit || '50', 10) || 50, 200));
+          const offset = Math.max(0, parseInt(q.offset || '0', 10) || 0);
+          const search = String(q.q || '').trim();
+          const allowed = new Set(['new','contacted','converted','archived','any']);
+          const statusFilter = allowed.has(status) ? status : 'new';
+          let baseSql;
+          if (statusFilter === 'any') {
+            baseSql = sql`SELECT id, form_type, full_name, email, phone, preferred_date, source_path, created_at, status FROM leads`;
+          } else {
+            baseSql = sql`SELECT id, form_type, full_name, email, phone, preferred_date, source_path, created_at, status FROM leads WHERE status = ${statusFilter}`;
+          }
+          // Apply search on server side if provided
+          if (search) {
+            const like = `%${search.toLowerCase()}%`;
+            baseSql = sql`${baseSql} AND (lower(coalesce(full_name,'')) LIKE ${like} OR lower(coalesce(email,'')) LIKE ${like} OR lower(coalesce(phone,'')) LIKE ${like} OR lower(coalesce(source_path,'')) LIKE ${like})`;
+          }
+          // Count total
+          let countRows;
+          if (statusFilter === 'any') {
+            countRows = search
+              ? await sql`SELECT COUNT(*)::int AS c FROM leads WHERE (lower(coalesce(full_name,'')) LIKE ${`%${search.toLowerCase()}%`} OR lower(coalesce(email,'')) LIKE ${`%${search.toLowerCase()}%`} OR lower(coalesce(phone,'')) LIKE ${`%${search.toLowerCase()}%`} OR lower(coalesce(source_path,'')) LIKE ${`%${search.toLowerCase()}%`})`
+              : await sql`SELECT COUNT(*)::int AS c FROM leads`;
+          } else {
+            countRows = search
+              ? await sql`SELECT COUNT(*)::int AS c FROM leads WHERE status = ${statusFilter} AND (lower(coalesce(full_name,'')) LIKE ${`%${search.toLowerCase()}%`} OR lower(coalesce(email,'')) LIKE ${`%${search.toLowerCase()}%`} OR lower(coalesce(phone,'')) LIKE ${`%${search.toLowerCase()}%`} OR lower(coalesce(source_path,'')) LIKE ${`%${search.toLowerCase()}%`})`
+              : await sql`SELECT COUNT(*)::int AS c FROM leads WHERE status = ${statusFilter}`;
+          }
+          const total = (countRows && countRows[0] && countRows[0].c) ? Number(countRows[0].c) : 0;
+          // Apply order, limit, offset
+          const rows = await sql`${baseSql} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ count: rows.length, rows }));
+          res.end(JSON.stringify({ count: total, rows }));
         } catch (e) {
           console.error('leads list error:', e.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: 'Failed to list leads' }));
         }
+        return;
+      }
+
+      // Bulk mark all new as contacted
+      if (pathname === '/api/leads/bulk/mark-new-contacted' && req.method === 'POST') {
+        if (!sql) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Database not available' }));
+          return;
+        }
+        await ensureLeadsSchema();
+        try {
+          const r = await sql`UPDATE leads SET status = 'contacted' WHERE status = 'new' RETURNING id`;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, updated: r.length }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // Update lead status endpoint: PUT /api/leads/:id/status  { status }
+      if (req.method === 'PUT' && /^\/api\/leads\/[0-9a-fA-F-]+\/status$/.test(pathname || '')) {
+        if (!sql) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Database not available' }));
+          return;
+        }
+        await ensureLeadsSchema();
+        const id = (pathname || '').split('/')[3];
+        let raw = '';
+        req.on('data', c => raw += c.toString());
+        req.on('end', async () => {
+          try {
+            const body = raw ? JSON.parse(raw) : {};
+            const status = String(body.status || '').toLowerCase();
+            const allowed = new Set(['new','contacted','converted','archived']);
+            if (!allowed.has(status)) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Invalid status' }));
+              return;
+            }
+            const rows = await sql`UPDATE leads SET status = ${status} WHERE id = ${id} RETURNING id, status`;
+            if (!rows.length) {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Lead not found' }));
+              return;
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, id, status }));
+          } catch (e) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }));
+          }
+        });
         return;
       }
       

@@ -160,7 +160,7 @@ const AdminDashboardPage: React.FC = () => {
         invoicesResponse
       ] = await Promise.allSettled([
         fetch('/api/crm/dashboard/metrics'),
-        fetch('/api/crm/leads'),
+  fetch('/api/leads/list?status=any'),
         fetch('/api/photography/sessions'),
         fetch('/api/crm/invoices')
       ]);

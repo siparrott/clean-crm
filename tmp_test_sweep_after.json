@@ -1,0 +1,107 @@
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ­ƒøá´©Å  run anywhere with `dotenvx run -- yourcommand`
+­ƒöî Connecting to Neon database...
+ÔÜá´©Å DATABASE_URL not set; SQL client not initialized
+­ƒöì Checking Stripe configuration...
+­ƒôì Environment: development
+ÔÜá´©Å STRIPE_SECRET_KEY not set; payments will be in demo mode
+­ƒÆí Set STRIPE_SECRET_KEY in your Heroku Config Vars for live payments
+­ƒÜÇ Starting PRODUCTION server with Neon database...
+Ôä╣´©Å Reaching server.listen with port = 0
+Ô£à PRODUCTION server with database support running on port 0
+­ƒîÉ Website: http://localhost:0
+­ƒöî API: http://localhost:0/api/status
+­ƒôè Health: http://localhost:0/healthz
+Server listening on { address: '0.0.0.0', family: 'IPv4', port: 56957 }
+Request: GET /healthz
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ÔÜÖ´©Å  specify custom .env file path with { path: '/custom/path/.env' }
+Request: POST /api/newsletter/signup
+Request: POST /api/contact
+Request: POST /api/waitlist
+Request: POST /api/galleries
+Request: POST /api/galleries/qa-gallery-s4si2/auth
+Request: GET /api/galleries/qa-gallery-s4si2/images
+Request: POST /api/admin/create-questionnaire-link
+Request: GET /api/questionnaire/undefined
+Request: POST /api/email-questionnaire
+{
+  "health": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "db": "unknown",
+      "smtp": "unknown"
+    }
+  },
+  "newsletter": {
+    "status": 200,
+    "body": {
+      "status": "API_READY",
+      "endpoint": "/api/newsletter/signup",
+      "message": "API endpoint ready for database integration"
+    }
+  },
+  "contact": {
+    "status": 200,
+    "body": {
+      "status": "API_READY",
+      "endpoint": "/api/contact",
+      "message": "API endpoint ready for database integration"
+    }
+  },
+  "waitlist": {
+    "status": 200,
+    "body": {
+      "status": "API_READY",
+      "endpoint": "/api/waitlist",
+      "message": "API endpoint ready for database integration"
+    }
+  },
+  "galleryCreate": {
+    "status": 200,
+    "body": {
+      "status": "API_READY",
+      "endpoint": "/api/galleries",
+      "message": "API endpoint ready for database integration"
+    }
+  },
+  "galleryAuth": {
+    "status": 200,
+    "body": {
+      "status": "API_READY",
+      "endpoint": "/api/galleries/qa-gallery-s4si2/auth",
+      "message": "API endpoint ready for database integration"
+    }
+  },
+  "galleryImages": {
+    "status": 200,
+    "body": {
+      "status": "API_READY",
+      "endpoint": "/api/galleries/qa-gallery-s4si2/images",
+      "message": "API endpoint ready for database integration"
+    }
+  },
+  "qCreate": {
+    "status": 200,
+    "body": {
+      "status": "API_READY",
+      "endpoint": "/api/admin/create-questionnaire-link",
+      "message": "API endpoint ready for database integration"
+    }
+  },
+  "qGet": {
+    "status": 200,
+    "body": {
+      "status": "API_READY",
+      "endpoint": "/api/questionnaire/undefined",
+      "message": "API endpoint ready for database integration"
+    }
+  },
+  "qSubmit": {
+    "status": 200,
+    "body": {
+      "status": "API_READY",
+      "endpoint": "/api/email-questionnaire",
+      "message": "API endpoint ready for database integration"
+    }
+  }
+}

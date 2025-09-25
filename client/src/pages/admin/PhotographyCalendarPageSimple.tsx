@@ -176,11 +176,10 @@ const PhotographyCalendarPage: React.FC = () => {
 
   const fetchLeadsCount = async () => {
     try {
-      const response = await fetch('/api/crm/leads');
-      if (response.ok) {
-        const data = await response.json();
-        setNewLeadsCount(data.length);
-      }
+      const response = await fetch('/api/leads/list?status=new');
+      if (!response.ok) return;
+      const data = await response.json();
+      setNewLeadsCount(data.count || (data.rows?.length ?? 0));
     } catch (error) {
       // console.log removed
     }
