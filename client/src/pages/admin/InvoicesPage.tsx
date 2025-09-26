@@ -63,6 +63,34 @@ const InvoicesPage: React.FC = () => {
     if (prefillClientId) setShowCreateModal(true);
   }, [prefillClientId]);
 
+  useEffect(() => {
+    // Poll payment status for any non-final invoices every 30s
+    const interval = setInterval(async () => {
+      try {
+        const target = invoices.filter(inv => inv.status !== 'paid' && inv.status !== 'cancelled');
+        if (!target.length) return;
+        const ids = target.map(t => t.id).join(',');
+        const resp = await fetch(`/api/invoices/status?ids=${encodeURIComponent(ids)}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const rows = data?.rows || [];
+        if (rows.length) {
+          setInvoices(prev => prev.map(inv => {
+            const row = rows.find((r:any) => r.id === inv.id);
+            if (!row) return inv;
+            const paid = (row.payment_status || row.status) === 'paid';
+            return {
+              ...inv,
+              status: (row.status || inv.status) as any,
+              paid_date: paid ? (row.paid_at || new Date().toISOString()) : inv.paid_date
+            };
+          }));
+        }
+      } catch {}
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [invoices]);
+
   const fetchInvoices = async () => {
     try {
       setLoading(true);
