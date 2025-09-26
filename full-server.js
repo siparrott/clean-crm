@@ -4990,7 +4990,7 @@ const server = http.createServer(async (req, res) => {
               const s = stateMap.get(n.id);
               return s ? { ...n, read: !!s.read, dismissed: !!s.dismissed } : n;
             })
-            .filter(n => !(n as any).dismissed);
+            .filter(n => !n.dismissed);
           
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(notifications));
@@ -8286,15 +8286,17 @@ New Age Fotografie Team`;
       // Continue processing after URL rewrite; fall through
     }
 
-    // Handle other API endpoints with fallback
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    const response = mockApiResponses[pathname] || {
-      status: 'API_READY',
-      endpoint: pathname,
-      message: 'API endpoint ready for database integration'
-    };
-    res.end(JSON.stringify(response));
-    return;
+    // Handle other API endpoints with fallback (ensure this ONLY triggers for /api/* paths)
+    if (pathname.startsWith('/api/')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      const response = mockApiResponses[pathname] || {
+        status: 'API_READY',
+        endpoint: pathname,
+        message: 'API endpoint ready for database integration'
+      };
+      res.end(JSON.stringify(response));
+      return;
+    }
   }
   
   // Serve static files
