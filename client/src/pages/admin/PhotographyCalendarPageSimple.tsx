@@ -70,6 +70,7 @@ interface DashboardStats {
   totalRevenue: number;
   pendingDeposits: number;
   equipmentConflicts: number;
+  newLeads?: number;
 }
 
 // Golden Hour calculation returning formatted windows plus raw Date objects for scheduling suggestions
@@ -156,8 +157,13 @@ const PhotographyCalendarPage: React.FC = () => {
     totalRevenue: 0,
     pendingDeposits: 0,
     equipmentConflicts: 0,
+    newLeads: 0,
   });
 
+  const [serverStatsLoaded, setServerStatsLoaded] = useState(false);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [period, setPeriod] = useState<'week' | 'month'>('week');
+  
   // Map loaded clients to the shape expected by AdvancedPhotographyCalendar (id, name, email)
   const clientsForCalendar = clients.map(c => ({
     id: c.id,
@@ -169,10 +175,14 @@ const PhotographyCalendarPage: React.FC = () => {
   useEffect(() => {
     fetchSessions();
     fetchLeadsCount();
-  fetchDashboardStats();
-  // Preload clients so calendar can resolve names from clientId
-  fetchClients();
+    fetchDashboardStats();
+    // Preload clients so calendar can resolve names from clientId
+    fetchClients();
   }, []);
+
+  useEffect(() => {
+    fetchAnalytics(period);
+  }, [period]);
 
   const fetchLeadsCount = async () => {
     try {
@@ -236,7 +246,7 @@ const PhotographyCalendarPage: React.FC = () => {
       setIsLoading(false);
     }
   };
-  const [serverStatsLoaded, setServerStatsLoaded] = useState(false);
+  // serverStatsLoaded is declared above; do not redeclare
 
   const computeDerivedStats = (list: PhotographySession[]) => {
     const now = new Date();
@@ -305,11 +315,25 @@ const PhotographyCalendarPage: React.FC = () => {
         totalRevenue: data.totalRevenue ?? 0,
         pendingDeposits: data.pendingDeposits ?? 0,
         equipmentConflicts: data.equipmentConflicts ?? 0,
+        newLeads: data.newLeads ?? 0,
       });
       setServerStatsLoaded(true);
       if (typeof data.newLeads === 'number') setNewLeadsCount(data.newLeads);
     } catch (err) {
       // ignore; fallback will compute
+    }
+  };
+
+  const fetchAnalytics = async (p: 'week' | 'month') => {
+    try {
+      const resp = await fetch(`/api/admin/calendar-analytics?period=${p}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` }
+      });
+      if (!resp.ok) return setAnalytics(null);
+      const data = await resp.json();
+      setAnalytics(data);
+    } catch (_) {
+      setAnalytics(null);
     }
   };
 
@@ -565,7 +589,20 @@ const PhotographyCalendarPage: React.FC = () => {
 
         {/* Key Business Metrics - Highlighted Section */}
         <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-lg border border-blue-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Key Business Metrics</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Key Business Metrics</h3>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600">Period:</span>
+              <select
+                value={period}
+                onChange={(e) => setPeriod(e.target.value as 'week' | 'month')}
+                className="text-sm border rounded px-2 py-1"
+              >
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+              </select>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-purple-500">
               <div className="flex items-center justify-between mb-2">
@@ -573,9 +610,12 @@ const PhotographyCalendarPage: React.FC = () => {
                 <DollarSign className="h-5 w-5 text-purple-500" />
               </div>
               <div className="text-2xl font-bold text-purple-600">€{stats.totalRevenue.toLocaleString()}</div>
-              <p className="text-xs text-gray-500 flex items-center mt-1">
-                <span className="text-green-600 mr-1">↗ 8.2%</span>
-                vs last month
+              <p className="text-xs text-gray-500 mt-1">
+                {analytics ? (
+                  <span>
+                    {analytics.revenue.delta >= 0 ? '↗' : '↘'} {Math.abs(Math.round(analytics.revenue.deltaPct))}% vs previous {period}
+                  </span>
+                ) : 'Based on session base prices'}
               </p>
             </div>
 
@@ -585,9 +625,12 @@ const PhotographyCalendarPage: React.FC = () => {
                 <TrendingUp className="h-5 w-5 text-blue-500" />
               </div>
               <div className="text-2xl font-bold text-blue-600">{newLeadsCount}</div>
-              <p className="text-xs text-gray-500 flex items-center mt-1">
-                <span className="text-green-600 mr-1">↗ 12.5%</span>
-                this week
+              <p className="text-xs text-gray-500 mt-1">
+                {analytics ? (
+                  <span>
+                    {analytics.leads.delta >= 0 ? '↗' : '↘'} {Math.abs(Math.round(analytics.leads.deltaPct))}% vs previous {period}
+                  </span>
+                ) : 'Last 7 days'}
               </p>
             </div>
 
@@ -597,9 +640,12 @@ const PhotographyCalendarPage: React.FC = () => {
                 <Calendar className="h-5 w-5 text-green-500" />
               </div>
               <div className="text-2xl font-bold text-green-600">{stats.upcomingSessions}</div>
-              <p className="text-xs text-gray-500 flex items-center mt-1">
-                <span className="text-blue-600 mr-1">→ 0</span>
-                next 30 days
+              <p className="text-xs text-gray-500 mt-1">
+                {analytics ? (
+                  <span>
+                    {analytics.sessionsBooked.delta >= 0 ? '↗' : '↘'} {Math.abs(Math.round(analytics.sessionsBooked.deltaPct))}% booked vs previous {period}
+                  </span>
+                ) : 'Next 30 days'}
               </p>
             </div>
 
@@ -608,10 +654,21 @@ const PhotographyCalendarPage: React.FC = () => {
                 <span className="text-sm font-medium text-gray-600">Conversion Rate</span>
                 <CheckCircle className="h-5 w-5 text-orange-500" />
               </div>
-              <div className="text-2xl font-bold text-orange-600">87.5%</div>
-              <p className="text-xs text-gray-500 flex items-center mt-1">
-                <span className="text-green-600 mr-1">↗ 3.2%</span>
-                vs last month
+              <div className="text-2xl font-bold text-orange-600">{
+                analytics ? `${Math.round(analytics.conversion.currentPct)}%` : (() => {
+                  const leads = stats.newLeads ?? newLeadsCount ?? 0;
+                  const booked = stats.upcomingSessions + stats.completedSessions;
+                  if (leads <= 0) return '—';
+                  const pct = Math.min(100, Math.round((booked / leads) * 100));
+                  return `${pct}%`;
+                })()
+              }</div>
+              <p className="text-xs text-gray-500 mt-1">
+                {analytics ? (
+                  <span>
+                    {analytics.conversion.deltaPct >= 0 ? '↗' : '↘'} {Math.abs(Math.round(analytics.conversion.deltaPct))}% vs previous {period}
+                  </span>
+                ) : 'Booked sessions vs new leads'}
               </p>
             </div>
           </div>
@@ -689,15 +746,28 @@ const PhotographyCalendarPage: React.FC = () => {
               <Camera className="w-6 h-6" />
               <span className="text-sm">Schedule Session</span>
             </button>
-            <button className="flex flex-col items-center space-y-2 p-4 border rounded-lg hover:bg-gray-50">
+            <button
+              onClick={() => {
+                const q = prompt('Location to scout (opens Google Maps search):');
+                if (q) window.open(`https://www.google.com/maps/search/${encodeURIComponent(q)}`, '_blank');
+              }}
+              className="flex flex-col items-center space-y-2 p-4 border rounded-lg hover:bg-gray-50">
               <MapPin className="w-6 h-6" />
               <span className="text-sm">Location Scouting</span>
             </button>
-            <button className="flex flex-col items-center space-y-2 p-4 border rounded-lg hover:bg-gray-50">
+            <button
+              onClick={() => {
+                alert('Equipment checklist coming soon. For now, add items per session in the form.');
+              }}
+              className="flex flex-col items-center space-y-2 p-4 border rounded-lg hover:bg-gray-50">
               <CheckCircle className="w-6 h-6" />
               <span className="text-sm">Equipment Check</span>
             </button>
-            <button className="flex flex-col items-center space-y-2 p-4 border rounded-lg hover:bg-gray-50">
+            <button
+              onClick={() => {
+                window.location.href = '/admin/reports';
+              }}
+              className="flex flex-col items-center space-y-2 p-4 border rounded-lg hover:bg-gray-50">
               <TrendingUp className="w-6 h-6" />
               <span className="text-sm">Revenue Report</span>
             </button>
@@ -1035,80 +1105,24 @@ const PhotographyCalendarPage: React.FC = () => {
                   />
                   {clientNameSuggestions.length > 0 && (
                     <ul className="mt-1 border rounded bg-white shadow divide-y max-h-40 overflow-auto text-sm">
-                      {clientNameSuggestions.map(s => (
-                        <li
-                          key={s.id}
-                          className="px-3 py-2 hover:bg-blue-50 cursor-pointer"
-                          onClick={() => {
-                            handleInputChange('clientId', s.id);
-                            handleInputChange('clientName', `${s.firstName} ${s.lastName}`.trim());
-                            if (s.email) handleInputChange('clientEmail', s.email);
-                            setClientNameSuggestions([]);
-                          }}
-                        >
-                          {s.firstName} {s.lastName}{s.email ? ` – ${s.email}` : ''}
+                      {clientNameSuggestions.map((c) => (
+                        <li key={c.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleInputChange('clientName', `${c.firstName} ${c.lastName}`.trim());
+                              handleInputChange('clientId', c.id);
+                              if (c.email) handleInputChange('clientEmail', c.email);
+                              setClientNameSuggestions([]);
+                            }}
+                            className="w-full text-left px-2 py-1 hover:bg-gray-50"
+                          >
+                            {c.firstName} {c.lastName}{c.email ? ` — ${c.email}` : ''}
+                          </button>
                         </li>
                       ))}
                     </ul>
                   )}
-                  {formData.clientName && clientNameSuggestions.length === 0 && clients.some(c => `${c.firstName} ${c.lastName}`.trim().toLowerCase() === formData.clientName.trim().toLowerCase()) && (
-                    <p className="text-xs text-green-600 mt-1">Matched existing client. Will link automatically.</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Client Email</label>
-                  <input
-                    type="email"
-                    value={formData.clientEmail}
-                    onChange={(e) => handleInputChange('clientEmail', e.target.value)}
-                    className="w-full border rounded px-3 py-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Location (Optional)</label>
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      placeholder="Enter venue name or address"
-                      value={formData.locationName}
-                      onChange={(e) => handleInputChange('locationName', e.target.value)}
-                      className="w-full border rounded px-3 py-2"
-                    />
-                    {formData.locationName && (
-                      <div className="flex items-center space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const query = encodeURIComponent(formData.locationName);
-                            window.open(`https://www.google.com/maps/search/${query}`, '_blank');
-                          }}
-                          className="flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm"
-                        >
-                          <MapPin className="w-3 h-3" />
-                          <span>View on Google Maps</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              const query = encodeURIComponent(formData.locationName);
-                              // This would require Google Places API - for now we'll store the address
-                              handleInputChange('locationAddress', formData.locationName);
-                              // In a real implementation, you'd geocode here and get coordinates
-                              // handleInputChange('locationCoordinates', `${lat},${lng}`);
-                            } catch (error) {
-                              console.error('Failed to geocode location:', error);
-                            }
-                          }}
-                          className="flex items-center space-x-1 text-green-600 hover:text-green-800 text-sm"
-                        >
-                          <span>📍 Save Coordinates</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

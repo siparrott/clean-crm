@@ -534,6 +534,224 @@ if (!connectionString) {
 
   // Export database functions
   module.exports = {
+    // Calendar analytics for week/month with deltas and timeseries
+    async getCalendarAnalytics(period = 'week') {
+      try {
+        const now = new Date();
+        const end = now; // rolling window end = now
+        const periodDays = period === 'month' ? 30 : 7;
+        const start = new Date(end.getTime() - periodDays * 24 * 60 * 60 * 1000);
+        const prevEnd = new Date(start.getTime());
+        const prevStart = new Date(prevEnd.getTime() - periodDays * 24 * 60 * 60 * 1000);
+
+        // Helper: check table existence
+        const tableExists = async (tableName) => {
+          const q = await pool.query(
+            `SELECT EXISTS (
+               SELECT 1 FROM information_schema.tables 
+               WHERE table_schema='public' AND table_name=$1
+             ) as exists`,
+            [tableName]
+          );
+          return q.rows[0]?.exists === true;
+        };
+
+        // Leads helpers (crm_leads preferred, fallback to leads)
+        const hasCrmLeads = await tableExists('crm_leads');
+        const leadsTable = hasCrmLeads ? 'crm_leads' : (await tableExists('leads') ? 'leads' : null);
+
+        const countLeadsBetween = async (a, b) => {
+          if (!leadsTable) return 0;
+          const res = await pool.query(
+            `SELECT COUNT(*)::int AS c FROM ${leadsTable} WHERE created_at >= $1 AND created_at < $2`,
+            [a, b]
+          );
+          return res.rows[0]?.c || 0;
+        };
+
+        const leadsDaily = async (a, b) => {
+          if (!leadsTable) return [];
+          const res = await pool.query(
+            `SELECT date_trunc('day', created_at) AS d, COUNT(*)::int AS c
+             FROM ${leadsTable}
+             WHERE created_at >= $1 AND created_at < $2
+             GROUP BY 1 ORDER BY 1`,
+            [a, b]
+          );
+          return res.rows.map(r => ({ date: r.d, leads: r.c }));
+        };
+
+        // Sessions helpers
+        const countSessionsCreatedBetween = async (a, b) => {
+          const res = await pool.query(
+            `SELECT COUNT(*)::int AS c 
+             FROM photography_sessions 
+             WHERE created_at >= $1 AND created_at < $2
+               AND COALESCE(status, 'scheduled') IN ('scheduled','confirmed','booked','completed')`,
+            [a, b]
+          );
+          return res.rows[0]?.c || 0;
+        };
+
+        const countSessionsStartedBetween = async (a, b) => {
+          const res = await pool.query(
+            `SELECT COUNT(*)::int AS c 
+             FROM photography_sessions 
+             WHERE start_time >= $1 AND start_time < $2`,
+            [a, b]
+          );
+          return res.rows[0]?.c || 0;
+        };
+
+        const countCompletedBetween = async (a, b) => {
+          const res = await pool.query(
+            `SELECT COUNT(*)::int AS c 
+             FROM photography_sessions 
+             WHERE start_time >= $1 AND start_time < $2
+               AND COALESCE(status, 'scheduled') = 'completed'`,
+            [a, b]
+          );
+          return res.rows[0]?.c || 0;
+        };
+
+        const sumRevenueByStartBetween = async (a, b) => {
+          const res = await pool.query(
+            `SELECT COALESCE(SUM(COALESCE(base_price,0)),0)::float AS v
+             FROM photography_sessions 
+             WHERE start_time >= $1 AND start_time < $2`,
+            [a, b]
+          );
+          return res.rows[0]?.v || 0;
+        };
+
+        const sessionsDaily = async (a, b) => {
+          const res = await pool.query(
+            `SELECT date_trunc('day', start_time) AS d,
+                    COUNT(*)::int AS sessions,
+                    COALESCE(SUM(COALESCE(base_price,0)),0)::float AS revenue
+             FROM photography_sessions
+             WHERE start_time >= $1 AND start_time < $2
+             GROUP BY 1 ORDER BY 1`,
+            [a, b]
+          );
+          return res.rows.map(r => ({ date: r.d, sessions: r.sessions, revenue: r.revenue }));
+        };
+
+        // Compute current and previous window stats
+        const [
+          leadsCur, leadsPrev,
+          createdCur, createdPrev,
+          startedCur, startedPrev,
+          completedCur, completedPrev,
+          revenueCur, revenuePrev,
+          leadsSeries, sessionsSeries
+        ] = await Promise.all([
+          countLeadsBetween(start, end),
+          countLeadsBetween(prevStart, prevEnd),
+          countSessionsCreatedBetween(start, end),
+          countSessionsCreatedBetween(prevStart, prevEnd),
+          countSessionsStartedBetween(start, end),
+          countSessionsStartedBetween(prevStart, prevEnd),
+          countCompletedBetween(start, end),
+          countCompletedBetween(prevStart, prevEnd),
+          sumRevenueByStartBetween(start, end),
+          sumRevenueByStartBetween(prevStart, prevEnd),
+          leadsDaily(start, end),
+          sessionsDaily(start, end)
+        ]);
+
+        const pct = (cur, prev) => {
+          if (prev === 0) return cur > 0 ? 100 : 0;
+          return ((cur - prev) / prev) * 100;
+        };
+
+        const conversion = (booked, leads) => {
+          if (leads <= 0) return 0;
+          return (booked / leads) * 100;
+        };
+
+        const currentConversion = conversion(createdCur, leadsCur);
+        const previousConversion = conversion(createdPrev, leadsPrev);
+        const conversionDeltaPct = previousConversion === 0
+          ? (currentConversion > 0 ? 100 : 0)
+          : ((currentConversion - previousConversion) / previousConversion) * 100;
+
+        return {
+          period,
+          range: { start: start.toISOString(), end: end.toISOString() },
+          previousRange: { start: prevStart.toISOString(), end: prevEnd.toISOString() },
+          leads: {
+            current: leadsCur,
+            previous: leadsPrev,
+            delta: leadsCur - leadsPrev,
+            deltaPct: pct(leadsCur, leadsPrev)
+          },
+          sessionsBooked: {
+            // Using sessions created as proxy for booked
+            current: createdCur,
+            previous: createdPrev,
+            delta: createdCur - createdPrev,
+            deltaPct: pct(createdCur, createdPrev)
+          },
+          sessionsStarted: {
+            current: startedCur,
+            previous: startedPrev,
+            delta: startedCur - startedPrev,
+            deltaPct: pct(startedCur, startedPrev)
+          },
+          completedSessions: {
+            current: completedCur,
+            previous: completedPrev,
+            delta: completedCur - completedPrev,
+            deltaPct: pct(completedCur, completedPrev)
+          },
+          revenue: {
+            current: revenueCur,
+            previous: revenuePrev,
+            delta: revenueCur - revenuePrev,
+            deltaPct: pct(revenueCur, revenuePrev)
+          },
+          conversion: {
+            currentPct: currentConversion,
+            previousPct: previousConversion,
+            deltaPct: conversionDeltaPct
+          },
+          timeseries: {
+            daily: mergeDailySeries(leadsSeries, sessionsSeries)
+          }
+        };
+
+        function mergeDailySeries(leadsArr, sessionsArr) {
+          const map = new Map();
+          for (const r of leadsArr) {
+            const k = new Date(r.date).toISOString().slice(0,10);
+            map.set(k, { date: k, leads: r.leads, sessions: 0, revenue: 0 });
+          }
+          for (const r of sessionsArr) {
+            const k = new Date(r.date).toISOString().slice(0,10);
+            const prev = map.get(k) || { date: k, leads: 0, sessions: 0, revenue: 0 };
+            prev.sessions = r.sessions;
+            prev.revenue = r.revenue;
+            map.set(k, prev);
+          }
+          return Array.from(map.values()).sort((a,b) => a.date.localeCompare(b.date));
+        }
+      } catch (error) {
+        console.error('❌ Error computing calendar analytics:', error.message);
+        return {
+          period,
+          range: null,
+          previousRange: null,
+          leads: { current: 0, previous: 0, delta: 0, deltaPct: 0 },
+          sessionsBooked: { current: 0, previous: 0, delta: 0, deltaPct: 0 },
+          sessionsStarted: { current: 0, previous: 0, delta: 0, deltaPct: 0 },
+          completedSessions: { current: 0, previous: 0, delta: 0, deltaPct: 0 },
+          revenue: { current: 0, previous: 0, delta: 0, deltaPct: 0 },
+          conversion: { currentPct: 0, previousPct: 0, deltaPct: 0 },
+          timeseries: { daily: [] }
+        };
+      }
+    },
     // Get all clients
     async getClients() {
       try {

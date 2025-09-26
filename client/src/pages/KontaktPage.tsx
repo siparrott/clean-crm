@@ -46,8 +46,55 @@ const KontaktPage: React.FC = () => {
     }
     ogDescription.setAttribute('content', 'Kontaktieren Sie unseren Familienfotograf in Wien. STUDIO Eingang Ecke Schönbrunnerstraße, Studio: Wehrgasse 11A/2+5, 1050 Wien. Tel: +43 677 633 99210.');
 
+    // Local Business (PhotoStudio) JSON-LD structured data
+    const jsonLdStudio = {
+      '@context': 'https://schema.org',
+      '@type': 'PhotoStudio',
+      name: 'New Age Fotografie',
+      image: 'https://www.newagefotografie.com/path-to-logo-or-hero.jpg',
+      url: 'https://www.newagefotografie.com/',
+      telephone: '+43 677 633 99210',
+      email: 'hallo@newagefotografie.com',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Wehrgasse 11A/2+5',
+        addressLocality: 'Wien',
+        postalCode: '1050',
+        addressCountry: 'AT'
+      },
+      description: 'Portraitstudio in 1050 Wien: Familien, Newborn, Babybauch & Business-Headshots. Studio Eingang Ecke Schönbrunnerstraße. Make the most of now!',
+      openingHoursSpecification: [
+        {
+          '@type': 'OpeningHoursSpecification',
+          dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+          opens: '10:00',
+          closes: '18:00'
+        }
+      ],
+      sameAs: [
+        'https://g.page/r/your-google-profile-id',
+        'https://www.facebook.com/yourpage',
+        'https://www.instagram.com/yourpage'
+      ],
+      hasMap: 'https://maps.google.com/?q=Wehrgasse+11A,+1050+Wien',
+      geo: {
+        '@type': 'GeoCoordinates',
+        // Coords derived from the embedded map on this page
+        latitude: 48.1865,
+        longitude: 16.3608
+      }
+    } as const;
+
+    const ldScript = document.createElement('script');
+    ldScript.type = 'application/ld+json';
+    ldScript.text = JSON.stringify(jsonLdStudio);
+    document.head.appendChild(ldScript);
+
     return () => {
       document.title = 'New Age Fotografie - Familienfotograf Wien';
+      if (ldScript && ldScript.parentNode) {
+        ldScript.parentNode.removeChild(ldScript);
+      }
     };
   }, []);
 

@@ -104,6 +104,154 @@ async function getInvoiceColumnSet() {
   }
 }
 
+// ===== Calendar import/export helpers (ICS parser, date utils) =====
+function decodeICalValue(v) {
+  return String(v || '')
+    .replace(/\\n/g, '\n')
+    .replace(/\\,/g, ',')
+    .replace(/\\;/g, ';')
+    .replace(/\\\\/g, '\\');
+}
+
+function parseICalDate(dateString, tzid) {
+  try {
+    let clean = String(dateString || '').trim();
+    // Zulu format: 20250101T123000Z
+    if (clean.includes('T') && clean.endsWith('Z')) {
+      clean = clean.replace('Z','');
+      const datePart = clean.split('T')[0];
+      const timePart = clean.split('T')[1];
+      if (datePart?.length === 8 && timePart?.length === 6) {
+        const iso = `${datePart.slice(0,4)}-${datePart.slice(4,6)}-${datePart.slice(6,8)}T${timePart.slice(0,2)}:${timePart.slice(2,4)}:${timePart.slice(4,6)}.000Z`;
+        const d = new Date(iso);
+        if (!isNaN(d.getTime())) return d.toISOString();
+      }
+    }
+    // All-day: YYYYMMDD
+    if (clean.length === 8 && !clean.includes('T')) {
+      const isoLocal = `${clean.slice(0,4)}-${clean.slice(4,6)}-${clean.slice(6,8)}T00:00:00`;
+      return convertLocalToUtcIso(isoLocal, tzid || 'Europe/Vienna');
+    }
+    // Local without Z: YYYYMMDDTHHMMSS
+    if (clean.length === 15 && clean.includes('T')) {
+      const dp = clean.slice(0,8); const tp = clean.slice(9,15);
+      const isoLocal = `${dp.slice(0,4)}-${dp.slice(4,6)}-${dp.slice(6,8)}T${tp.slice(0,2)}:${tp.slice(2,4)}:${tp.slice(4,6)}`;
+      const out = tzid ? convertLocalToUtcIso(isoLocal, tzid) : new Date(isoLocal).toISOString();
+      const d = new Date(out); if (!isNaN(d.getTime())) return d.toISOString();
+    }
+    const fb = new Date(dateString); if (!isNaN(fb.getTime())) return fb.toISOString();
+    return undefined;
+  } catch { return undefined; }
+}
+
+function convertLocalToUtcIso(localIso, tzid) {
+  try {
+    // Using Intl math fallback (no heavy deps)
+    const m = localIso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+    if (m) {
+      const y=+m[1], mo=+m[2], d=+m[3], hh=+m[4], mm=+m[5], ss=+m[6];
+      const epoch = toUtcFromTz(y, mo, d, hh, mm, ss, tzid || 'UTC');
+      return new Date(epoch).toISOString();
+    }
+  } catch {}
+  const d2 = new Date(localIso);
+  return isNaN(d2.getTime()) ? new Date().toISOString() : d2.toISOString();
+}
+
+function toUtcFromTz(y, m, d, hh, mm, ss, timeZone) {
+  const approx = new Date(Date.UTC(y, m - 1, d, hh, mm, ss));
+  const offset = tzOffset(approx, timeZone);
+  return approx.getTime() - offset * 60000;
+}
+
+function tzOffset(dateUTC, timeZone) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+  const parts = dtf.formatToParts(dateUTC);
+  const map = {};
+  for (const { type, value } of parts) { if (type !== 'literal') map[type] = value; }
+  const asUTC = Date.UTC(+map.year, +map.month - 1, +map.day, +map.hour, +map.minute, +map.second);
+  return (asUTC - dateUTC.getTime()) / 60000;
+}
+
+function parseICalContent(icsContent) {
+  const events = [];
+  const lines = String(icsContent || '').split('\n');
+  let current = null;
+  let multiProp = ''; let multiVal = '';
+  for (let i=0;i<lines.length;i++) {
+    let line = lines[i].trim();
+    if (line.startsWith(' ') || line.startsWith('\t')) { multiVal += line.substring(1); continue; }
+    if (multiProp && multiVal) {
+      if (current) current[multiProp.toLowerCase()] = decodeICalValue(multiVal);
+      multiProp = ''; multiVal = '';
+    }
+    if (line === 'BEGIN:VEVENT') current = {};
+    else if (line === 'END:VEVENT' && current) { events.push(current); current = null; }
+    else if (current && line.includes(':')) {
+      const idx = line.indexOf(':');
+      const prop = line.substring(0, idx); const value = line.substring(idx+1);
+      multiProp = prop; multiVal = value;
+      const [base, ...paramParts] = prop.split(';');
+      const propName = base.toLowerCase();
+      const params = {};
+      for (const p of paramParts) { const ei = p.indexOf('='); if (ei>-1) params[p.substring(0,ei).toLowerCase()] = p.substring(ei+1); }
+      if (propName === 'dtstart' || propName === 'dtend') {
+        const tz = params['tzid'] || 'Europe/Vienna';
+        const parsed = parseICalDate(value, tz);
+        current[propName] = parsed; // may be undefined
+      } else {
+        current[propName] = decodeICalValue(value);
+      }
+    }
+  }
+  return events;
+}
+
+function extractClientFromText(text) {
+  const t = String(text || '');
+  const patterns = [ /client[:\s]+([^,\n]+)/i, /with[:\s]+([^,\n]+)/i, /für[:\s]+([^,\n]+)/i, /([A-Z][a-z]+\s+[A-Z][a-z]+)/ ];
+  for (const re of patterns) { const m = t.match(re); if (m && m[1]) return m[1].trim(); }
+  return 'Imported Client';
+}
+
+function safeDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d; }
+
+function getImportCutoffUtc(req) {
+  try {
+    const parsed = url.parse(req.url || '', true).query || {};
+    const includePast = String(parsed.includePast || '').toLowerCase() === 'true';
+    const from = parsed.from || parsed.since;
+    const tz = 'Europe/Vienna';
+    if (from && /\d{4}-\d{2}-\d{2}/.test(String(from))) {
+      const localIso = `${from}T00:00:00`;
+      const utcIso = convertLocalToUtcIso(localIso, tz);
+      const d = new Date(utcIso); if (!isNaN(d.getTime())) return d;
+    }
+    if (includePast) return new Date('1970-01-01T00:00:00Z');
+  } catch {}
+  // Default: only future events
+  const now = new Date();
+  return new Date(now.toISOString());
+}
+
+function getImportUpperBoundUtc(req) {
+  try {
+    const parsed = url.parse(req.url || '', true).query || {};
+    const to = parsed.to || parsed.until;
+    const tz = 'Europe/Vienna';
+    if (to && /\d{4}-\d{2}-\d{2}/.test(String(to))) {
+      const localIso = `${to}T23:59:59`;
+      const utcIso = convertLocalToUtcIso(localIso, tz);
+      const d = new Date(utcIso); if (!isNaN(d.getTime())) return d;
+    }
+  } catch {}
+  return undefined;
+}
+
 // ===== Leads schema bootstrap (compatible with existing table) =====
 let __leadsSchemaEnsured = false;
 async function ensureLeadsSchema() {
@@ -3959,6 +4107,31 @@ const server = http.createServer(async (req, res) => {
               console.log('📸 Creating photography session:', sessionData.title);
               
               const result = await database.createPhotographySession(sessionData);
+              // Best-effort: send confirmation email if clientEmail present
+              try {
+                const to = (sessionData.clientEmail || '').trim();
+                if (to) {
+                  const start = sessionData.startTime ? new Date(sessionData.startTime) : null;
+                  const end = sessionData.endTime ? new Date(sessionData.endTime) : null;
+                  const whenStr = start ? `${start.toLocaleString('de-DE', { timeZone: 'Europe/Vienna' })}${end ? ' - ' + end.toLocaleTimeString('de-DE', { timeZone: 'Europe/Vienna' }) : ''}` : 'tbd';
+                  const subject = `Termin bestätigt: ${sessionData.title || 'Fotoshooting'}`;
+                  const html = `
+                    <p>Hallo${sessionData.clientName ? ' ' + sessionData.clientName : ''},</p>
+                    <p>vielen Dank für Ihre Buchung. Wir bestätigen Ihren Termin:</p>
+                    <ul>
+                      <li><strong>Titel:</strong> ${sessionData.title || 'Fotoshooting'}</li>
+                      <li><strong>Datum/Zeit:</strong> ${whenStr}</li>
+                      ${sessionData.locationName ? `<li><strong>Ort:</strong> ${sessionData.locationName}</li>` : ''}
+                    </ul>
+                    <p>Sollten Sie Fragen haben, antworten Sie einfach auf diese E‑Mail.</p>
+                    <p>Liebe Grüße,<br/>New Age Fotografie</p>
+                  `;
+                  await database.sendEmail({ to, subject, content: html, html, autoLinkClient: true });
+                  console.log('✅ Session confirmation email queued to', to);
+                }
+              } catch (mailErr) {
+                console.warn('✉️ Session confirmation send skipped:', mailErr?.message || mailErr);
+              }
               
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
@@ -3993,6 +4166,276 @@ const server = http.createServer(async (req, res) => {
           console.error('❌ Get dashboard stats error:', error.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+      }
+
+      // Calendar analytics endpoint (week/month) with deltas and timeseries
+      if (pathname === '/api/admin/calendar-analytics' && req.method === 'GET') {
+        try {
+          const q = url.parse(req.url || '', true).query || {};
+          const period = (q.period === 'month') ? 'month' : 'week';
+          if (!database || typeof database.getCalendarAnalytics !== 'function') {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Analytics not available' }));
+            return;
+          }
+          const data = await database.getCalendarAnalytics(period);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(data));
+        } catch (error) {
+          console.error('❌ Calendar analytics error:', error.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Failed to compute analytics' }));
+        }
+        return;
+      }
+
+      // === Public iCal feed for photography sessions (shareable) ===
+      if (pathname === '/api/calendar/photography-sessions.ics' && req.method === 'GET') {
+        try {
+          const sessions = await database.getPhotographySessions();
+          const formatICalDate = (d) => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+          const esc = (s) => String(s || '').replace(/[,;\\]/g, '\\$&');
+          const lines = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//New Age Fotografie//Photography CRM//EN',
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH',
+            'X-WR-CALNAME:Photography Sessions',
+            'X-WR-CALDESC:Photography sessions from New Age Fotografie CRM'
+          ];
+          const now = new Date();
+          const dtstamp = formatICalDate(now);
+          for (const s of sessions) {
+            if (!s.startTime || !s.endTime) continue;
+            const uid = `session-${s.id}@newagefotografie.com`;
+            lines.push(
+              'BEGIN:VEVENT',
+              `UID:${uid}`,
+              `DTSTAMP:${dtstamp}`,
+              `DTSTART:${formatICalDate(s.startTime)}`,
+              `DTEND:${formatICalDate(s.endTime)}`,
+              `SUMMARY:${esc(s.title)}`,
+              `DESCRIPTION:${esc(s.description || '')}${s.clientName ? '\\nClient: ' + esc(s.clientName) : ''}${s.sessionType ? '\\nType: ' + esc(s.sessionType) : ''}`,
+              `LOCATION:${esc(s.locationName || s.locationAddress || '')}`,
+              'END:VEVENT'
+            );
+          }
+          lines.push('END:VCALENDAR');
+          const content = lines.join('\r\n');
+          res.writeHead(200, {
+            'Content-Type': 'text/calendar; charset=utf-8',
+            'Content-Disposition': 'attachment; filename="photography-sessions.ics"',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          });
+          res.end(content);
+        } catch (e) {
+          console.error('❌ iCal feed error:', e.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Failed to generate iCal' }));
+        }
+        return;
+      }
+
+      // === Calendar import from raw .ics content ===
+      if (pathname === '/api/calendar/import/ics' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', c => body += c.toString());
+          req.on('end', async () => {
+            try {
+              const { icsContent, fileName } = JSON.parse(body || '{}');
+              if (!icsContent) throw new Error('No iCal content provided');
+              const events = parseICalContent(icsContent);
+              const cutoff = getImportCutoffUtc(req);
+              const upper = getImportUpperBoundUtc(req);
+              const toImport = events.filter(ev => {
+                const ds = ev && ev.dtstart ? new Date(ev.dtstart) : null;
+                return !!(ds && !isNaN(ds.getTime()) && ds >= cutoff && (!upper || ds <= upper));
+              });
+              let imported = 0;
+              for (const ev of toImport) {
+                try {
+                  const start = safeDate(ev.dtstart);
+                  const end = safeDate(ev.dtend);
+                  if (!start || !end) continue;
+                  await database.createPhotographySession({
+                    id: `imported-${(ev.uid || `${Date.now()}-${Math.random().toString(36).slice(2,11)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`,
+                    icalUid: ev.uid || undefined,
+                    title: ev.summary || 'Imported Event',
+                    description: ev.description || '',
+                    sessionType: 'imported',
+                    status: 'confirmed',
+                    startTime: start,
+                    endTime: end,
+                    locationName: ev.location || '',
+                    locationAddress: ev.location || '',
+                    clientName: extractClientFromText(ev.description || ev.summary || ''),
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                  });
+                  imported++;
+                } catch (ie) { console.error('Import event failed:', ie.message); }
+              }
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: true, imported, cutoff: cutoff.toISOString(), upper: upper ? upper.toISOString() : null, message: `Imported ${imported} events${fileName ? ' from ' + fileName : ''}` }));
+            } catch (err) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Failed to parse iCal file', details: err.message }));
+            }
+          });
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Internal server error' }));
+        }
+        return;
+      }
+
+      // === Calendar import from .ics URL ===
+      if (pathname === '/api/calendar/import/ics-url' && req.method === 'POST') {
+        try {
+          let body = '';
+          req.on('data', c => body += c.toString());
+          req.on('end', async () => {
+            try {
+              const { icsUrl } = JSON.parse(body || '{}');
+              if (!icsUrl) throw new Error('No iCal URL provided');
+              const fetch = (await import('node-fetch')).default;
+              const resp = await fetch(icsUrl);
+              if (!resp.ok) throw new Error(`Fetch failed ${resp.status}`);
+              const text = await resp.text();
+              if (/<!DOCTYPE html>|<html[\s>]/i.test(text)) throw new Error('HTML received instead of ICS (auth likely required)');
+              const events = parseICalContent(text);
+              const cutoff = getImportCutoffUtc(req);
+              const upper = getImportUpperBoundUtc(req);
+              const toImport = events.filter(ev => {
+                const ds = ev && ev.dtstart ? new Date(ev.dtstart) : null;
+                return !!(ds && !isNaN(ds.getTime()) && ds >= cutoff && (!upper || ds <= upper));
+              });
+              let imported = 0;
+              for (const ev of toImport) {
+                try {
+                  const start = safeDate(ev.dtstart);
+                  const end = safeDate(ev.dtend);
+                  if (!start || !end) continue;
+                  await database.createPhotographySession({
+                    id: `imported-${(ev.uid || `${Date.now()}-${Math.random().toString(36).slice(2,11)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`,
+                    icalUid: ev.uid || undefined,
+                    title: ev.summary || 'Imported Event',
+                    description: ev.description || '',
+                    sessionType: 'imported',
+                    status: 'confirmed',
+                    startTime: start,
+                    endTime: end,
+                    locationName: ev.location || '',
+                    locationAddress: ev.location || '',
+                    clientName: extractClientFromText(ev.description || ev.summary || ''),
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                  });
+                  imported++;
+                } catch (ie) { console.error('Import event failed:', ie.message); }
+              }
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: true, imported, cutoff: cutoff.toISOString(), upper: upper ? upper.toISOString() : null, message: `Imported ${imported} events from URL` }));
+            } catch (err) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Failed to fetch or parse iCal URL', details: err.message }));
+            }
+          });
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Internal server error' }));
+        }
+        return;
+      }
+
+      // === Admin: detect stacked clusters (duplicate UTC start_time rows) ===
+      if (pathname === '/api/admin/calendar/stacked-clusters' && req.method === 'GET') {
+        try {
+          if (!sql) throw new Error('Database not available');
+          const q = url.parse(req.url || '', true).query || {};
+          const threshold = Math.max(1, parseInt(q.threshold || '20', 10) || 20);
+          const limit = Math.max(1, parseInt(q.limit || '20', 10) || 20);
+          const clusters = await sql`
+            SELECT 
+              to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as start_time_iso,
+              COUNT(*)::int as count,
+              SUM(CASE WHEN ical_uid IS NULL OR ical_uid = '' THEN 1 ELSE 0 END)::int as without_ical_uid,
+              SUM(CASE WHEN ical_uid IS NOT NULL AND ical_uid <> '' THEN 1 ELSE 0 END)::int as with_ical_uid
+            FROM photography_sessions
+            GROUP BY start_time
+            HAVING COUNT(*) >= ${threshold}
+            ORDER BY count DESC
+            LIMIT ${limit}
+          `;
+          let sample = [];
+          if (clusters.length) {
+            const targetIso = clusters[0].start_time_iso;
+            sample = await sql`
+              SELECT id, title, ical_uid, created_at 
+              FROM photography_sessions
+              WHERE to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') = ${targetIso}
+              ORDER BY created_at DESC
+              LIMIT 5
+            `;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, threshold, clusters, sample }));
+        } catch (err) {
+          console.error('❌ stacked-clusters error:', err.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Failed to detect clusters' }));
+        }
+        return;
+      }
+
+      // === Admin: cleanup stacked sessions for a given UTC ISO start timestamp ===
+      if (pathname === '/api/admin/calendar/cleanup-stacked' && req.method === 'POST') {
+        try {
+          if (!sql) throw new Error('Database not available');
+          let raw = ''; req.on('data', c => raw += c.toString());
+          req.on('end', async () => {
+            try {
+              const { targetStartTimeIso, onlyNullIcalUid = true, dryRun = true } = JSON.parse(raw || '{}');
+              if (!targetStartTimeIso || typeof targetStartTimeIso !== 'string') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'targetStartTimeIso is required (UTC ISO, e.g. 2025-09-08T16:36:48Z)' }));
+                return;
+              }
+              const counts = await sql`
+                SELECT 
+                  COUNT(*)::int as total,
+                  SUM(CASE WHEN ical_uid IS NULL OR ical_uid = '' THEN 1 ELSE 0 END)::int as without_ical_uid,
+                  SUM(CASE WHEN ical_uid IS NOT NULL AND ical_uid <> '' THEN 1 ELSE 0 END)::int as with_ical_uid
+                FROM photography_sessions
+                WHERE to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') = ${targetStartTimeIso}
+              `;
+              const summary = counts?.[0] || { total: 0, without_ical_uid: 0, with_ical_uid: 0 };
+              if (dryRun) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, dryRun: true, targetStartTimeIso, summary }));
+                return;
+              }
+              let delSql = sql`DELETE FROM photography_sessions WHERE to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') = ${targetStartTimeIso}`;
+              if (onlyNullIcalUid) {
+                delSql = sql`DELETE FROM photography_sessions WHERE to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') = ${targetStartTimeIso} AND (ical_uid IS NULL OR ical_uid = '')`;
+              }
+              await delSql;
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: true, targetStartTimeIso, deleted: summary, onlyNullIcalUid }));
+            } catch (err) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: 'Invalid request', details: err.message }));
+            }
+          });
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Internal server error' }));
         }
         return;
       }
