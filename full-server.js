@@ -88,6 +88,11 @@ initializeStripe();
 
 console.log('🚀 Starting PRODUCTION server with Neon database...');
 
+// Proactively ensure critical schemas (non-blocking) so first admin requests don't race
+(async () => {
+  try { await ensureLeadsSchema(); } catch (e) { console.warn('Leads schema ensure (startup) warning:', e.message); }
+})();
+
 // Cached invoice column detection to avoid per-request information_schema scans
 let __invoiceColsCache = { set: null, ts: 0 };
 async function getInvoiceColumnSet() {
@@ -4617,8 +4622,12 @@ const server = http.createServer(async (req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true, id }));
         } catch (e) {
+          const msg = (e && e.message) ? e.message : 'Unknown error';
+          let friendly = 'Failed to create lead';
+          if (/relation "leads" does not exist/i.test(msg)) friendly = 'Leads table missing — auto-create failed';
+          if (/invalid input syntax for type inet/i.test(msg)) friendly = 'IP parse error — retrying without IP failed';
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: e.message }));
+          res.end(JSON.stringify({ ok: false, error: friendly, detail: msg.slice(0,180) }));
         }
         return;
       }
